@@ -1,0 +1,49 @@
+import 'package:flutter/material.dart';
+
+import '../core/models/subject.dart';
+import '../features/auth/login_screen.dart';
+import '../features/favorites/favorites_screen.dart';
+import '../features/flashcards/flashcards_screen.dart';
+import '../features/generation/generated_outputs_screen.dart';
+import '../features/materials/add_material_screen.dart';
+import '../features/study_modes/after_lecture_screen.dart';
+import '../features/study_modes/exam_prep_screen.dart';
+import '../features/subjects/subject_detail_screen.dart';
+import '../features/subjects/subjects_screen.dart';
+import '../features/usage/usage_limits_screen.dart';
+import '../mock/mock_data.dart';
+
+class AppRoutes {
+  static const login = '/';
+  static const subjects = '/subjects';
+  static const subjectDetail = '/subjects/detail';
+  static const addMaterial = '/materials/add';
+  static const generatedOutputs = '/generation/outputs';
+  static const flashcards = '/flashcards';
+  static const favorites = '/favorites';
+  static const afterLecture = '/study/after-lecture';
+  static const examPrep = '/study/exam-prep';
+  static const usage = '/usage';
+
+  static Route<void> onGenerateRoute(RouteSettings settings) {
+    final subject = settings.arguments is Subject
+        ? settings.arguments! as Subject
+        : MockData.subjects.first;
+
+    final widget = switch (settings.name) {
+      login => const LoginScreen(),
+      subjects => const SubjectsScreen(),
+      subjectDetail => SubjectDetailScreen(subject: subject),
+      addMaterial => AddMaterialScreen(subject: subject),
+      generatedOutputs => GeneratedOutputsScreen(subject: subject),
+      flashcards => FlashcardsScreen(subject: subject),
+      favorites => const FavoritesScreen(),
+      afterLecture => const AfterLectureScreen(),
+      examPrep => const ExamPrepScreen(),
+      usage => const UsageLimitsScreen(),
+      _ => const LoginScreen(),
+    };
+
+    return MaterialPageRoute<void>(builder: (_) => widget, settings: settings);
+  }
+}
