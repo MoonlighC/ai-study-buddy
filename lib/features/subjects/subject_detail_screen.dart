@@ -35,11 +35,11 @@ class SubjectDetailScreen extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: () => Navigator.pushNamed(
               context,
-              AppRoutes.generatedOutputs,
+              AppRoutes.studySessionResult,
               arguments: subject,
             ),
             icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('Generate mock outputs'),
+            label: const Text('Create study session'),
           ),
           const SizedBox(height: 24),
           Text('Materials', style: Theme.of(context).textTheme.titleLarge),
@@ -53,7 +53,7 @@ class SubjectDetailScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.pushNamed(
                   context,
-                  AppRoutes.generatedOutputs,
+                  AppRoutes.studySessionResult,
                   arguments: subject,
                 ),
               ),

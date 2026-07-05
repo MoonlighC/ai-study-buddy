@@ -1,8 +1,12 @@
 import '../core/models/flashcard.dart';
+import '../core/models/knowledge_score.dart';
 import '../core/models/material.dart';
 import '../core/models/quiz_question.dart';
 import '../core/models/subject.dart';
+import '../core/models/study_history_entry.dart';
+import '../core/models/study_time_block.dart';
 import '../core/models/usage_log.dart';
+import '../core/models/weak_topic.dart';
 
 class MockData {
   static const subjects = [
@@ -132,5 +136,59 @@ class MockData {
       outputTokens: 0,
       estimatedCostUsd: 0,
     ),
+  ];
+
+  static const knowledgeScores = [
+    KnowledgeScore(
+      subjectId: 'biology',
+      subjectName: 'Biology',
+      scorePercent: 82,
+    ),
+    KnowledgeScore(subjectId: 'math', subjectName: 'Math', scorePercent: 54),
+    KnowledgeScore(
+      subjectId: 'german',
+      subjectName: 'German',
+      scorePercent: 71,
+    ),
+  ];
+
+  static const weakTopics = [
+    WeakTopic(
+      subjectId: 'biology',
+      title: 'Chloroplast inputs',
+      reason: 'You mixed up carbon dioxide and oxygen in the last quiz.',
+    ),
+    WeakTopic(
+      subjectId: 'math',
+      title: 'Balancing equations',
+      reason: 'Practice applying the same operation to both sides.',
+    ),
+    WeakTopic(
+      subjectId: 'german',
+      title: 'Subordinate clauses',
+      reason: 'Review verb position after connectors like "weil".',
+    ),
+  ];
+
+  static const studyHistory = [
+    StudyHistoryEntry(
+      label: 'Today',
+      subjectName: 'Biology',
+      activitySummary: '8 flashcards',
+      quizScorePercent: 80,
+    ),
+    StudyHistoryEntry(
+      label: 'Yesterday',
+      subjectName: 'German vocabulary',
+      activitySummary: 'quick quiz',
+      quizScorePercent: 90,
+    ),
+  ];
+
+  static const studyTimeBlocks = [
+    StudyTimeBlock(label: 'Summary', minutes: 5),
+    StudyTimeBlock(label: 'Flashcards', minutes: 10),
+    StudyTimeBlock(label: 'Quiz', minutes: 7),
+    StudyTimeBlock(label: 'Review mistakes', minutes: 5),
   ];
 }

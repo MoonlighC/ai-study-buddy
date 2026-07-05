@@ -39,7 +39,7 @@ class LoginScreen extends StatelessWidget {
                   FilledButton.icon(
                     onPressed: () => Navigator.pushReplacementNamed(
                       context,
-                      AppRoutes.subjects,
+                      AppRoutes.dashboard,
                     ),
                     icon: const Icon(Icons.mail_outline),
                     label: const Text('Continue with email'),
@@ -48,7 +48,7 @@ class LoginScreen extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: () => Navigator.pushReplacementNamed(
                       context,
-                      AppRoutes.subjects,
+                      AppRoutes.dashboard,
                     ),
                     icon: const Icon(Icons.g_mobiledata),
                     label: const Text('Google placeholder'),
@@ -57,7 +57,7 @@ class LoginScreen extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: () => Navigator.pushReplacementNamed(
                       context,
-                      AppRoutes.subjects,
+                      AppRoutes.dashboard,
                     ),
                     icon: const Icon(Icons.apple),
                     label: const Text('Apple placeholder'),
