@@ -4,6 +4,8 @@ import '../../app/routes.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
 import '../../mock/mock_data.dart';
+import '../../shared/widgets/app_page.dart';
+import '../../shared/widgets/section_card.dart';
 
 class ExamPrepScreen extends StatefulWidget {
   const ExamPrepScreen({super.key});
@@ -29,82 +31,105 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Exam Prep')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: AppPage(
         children: [
           Text(
             'Prepare for an exam',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
-          const SizedBox(height: 12),
-          Text('Choose subject', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final subject in MockData.subjects)
-                ChoiceChip(
-                  label: Text(subject.name),
-                  selected: selectedSubject.id == subject.id,
-                  onSelected: (_) => setState(() => selectedSubject = subject),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            readOnly: true,
-            decoration: InputDecoration(
-              labelText: 'Exam date',
-              hintText: 'Mock date: 2 weeks from now',
-              suffixIcon: IconButton(
-                tooltip: 'Pick date placeholder',
-                onPressed: () {},
-                icon: const Icon(Icons.calendar_today_outlined),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           Text(
-            'Selected materials',
-            style: Theme.of(context).textTheme.titleLarge,
+            'Create a local mock plan from a subject, materials, and weak topics.',
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
-          const SizedBox(height: 8),
-          for (final material in materials)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.article_outlined),
-                title: Text(material.title),
-                subtitle: Text(
-                  '${material.createdLabel} - included in mock plan',
+          const SizedBox(height: 12),
+          SectionCard(
+            icon: Icons.folder_outlined,
+            title: 'Choose subject',
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final subject in MockData.subjects)
+                  ChoiceChip(
+                    label: Text(subject.name),
+                    selected: selectedSubject.id == subject.id,
+                    onSelected: (_) =>
+                        setState(() => selectedSubject = subject),
+                  ),
+              ],
+            ),
+          ),
+          SectionCard(
+            icon: Icons.event_outlined,
+            title: 'Exam date',
+            child: TextField(
+              readOnly: true,
+              decoration: InputDecoration(
+                labelText: 'Exam date',
+                hintText: 'Mock date: 2 weeks from now',
+                suffixIcon: IconButton(
+                  tooltip: 'Pick date placeholder',
+                  onPressed: () {},
+                  icon: const Icon(Icons.calendar_today_outlined),
                 ),
               ),
             ),
-          const SizedBox(height: 12),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.trending_up_outlined),
-              title: Text('${selectedSubject.name} knowledge score'),
-              subtitle: LinearProgressIndicator(
-                value: score.scorePercent / 100,
-              ),
-              trailing: Text('${score.scorePercent}%'),
+          ),
+          SectionCard(
+            icon: Icons.article_outlined,
+            title: 'Selected materials',
+            child: Column(
+              children: [
+                for (final material in materials)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.article_outlined),
+                    title: Text(material.title),
+                    subtitle: Text(
+                      '${material.createdLabel} - included in mock plan',
+                    ),
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          Text('Weak topics', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          for (final topic in weakTopics)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.flag_outlined),
-                title: Text(topic.title),
-                subtitle: Text(topic.reason),
-              ),
+          SectionCard(
+            icon: Icons.trending_up_outlined,
+            title: '${selectedSubject.name} knowledge score',
+            trailing: Text('${score.scorePercent}%'),
+            child: LinearProgressIndicator(value: score.scorePercent / 100),
+          ),
+          SectionCard(
+            icon: Icons.flag_outlined,
+            title: 'Weak topics',
+            child: Column(
+              children: [
+                for (final topic in weakTopics)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.flag_outlined),
+                    title: Text(topic.title),
+                    subtitle: Text(topic.reason),
+                  ),
+              ],
             ),
-          const SizedBox(height: 12),
-          _PlanSection(plan: plan),
-          const SizedBox(height: 16),
+          ),
+          SectionCard(
+            icon: Icons.calendar_month_outlined,
+            title: 'Daily preparation plan',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final item in plan)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(item),
+                  ),
+                const SizedBox(height: 6),
+                const Text('Recommended: flashcards first, then quick quiz.'),
+              ],
+            ),
+          ),
           FilledButton.icon(
             onPressed: () => Navigator.pushNamed(
               context,
@@ -115,47 +140,6 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
             label: const Text('Create study session'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PlanSection extends StatelessWidget {
-  const _PlanSection({required this.plan});
-
-  final List<String> plan;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_month_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Daily preparation plan',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            for (final item in plan)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(item),
-              ),
-            const SizedBox(height: 6),
-            const Text('Recommended: flashcards first, then quick quiz.'),
-          ],
-        ),
       ),
     );
   }

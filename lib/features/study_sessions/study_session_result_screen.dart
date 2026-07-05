@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../app/routes.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
+import '../../shared/widgets/app_page.dart';
+import '../../shared/widgets/section_card.dart';
 
 class StudySessionResultScreen extends StatelessWidget {
   const StudySessionResultScreen({required this.subject, super.key});
@@ -18,17 +20,42 @@ class StudySessionResultScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Study Session')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: AppPage(
         children: [
           Text(subject.name, style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 4),
+          Text(
+            'Mock study session generated from your material.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 12),
-          _SessionSection(
+          Row(
+            children: [
+              Expanded(
+                child: _MetricCard(
+                  icon: Icons.quiz_outlined,
+                  label: 'Quiz score',
+                  value: '$quizScore%',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _MetricCard(
+                  icon: Icons.schedule_outlined,
+                  label: 'Study time',
+                  value:
+                      '${ai.studyTimeBlocks().fold<int>(0, (total, block) => total + block.minutes)} min',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SectionCard(
             icon: Icons.summarize_outlined,
             title: 'Summary',
             child: Text(ai.summaryFor(subject)),
           ),
-          _SessionSection(
+          SectionCard(
             icon: Icons.schedule_outlined,
             title: 'Estimated study time',
             child: Column(
@@ -43,7 +70,7 @@ class StudySessionResultScreen extends StatelessWidget {
               ],
             ),
           ),
-          _SessionSection(
+          SectionCard(
             icon: Icons.style_outlined,
             title: 'Flashcards',
             child: Column(
@@ -57,12 +84,14 @@ class StudySessionResultScreen extends StatelessWidget {
               ],
             ),
           ),
-          _SessionSection(
+          SectionCard(
             icon: Icons.quiz_outlined,
             title: 'Quick quiz',
-            child: Text('Quiz score: $quizScore%'),
+            child: Text(
+              'Quiz score: $quizScore%. Retake after reviewing weak topics.',
+            ),
           ),
-          _SessionSection(
+          SectionCard(
             icon: Icons.warning_amber_outlined,
             title: 'Weak topics',
             child: Column(
@@ -76,7 +105,7 @@ class StudySessionResultScreen extends StatelessWidget {
               ],
             ),
           ),
-          _SessionSection(
+          SectionCard(
             icon: Icons.lightbulb_outline,
             title: 'Mistake explanation',
             child: Text(ai.mistakeExplanationFor(subject)),
@@ -113,35 +142,29 @@ class StudySessionResultScreen extends StatelessWidget {
   }
 }
 
-class _SessionSection extends StatelessWidget {
-  const _SessionSection({
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
     required this.icon,
-    required this.title,
-    required this.child,
+    required this.label,
+    required this.value,
   });
 
   final IconData icon;
-  final String title;
-  final Widget child;
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(icon, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(title, style: Theme.of(context).textTheme.titleMedium),
-              ],
-            ),
+            Icon(icon, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 12),
-            child,
+            Text(value, style: Theme.of(context).textTheme.titleLarge),
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),

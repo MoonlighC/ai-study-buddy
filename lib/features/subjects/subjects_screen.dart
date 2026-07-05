@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
 import '../../mock/mock_data.dart';
+import '../../shared/widgets/app_page.dart';
 
 class SubjectsScreen extends StatelessWidget {
   const SubjectsScreen({super.key});
@@ -26,8 +27,7 @@ class SubjectsScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: AppPage(
         children: [
           Text('Subjects', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),

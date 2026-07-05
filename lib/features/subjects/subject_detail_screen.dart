@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../app/routes.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_data.dart';
+import '../../shared/widgets/app_page.dart';
+import '../../shared/widgets/section_card.dart';
 
 class SubjectDetailScreen extends StatelessWidget {
   const SubjectDetailScreen({required this.subject, super.key});
@@ -17,59 +19,80 @@ class SubjectDetailScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(subject.name)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: AppPage(
         children: [
           _SubjectHeader(subject: subject),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => Navigator.pushNamed(
-              context,
-              AppRoutes.addMaterial,
-              arguments: subject,
-            ),
-            icon: const Icon(Icons.post_add_outlined),
-            label: const Text('Add pasted text'),
-          ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.pushNamed(
-              context,
-              AppRoutes.studySessionResult,
-              arguments: subject,
-            ),
-            icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('Create study session'),
-          ),
-          const SizedBox(height: 24),
-          Text('Materials', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          for (final material in materials)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.article_outlined),
-                title: Text(material.title),
-                subtitle: Text('${material.createdLabel} - pasted text'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.pushNamed(
-                  context,
-                  AppRoutes.studySessionResult,
-                  arguments: subject,
+          SectionCard(
+            icon: Icons.auto_awesome_outlined,
+            title: 'Study actions',
+            subtitle: 'Use local mock content for this subject.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    AppRoutes.addMaterial,
+                    arguments: subject,
+                  ),
+                  icon: const Icon(Icons.post_add_outlined),
+                  label: const Text('Add pasted text'),
                 ),
-              ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    AppRoutes.studySessionResult,
+                    arguments: subject,
+                  ),
+                  icon: const Icon(Icons.auto_awesome_outlined),
+                  label: const Text('Create study session'),
+                ),
+              ],
             ),
-          const SizedBox(height: 12),
-          ListTile(
-            leading: const Icon(Icons.image_outlined),
-            title: const Text('Photo upload placeholder'),
-            subtitle: const Text('Later: Supabase Storage plus OCR pipeline'),
-            enabled: false,
           ),
-          ListTile(
-            leading: const Icon(Icons.picture_as_pdf_outlined),
-            title: const Text('PDF upload placeholder'),
-            subtitle: const Text('Later: Supabase Storage plus extraction'),
-            enabled: false,
+          SectionCard(
+            icon: Icons.article_outlined,
+            title: 'Materials',
+            child: Column(
+              children: [
+                for (final material in materials)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.article_outlined),
+                    title: Text(material.title),
+                    subtitle: Text('${material.createdLabel} - pasted text'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.studySessionResult,
+                      arguments: subject,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          SectionCard(
+            icon: Icons.hourglass_empty_outlined,
+            title: 'Coming later',
+            subtitle: 'Visible placeholders only; no upload is performed.',
+            child: const Column(
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.image_outlined),
+                  title: Text('Photo upload placeholder'),
+                  subtitle: Text('Later: storage plus OCR pipeline'),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.picture_as_pdf_outlined),
+                  title: Text('PDF upload placeholder'),
+                  subtitle: Text('Later: storage plus extraction'),
+                ),
+              ],
+            ),
           ),
         ],
       ),
