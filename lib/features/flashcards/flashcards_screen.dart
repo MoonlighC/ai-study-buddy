@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/models/flashcard.dart';
+import '../../app/app_state.dart';
 import '../../core/models/subject.dart';
-import '../../mock/mock_ai_service.dart';
 
 class FlashcardsScreen extends StatefulWidget {
   const FlashcardsScreen({required this.subject, super.key});
@@ -14,12 +13,13 @@ class FlashcardsScreen extends StatefulWidget {
 }
 
 class _FlashcardsScreenState extends State<FlashcardsScreen> {
-  static const ai = MockAiService();
-  late List<Flashcard> cards = ai.flashcardsFor(widget.subject);
   int sessionSize = 5;
 
   @override
   Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
+    final cards = state.flashcardsFor(widget.subject.id);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Flashcards')),
       body: ListView(
@@ -58,16 +58,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                 trailing: IconButton(
                   tooltip: card.isFavorite ? 'Unfavorite' : 'Favorite',
                   icon: Icon(card.isFavorite ? Icons.star : Icons.star_border),
-                  onPressed: () {
-                    setState(() {
-                      cards = [
-                        for (final item in cards)
-                          item.id == card.id
-                              ? item.copyWith(isFavorite: !item.isFavorite)
-                              : item,
-                      ];
-                    });
-                  },
+                  onPressed: () => state.toggleFavorite(card.id),
                 ),
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/models/material.dart';
 import '../core/models/subject.dart';
 import '../features/auth/login_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
@@ -7,7 +8,9 @@ import '../features/favorites/favorites_screen.dart';
 import '../features/flashcards/flashcards_screen.dart';
 import '../features/generation/generated_outputs_screen.dart';
 import '../features/materials/add_material_screen.dart';
+import '../features/materials/material_detail_screen.dart';
 import '../features/progress/progress_screen.dart';
+import '../features/search/search_screen.dart';
 import '../features/study_modes/after_lecture_screen.dart';
 import '../features/study_modes/exam_prep_screen.dart';
 import '../features/study_sessions/ai_teacher_screen.dart';
@@ -24,6 +27,7 @@ class AppRoutes {
   static const subjects = '/subjects';
   static const subjectDetail = '/subjects/detail';
   static const addMaterial = '/materials/add';
+  static const materialDetail = '/materials/detail';
   static const generatedOutputs = '/generation/outputs';
   static const flashcards = '/flashcards';
   static const favorites = '/favorites';
@@ -34,11 +38,15 @@ class AppRoutes {
   static const aiTeacher = '/study/ai-teacher';
   static const progress = '/progress';
   static const usage = '/usage';
+  static const search = '/search';
 
   static Route<void> onGenerateRoute(RouteSettings settings) {
     final subject = settings.arguments is Subject
         ? settings.arguments! as Subject
         : MockData.subjects.first;
+    final material = settings.arguments is StudyMaterial
+        ? settings.arguments! as StudyMaterial
+        : MockData.materials.first;
 
     final widget = switch (settings.name) {
       login => const LoginScreen(),
@@ -46,6 +54,7 @@ class AppRoutes {
       subjects => const SubjectsScreen(),
       subjectDetail => SubjectDetailScreen(subject: subject),
       addMaterial => AddMaterialScreen(subject: subject),
+      materialDetail => MaterialDetailScreen(material: material),
       generatedOutputs => GeneratedOutputsScreen(subject: subject),
       flashcards => FlashcardsScreen(subject: subject),
       favorites => const FavoritesScreen(),
@@ -56,6 +65,7 @@ class AppRoutes {
       aiTeacher => AiTeacherScreen(subject: subject),
       progress => const ProgressScreen(),
       usage => const UsageLimitsScreen(),
+      search => const SearchScreen(),
       _ => const LoginScreen(),
     };
 

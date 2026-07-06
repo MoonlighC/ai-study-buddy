@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
 import '../../mock/mock_data.dart';
+import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_page.dart';
 
 class SubjectsScreen extends StatelessWidget {
@@ -15,6 +16,11 @@ class SubjectsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Study Workspace'),
         actions: [
+          IconButton(
+            tooltip: 'Search',
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.search),
+            icon: const Icon(Icons.search),
+          ),
           IconButton(
             tooltip: 'Favorites',
             onPressed: () => Navigator.pushNamed(context, AppRoutes.favorites),
@@ -81,6 +87,7 @@ class SubjectsScreen extends StatelessWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNav(),
     );
   }
 }

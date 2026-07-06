@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_state.dart';
 import '../../core/models/subject.dart';
 
 class AddMaterialScreen extends StatefulWidget {
@@ -51,6 +52,11 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: () {
+              AppStateScope.read(context).addMaterial(
+                subjectId: widget.subject.id,
+                title: titleController.text,
+                content: contentController.text,
+              );
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Mock material saved locally.')),
               );

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../mock/mock_data.dart';
+import '../../shared/widgets/app_bottom_nav.dart';
+import '../../shared/widgets/app_top_actions.dart';
 
 class ProgressScreen extends StatelessWidget {
   const ProgressScreen({super.key});
@@ -8,7 +10,10 @@ class ProgressScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Progress')),
+      appBar: AppBar(
+        title: const Text('Progress'),
+        actions: const [AppTopActions()],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -61,6 +66,7 @@ class ProgressScreen extends StatelessWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNav(),
     );
   }
 }

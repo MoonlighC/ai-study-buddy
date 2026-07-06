@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
 import '../../mock/mock_data.dart';
 import '../../shared/widgets/app_page.dart';
+import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
 
 class ExamPrepScreen extends StatefulWidget {
@@ -20,9 +22,8 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final materials = MockData.materials
-        .where((material) => material.subjectId == selectedSubject.id)
-        .toList();
+    final state = AppStateScope.watch(context);
+    final materials = state.materialsFor(selectedSubject.id);
     final score = MockData.knowledgeScores.firstWhere(
       (item) => item.subjectId == selectedSubject.id,
     );
@@ -30,7 +31,10 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
     final plan = ai.examPlanFor(selectedSubject);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Exam Prep')),
+      appBar: AppBar(
+        title: const Text('Exam Prep'),
+        actions: const [AppTopActions()],
+      ),
       body: AppPage(
         children: [
           Text(

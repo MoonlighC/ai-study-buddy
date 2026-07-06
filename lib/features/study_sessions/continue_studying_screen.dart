@@ -1,16 +1,31 @@
 import 'package:flutter/material.dart';
 
-import '../../mock/mock_data.dart';
+import '../../app/app_state.dart';
+import '../../shared/widgets/app_bottom_nav.dart';
+import '../../shared/widgets/app_top_actions.dart';
 
 class ContinueStudyingScreen extends StatelessWidget {
   const ContinueStudyingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final weakTopics = MockData.weakTopics.take(3);
+    final state = AppStateScope.watch(context);
+    final latest = state.latestStudySession;
+    final weakTopics =
+        latest?.weakTopics ?? state.weakTopicsFor(state.subjects.first.id);
+    final dueFlashcards = state.dueFlashcards;
+    final subject = latest == null
+        ? state.subjects.first
+        : state.subjects.firstWhere(
+            (item) => item.id == latest.subjectId,
+            orElse: () => state.subjects.first,
+          );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Continue Studying')),
+      appBar: AppBar(
+        title: const Text('Continue Studying'),
+        actions: const [AppTopActions()],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -19,27 +34,34 @@ class ContinueStudyingScreen extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 12),
-          const Card(
+          Card(
             child: ListTile(
-              leading: Icon(Icons.eco_outlined),
-              title: Text('Biology review'),
+              leading: const Icon(Icons.eco_outlined),
+              title: Text('${subject.name} review'),
               subtitle: Text(
-                'Read the summary, study 8 flashcards, then retake the quick quiz.',
+                latest?.summary ??
+                    'Read the summary, study flashcards, then retake the quick quiz.',
               ),
             ),
           ),
-          const Card(
+          Card(
             child: ListTile(
-              leading: Icon(Icons.style_outlined),
-              title: Text('Due flashcards'),
-              subtitle: Text('8 Biology cards are ready for review.'),
+              leading: const Icon(Icons.style_outlined),
+              title: const Text('Due flashcards'),
+              subtitle: Text(
+                '${dueFlashcards.length} ${subject.name} cards are ready for review.',
+              ),
             ),
           ),
-          const Card(
+          Card(
             child: ListTile(
-              leading: Icon(Icons.quiz_outlined),
-              title: Text('Last quiz score'),
-              subtitle: Text('Biology quick quiz: 80%'),
+              leading: const Icon(Icons.quiz_outlined),
+              title: const Text('Last quiz score'),
+              subtitle: Text(
+                latest?.quizScorePercent == null
+                    ? '${subject.name} quick quiz: not answered yet'
+                    : '${subject.name} quick quiz: ${latest!.quizScorePercent}%',
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -55,6 +77,7 @@ class ContinueStudyingScreen extends StatelessWidget {
             ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNav(),
     );
   }
 }

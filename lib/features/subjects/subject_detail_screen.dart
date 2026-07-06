@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../../core/models/subject.dart';
-import '../../mock/mock_data.dart';
+import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_page.dart';
+import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
 
 class SubjectDetailScreen extends StatelessWidget {
@@ -13,12 +15,13 @@ class SubjectDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final materials = MockData.materials
-        .where((material) => material.subjectId == subject.id)
-        .toList();
+    final materials = AppStateScope.watch(context).materialsFor(subject.id);
 
     return Scaffold(
-      appBar: AppBar(title: Text(subject.name)),
+      appBar: AppBar(
+        title: Text(subject.name),
+        actions: const [AppTopActions()],
+      ),
       body: AppPage(
         children: [
           _SubjectHeader(subject: subject),
@@ -66,8 +69,8 @@ class SubjectDetailScreen extends StatelessWidget {
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.pushNamed(
                       context,
-                      AppRoutes.studySessionResult,
-                      arguments: subject,
+                      AppRoutes.materialDetail,
+                      arguments: material,
                     ),
                   ),
               ],
@@ -96,6 +99,7 @@ class SubjectDetailScreen extends StatelessWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNav(),
     );
   }
 }

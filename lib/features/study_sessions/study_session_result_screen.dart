@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../core/models/study_session.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
 import '../../shared/widgets/app_page.dart';
@@ -14,9 +16,16 @@ class StudySessionResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final quizScore = ai.quizScoreFor(subject);
-    final weakTopics = ai.weakTopicsFor(subject);
-    final flashcards = ai.flashcardsFor(subject);
+    final state = AppStateScope.watch(context);
+    final latest = state.latestStudySession;
+    final session = latest != null && latest.subjectId == subject.id
+        ? latest
+        : null;
+    final quizScore = session?.quizScorePercent ?? ai.quizScoreFor(subject);
+    final weakTopics = session?.weakTopics ?? ai.weakTopicsFor(subject);
+    final flashcards = session?.flashcards ?? state.flashcardsFor(subject.id);
+    final timeBlocks = session?.studyTimeBlocks ?? ai.studyTimeBlocks();
+    final quiz = session?.quizQuestion ?? ai.quizFor(subject).first;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Study Session')),
@@ -44,7 +53,7 @@ class StudySessionResultScreen extends StatelessWidget {
                   icon: Icons.schedule_outlined,
                   label: 'Study time',
                   value:
-                      '${ai.studyTimeBlocks().fold<int>(0, (total, block) => total + block.minutes)} min',
+                      '${timeBlocks.fold<int>(0, (total, block) => total + block.minutes)} min',
                 ),
               ),
             ],
@@ -53,14 +62,14 @@ class StudySessionResultScreen extends StatelessWidget {
           SectionCard(
             icon: Icons.summarize_outlined,
             title: 'Summary',
-            child: Text(ai.summaryFor(subject)),
+            child: Text(session?.summary ?? ai.summaryFor(subject)),
           ),
           SectionCard(
             icon: Icons.schedule_outlined,
             title: 'Estimated study time',
             child: Column(
               children: [
-                for (final block in ai.studyTimeBlocks())
+                for (final block in timeBlocks)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
@@ -87,8 +96,32 @@ class StudySessionResultScreen extends StatelessWidget {
           SectionCard(
             icon: Icons.quiz_outlined,
             title: 'Quick quiz',
-            child: Text(
-              'Quiz score: $quizScore%. Retake after reviewing weak topics.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(quiz.question),
+                const SizedBox(height: 8),
+                for (final option in quiz.options)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: OutlinedButton(
+                      onPressed: session == null
+                          ? null
+                          : () => state.answerQuiz(
+                              sessionId: session.id,
+                              answer: option,
+                            ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(_answerLabel(session, option)),
+                      ),
+                    ),
+                  ),
+                Text(
+                  session?.feedback ??
+                      'Quiz score: $quizScore%. Choose an answer to update this local session.',
+                ),
+              ],
             ),
           ),
           SectionCard(
@@ -139,6 +172,14 @@ class StudySessionResultScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _answerLabel(StudySession? session, String option) {
+    if (session?.selectedAnswer != option) {
+      return option;
+    }
+    final isCorrect = session?.answeredCorrectly == true;
+    return isCorrect ? '$option - correct' : '$option - incorrect';
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
 import '../../mock/mock_data.dart';
+import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/section_card.dart';
 
@@ -17,6 +18,11 @@ class DashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('AI Study Buddy'),
         actions: [
+          IconButton(
+            tooltip: 'Search',
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.search),
+            icon: const Icon(Icons.search),
+          ),
           IconButton(
             tooltip: 'Favorites',
             onPressed: () => Navigator.pushNamed(context, AppRoutes.favorites),
@@ -110,6 +116,7 @@ class DashboardScreen extends StatelessWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNav(),
     );
   }
 }
