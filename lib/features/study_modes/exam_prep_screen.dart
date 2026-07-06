@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../core/models/study_session.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
 import '../../mock/mock_data.dart';
+import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
@@ -135,16 +137,24 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
             ),
           ),
           FilledButton.icon(
-            onPressed: () => Navigator.pushNamed(
-              context,
-              AppRoutes.studySessionResult,
-              arguments: selectedSubject,
-            ),
+            onPressed: () {
+              AppStateScope.read(context).createStudySession(
+                subject: selectedSubject,
+                confidence: LectureConfidence.mostly,
+                materialId: materials.firstOrNull?.id,
+              );
+              Navigator.pushNamed(
+                context,
+                AppRoutes.studySessionResult,
+                arguments: selectedSubject,
+              );
+            },
             icon: const Icon(Icons.auto_awesome_outlined),
             label: const Text('Create study session'),
           ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNav(),
     );
   }
 }

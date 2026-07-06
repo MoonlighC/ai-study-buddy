@@ -5,6 +5,7 @@ import '../../app/routes.dart';
 import '../../core/models/study_session.dart';
 import '../../core/models/study_time_block.dart';
 import '../../mock/mock_ai_service.dart';
+import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
@@ -121,6 +122,7 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNav(),
     );
   }
 

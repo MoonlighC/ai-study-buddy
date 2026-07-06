@@ -96,7 +96,9 @@ void main() {
     expect(find.text('What is photosynthesis?'), findsNothing);
   });
 
-  testWidgets('material detail can create a study session', (tester) async {
+  testWidgets('material detail creates a source-specific study session', (
+    tester,
+  ) async {
     await _enterDashboard(tester);
     await _pushRoute(
       tester,
@@ -122,7 +124,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Study Session'), findsOneWidget);
+    expect(
+      find.text('Generated from: Photosynthesis lecture notes'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Normal review'), findsOneWidget);
+    expect(
+      find.textContaining('Source "Photosynthesis lecture notes" says'),
+      findsOneWidget,
+    );
+    await _scrollTo(
+      tester,
+      find.text('Which source did this study session use?'),
+    );
+    expect(
+      find.text('Which source did this study session use?'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('bottom navigation opens core routes', (tester) async {
@@ -158,21 +176,23 @@ void main() {
     expect(find.text('What do you want to do today?'), findsOneWidget);
   });
 
-  testWidgets('scenario screens expose top quick actions only', (tester) async {
+  testWidgets('scenario screens expose shared navigation actions', (
+    tester,
+  ) async {
     await _enterDashboard(tester);
     await _pushRoute(tester, AppRoutes.afterLecture);
 
     expect(find.byTooltip('Search'), findsOneWidget);
-    expect(find.byTooltip('Favorites'), findsOneWidget);
-    expect(find.byTooltip('Home'), findsOneWidget);
-    expect(find.text('Subjects'), findsNothing);
+    expect(find.byTooltip('Favorites'), findsWidgets);
+    expect(find.byTooltip('Home'), findsWidgets);
+    expect(find.text('Subjects'), findsOneWidget);
 
     await _pushRoute(tester, AppRoutes.examPrep);
 
     expect(find.byTooltip('Search'), findsOneWidget);
-    expect(find.byTooltip('Favorites'), findsOneWidget);
-    expect(find.byTooltip('Home'), findsOneWidget);
-    expect(find.text('Progress'), findsNothing);
+    expect(find.byTooltip('Favorites'), findsWidgets);
+    expect(find.byTooltip('Home'), findsWidgets);
+    expect(find.text('Progress'), findsOneWidget);
   });
 
   testWidgets('local search finds material and opens detail', (tester) async {
@@ -212,18 +232,21 @@ void main() {
     expect(find.textContaining('Simple explanation'), findsWidgets);
     expect(find.text('45 min'), findsOneWidget);
 
-    await _scrollTo(tester, find.text('Oxygen'));
-    await tester.tap(find.text('Oxygen'));
+    await _scrollTo(tester, find.text('A generic Biology fallback'));
+    await tester.tap(find.text('A generic Biology fallback'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Oxygen - incorrect'), findsOneWidget);
+    expect(find.text('A generic Biology fallback - incorrect'), findsOneWidget);
     expect(
       find.text(
         'Incorrect. Review the explanation, then retry the flashcards.',
       ),
       findsOneWidget,
     );
-    expect(find.textContaining('You chose "Oxygen"'), findsOneWidget);
+    expect(
+      find.textContaining('You chose "A generic Biology fallback"'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('continue studying reads latest local session', (tester) async {
@@ -234,8 +257,8 @@ void main() {
     await tester.pumpAndSettle();
     await _tapVisible(tester, find.text('Create study session'));
     await tester.pumpAndSettle();
-    await _scrollTo(tester, find.text('Oxygen'));
-    await tester.tap(find.text('Oxygen'));
+    await _scrollTo(tester, find.text('A generic Biology fallback'));
+    await tester.tap(find.text('A generic Biology fallback'));
     await tester.pumpAndSettle();
 
     await _pushRoute(tester, AppRoutes.continueStudying);

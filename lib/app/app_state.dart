@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/models/flashcard.dart';
 import '../core/models/material.dart';
+import '../core/models/quiz_question.dart';
 import '../core/models/study_session.dart';
 import '../core/models/study_time_block.dart';
 import '../core/models/subject.dart';
@@ -175,15 +176,22 @@ class AppState extends ChangeNotifier {
   }) {
     final materials = materialsFor(subject.id);
     final selectedMaterialId = materialId ?? materials.firstOrNull?.id ?? '';
-    final question = _ai.quizFor(subject).first;
+    final selectedMaterial = materialById(selectedMaterialId);
+    final sessionNumber = ++_sessionCounter;
+    final question = _quizFor(subject, selectedMaterial, sessionNumber);
     final session = StudySession(
-      id: 'local-session-${++_sessionCounter}',
+      id: 'local-session-$sessionNumber',
       subjectId: subject.id,
       materialId: selectedMaterialId,
       confidence: confidence,
-      summary: _summaryFor(subject, confidence),
+      summary: _summaryFor(subject, confidence, selectedMaterial),
       studyTimeBlocks: _timeBlocksFor(confidence),
-      flashcards: _cardsFor(subject, confidence),
+      flashcards: _cardsFor(
+        subject,
+        confidence,
+        selectedMaterial,
+        sessionNumber,
+      ),
       quizQuestion: question,
       weakTopics: _initialWeakTopicsFor(subject, confidence),
     );
@@ -233,17 +241,24 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  String _summaryFor(Subject subject, LectureConfidence confidence) {
+  String _summaryFor(
+    Subject subject,
+    LectureConfidence confidence,
+    StudyMaterial? material,
+  ) {
     final base = _ai.summaryFor(subject);
+    final sourceNote = material == null
+        ? ''
+        : ' Source "${material.title}" says: ${material.content}';
     return switch (confidence) {
       LectureConfidence.understoodEverything =>
-        'Short review: $base Focus on one quick check and move on.',
+        'Short review: $base$sourceNote Focus on one quick check and move on.',
       LectureConfidence.mostly =>
-        'Normal review: $base Use flashcards, then answer the quick quiz.',
+        'Normal review: $base$sourceNote Use flashcards, then answer the quick quiz.',
       LectureConfidence.aboutHalf =>
-        'Practice review: $base Spend extra time on flashcards and quiz choices.',
+        'Practice review: $base$sourceNote Spend extra time on flashcards and quiz choices.',
       LectureConfidence.completelyLost =>
-        'Simple explanation: start with the main idea in ${subject.name}, then connect one example before adding details. Take the longer guided review.',
+        'Simple explanation: start with the main idea in ${subject.name}, then connect one example from ${material?.title ?? 'the selected material'} before adding details.$sourceNote Take the longer guided review.',
     };
   }
 
@@ -270,16 +285,62 @@ class AppState extends ChangeNotifier {
     };
   }
 
-  List<Flashcard> _cardsFor(Subject subject, LectureConfidence confidence) {
+  List<Flashcard> _cardsFor(
+    Subject subject,
+    LectureConfidence confidence,
+    StudyMaterial? material,
+    int sessionNumber,
+  ) {
     final cards = flashcardsFor(subject.id);
+    final sourceCards = material == null
+        ? cards
+        : [
+            Flashcard(
+              id: 'local-session-$sessionNumber-source-card-1',
+              subjectId: subject.id,
+              front: 'What is the key idea in "${material.title}"?',
+              back: material.content.isEmpty
+                  ? 'Review the selected material and identify its main point.'
+                  : material.content,
+              topic: material.title,
+              isFavorite: false,
+            ),
+            ...cards,
+          ];
     if (confidence == LectureConfidence.understoodEverything) {
-      return cards.take(1).toList();
+      return sourceCards.take(1).toList();
     }
     if (confidence == LectureConfidence.aboutHalf ||
         confidence == LectureConfidence.completelyLost) {
-      return [...cards, ...cards.take(1)];
+      return [...sourceCards, ...sourceCards.take(1)];
     }
-    return cards;
+    return sourceCards;
+  }
+
+  QuizQuestion _quizFor(
+    Subject subject,
+    StudyMaterial? material,
+    int sessionNumber,
+  ) {
+    final fallback = _ai.quizFor(subject).first;
+    if (material == null) {
+      return fallback;
+    }
+    return QuizQuestion(
+      id: 'local-session-$sessionNumber-source-quiz',
+      subjectId: subject.id,
+      question: 'Which source did this study session use?',
+      options: [
+        material.title,
+        'A generic ${subject.name} fallback',
+        'An uploaded PDF',
+        'A saved favorite',
+      ],
+      correctAnswer: material.title,
+      explanation:
+          'This local session was generated from "${material.title}", using its pasted content.',
+      difficulty: fallback.difficulty,
+    );
   }
 
   List<WeakTopic> _initialWeakTopicsFor(

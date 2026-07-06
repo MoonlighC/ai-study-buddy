@@ -26,6 +26,9 @@ class StudySessionResultScreen extends StatelessWidget {
     final flashcards = session?.flashcards ?? state.flashcardsFor(subject.id);
     final timeBlocks = session?.studyTimeBlocks ?? ai.studyTimeBlocks();
     final quiz = session?.quizQuestion ?? ai.quizFor(subject).first;
+    final material = session == null
+        ? null
+        : state.materialById(session.materialId);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Study Session')),
@@ -34,7 +37,9 @@ class StudySessionResultScreen extends StatelessWidget {
           Text(subject.name, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
           Text(
-            'Mock study session generated from your material.',
+            material == null
+                ? 'Mock study session generated from your material.'
+                : 'Generated from: ${material.title}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
