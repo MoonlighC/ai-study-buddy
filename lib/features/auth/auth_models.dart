@@ -6,6 +6,14 @@ class AuthUser {
   final String? displayName;
 }
 
+class AuthProfile {
+  const AuthProfile({required this.id, this.email, this.displayName});
+
+  final String id;
+  final String? email;
+  final String? displayName;
+}
+
 class AuthResult {
   const AuthResult._({
     required this.user,

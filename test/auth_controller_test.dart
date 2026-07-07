@@ -25,8 +25,14 @@ void main() {
       expect(controller.user, isNull);
     });
 
-    test('startup with a session signs in and ensures profile', () async {
-      final profileRepository = _FakeProfileRepository();
+    test('startup with a session fetches profile', () async {
+      final profileRepository = _FakeProfileRepository(
+        profile: const AuthProfile(
+          id: 'user-1',
+          email: 'learner@example.test',
+          displayName: 'Profile Learner',
+        ),
+      );
       final controller = AuthController(
         authRepository: _FakeAuthRepository(initialUser: user),
         profileRepository: profileRepository,
@@ -36,7 +42,59 @@ void main() {
 
       expect(controller.isAuthenticated, isTrue);
       expect(controller.user, user);
+      expect(controller.profile?.displayName, 'Profile Learner');
+      expect(controller.effectiveDisplayName, 'Profile Learner');
+      expect(profileRepository.fetchedUsers, [user]);
+      expect(profileRepository.ensuredUsers, isEmpty);
+    });
+
+    test('profile display name wins over auth metadata', () async {
+      final controller = AuthController(
+        authRepository: _FakeAuthRepository(initialUser: user),
+        profileRepository: _FakeProfileRepository(
+          profile: const AuthProfile(
+            id: 'user-1',
+            email: 'learner@example.test',
+            displayName: 'Profile Name',
+          ),
+        ),
+      );
+
+      await controller.initialize();
+
+      expect(controller.user?.displayName, 'Learner One');
+      expect(controller.effectiveDisplayName, 'Profile Name');
+    });
+
+    test('missing profile calls ensure and falls back safely', () async {
+      final profileRepository = _FakeProfileRepository();
+      final controller = AuthController(
+        authRepository: _FakeAuthRepository(initialUser: user),
+        profileRepository: profileRepository,
+      );
+
+      await controller.initialize();
+
+      expect(controller.isAuthenticated, isTrue);
+      expect(controller.profile?.displayName, 'Learner One');
+      expect(controller.effectiveDisplayName, 'Learner One');
+      expect(profileRepository.fetchedUsers, [user]);
       expect(profileRepository.ensuredUsers, [user]);
+    });
+
+    test('profile failure preserves signed-in startup session', () async {
+      final controller = AuthController(
+        authRepository: _FakeAuthRepository(initialUser: user),
+        profileRepository: _FakeProfileRepository(throwOnFetch: true),
+      );
+
+      await controller.initialize();
+
+      expect(controller.isAuthenticated, isTrue);
+      expect(controller.user, user);
+      expect(controller.profile, isNull);
+      expect(controller.effectiveDisplayName, 'Learner One');
+      expect(controller.errorMessage, isNull);
     });
 
     test('login signs in and ensures profile', () async {
@@ -161,6 +219,37 @@ void main() {
       expect(controller.noticeMessage, contains('reset email'));
     });
 
+    test('empty edit name fails before repository update', () async {
+      final profileRepository = _FakeProfileRepository();
+      final controller = AuthController(
+        authRepository: _FakeAuthRepository(initialUser: user),
+        profileRepository: profileRepository,
+      );
+      await controller.initialize();
+
+      final updated = await controller.updateDisplayName('   ');
+
+      expect(updated, isFalse);
+      expect(controller.errorMessage, 'Enter your name.');
+      expect(profileRepository.updatedDisplayNames, isEmpty);
+    });
+
+    test('valid edit name updates repository and controller state', () async {
+      final profileRepository = _FakeProfileRepository();
+      final controller = AuthController(
+        authRepository: _FakeAuthRepository(initialUser: user),
+        profileRepository: profileRepository,
+      );
+      await controller.initialize();
+
+      final updated = await controller.updateDisplayName('  Updated Learner  ');
+
+      expect(updated, isTrue);
+      expect(profileRepository.updatedDisplayNames, ['Updated Learner']);
+      expect(controller.profile?.displayName, 'Updated Learner');
+      expect(controller.effectiveDisplayName, 'Updated Learner');
+    });
+
     test('signout clears authenticated user', () async {
       final authRepository = _FakeAuthRepository(initialUser: user);
       final controller = AuthController(
@@ -173,6 +262,7 @@ void main() {
 
       expect(signedOut, isTrue);
       expect(controller.user, isNull);
+      expect(controller.profile, isNull);
       expect(authRepository.signOutCount, 1);
     });
   });
@@ -239,10 +329,50 @@ class _FakeAuthRepository implements AuthRepository {
 }
 
 class _FakeProfileRepository implements ProfileRepository {
+  _FakeProfileRepository({this.profile, this.throwOnFetch = false});
+
+  AuthProfile? profile;
+  final bool throwOnFetch;
+
+  final List<AuthUser> fetchedUsers = [];
   final List<AuthUser> ensuredUsers = [];
+  final List<AuthUser> updateUsers = [];
+  final List<String> updatedDisplayNames = [];
 
   @override
-  Future<void> ensureProfile(AuthUser user) async {
+  Future<AuthProfile?> fetchProfile(AuthUser user) async {
+    if (throwOnFetch) {
+      throw const ProfileRepositoryException('Profile failed.');
+    }
+    fetchedUsers.add(user);
+    return profile;
+  }
+
+  @override
+  Future<AuthProfile> ensureProfile(AuthUser user) async {
     ensuredUsers.add(user);
+    final ensuredProfile = AuthProfile(
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+    );
+    profile = ensuredProfile;
+    return ensuredProfile;
+  }
+
+  @override
+  Future<AuthProfile> updateDisplayName({
+    required AuthUser user,
+    required String displayName,
+  }) async {
+    updateUsers.add(user);
+    updatedDisplayNames.add(displayName);
+    final updatedProfile = AuthProfile(
+      id: user.id,
+      email: user.email,
+      displayName: displayName,
+    );
+    profile = updatedProfile;
+    return updatedProfile;
   }
 }

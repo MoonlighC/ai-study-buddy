@@ -122,17 +122,106 @@ class SupabaseProfileRepository implements ProfileRepository {
   final supabase.SupabaseClient _client;
 
   @override
-  Future<void> ensureProfile(AuthUser user) async {
+  Future<AuthProfile?> fetchProfile(AuthUser user) async {
     try {
-      await _client.from('profiles').upsert(<String, Object?>{
-        'id': user.id,
-        'email': user.email,
-        'display_name': user.displayName,
-      });
+      final row = await _client
+          .from('profiles')
+          .select('id,email,display_name')
+          .eq('id', user.id)
+          .maybeSingle();
+      if (row == null) {
+        return null;
+      }
+      return _mapProfile(row);
+    } catch (_) {
+      throw const ProfileRepositoryException(
+        'Could not load the account profile.',
+      );
+    }
+  }
+
+  @override
+  Future<AuthProfile> ensureProfile(AuthUser user) async {
+    final existingProfile = await fetchProfile(user);
+    if (existingProfile != null) {
+      return existingProfile;
+    }
+    return _upsertProfile(user: user, displayName: user.displayName);
+  }
+
+  @override
+  Future<AuthProfile> updateDisplayName({
+    required AuthUser user,
+    required String displayName,
+  }) async {
+    final trimmedDisplayName = displayName.trim();
+    if (trimmedDisplayName.isEmpty) {
+      throw const ProfileRepositoryException('Enter your name.');
+    }
+
+    try {
+      final row = await _client
+          .from('profiles')
+          .update(<String, Object?>{'display_name': trimmedDisplayName})
+          .eq('id', user.id)
+          .select('id,email,display_name')
+          .maybeSingle();
+      if (row != null) {
+        return _mapProfile(row);
+      }
+      return _upsertProfile(user: user, displayName: trimmedDisplayName);
+    } on ProfileRepositoryException {
+      rethrow;
     } catch (_) {
       throw const ProfileRepositoryException(
         'Could not update the account profile.',
       );
     }
+  }
+
+  Future<AuthProfile> _upsertProfile({
+    required AuthUser user,
+    required String? displayName,
+  }) async {
+    try {
+      final row = await _client
+          .from('profiles')
+          .upsert(<String, Object?>{
+            'id': user.id,
+            'email': user.email,
+            'display_name': _trimmedOrNull(displayName),
+          })
+          .select('id,email,display_name')
+          .single();
+      return _mapProfile(row);
+    } catch (_) {
+      throw const ProfileRepositoryException(
+        'Could not update the account profile.',
+      );
+    }
+  }
+
+  AuthProfile _mapProfile(Map<String, dynamic> row) {
+    return AuthProfile(
+      id: _profileString(row, 'id') ?? '',
+      email: _profileString(row, 'email'),
+      displayName: _profileString(row, 'display_name'),
+    );
+  }
+
+  String? _profileString(Map<String, dynamic> row, String key) {
+    final value = row[key];
+    if (value is! String) {
+      return null;
+    }
+    return _trimmedOrNull(value);
+  }
+
+  String? _trimmedOrNull(String? value) {
+    final trimmedValue = value?.trim();
+    if (trimmedValue == null || trimmedValue.isEmpty) {
+      return null;
+    }
+    return trimmedValue;
   }
 }

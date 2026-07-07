@@ -20,7 +20,7 @@ class SettingsScreen extends StatelessWidget {
         state.config.effectiveBackendMode == AppBackendMode.supabase;
     final accountEmail = auth.user?.email ?? 'alex.student@example.test';
     final accountName = isSupabaseMode
-        ? _accountName(displayName: auth.user?.displayName, email: accountEmail)
+        ? auth.effectiveDisplayName
         : 'Alex Student';
 
     return Scaffold(
@@ -49,6 +49,16 @@ class SettingsScreen extends StatelessWidget {
                 _InfoRow(label: 'Name', value: accountName),
                 _InfoRow(label: 'Email', value: accountEmail),
                 const SizedBox(height: 12),
+                if (isSupabaseMode) ...[
+                  OutlinedButton.icon(
+                    onPressed: auth.isLoading || auth.user == null
+                        ? null
+                        : () => _editName(context),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit name'),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 FilledButton.tonalIcon(
                   onPressed: auth.isLoading ? null : () => _logOut(context),
                   icon: const Icon(Icons.logout),
@@ -190,17 +200,41 @@ class SettingsScreen extends StatelessWidget {
     };
   }
 
-  String _accountName({required String? displayName, required String email}) {
+  String _editableName(AuthController auth) {
+    final profileName = _cleanName(auth.profile?.displayName);
+    if (profileName != null) {
+      return profileName;
+    }
+    return _cleanName(auth.user?.displayName) ?? '';
+  }
+
+  String? _cleanName(String? displayName) {
     final trimmedName = displayName?.trim();
     if (trimmedName != null && trimmedName.isNotEmpty) {
       return trimmedName;
     }
+    return null;
+  }
 
-    final atIndex = email.indexOf('@');
-    if (atIndex > 0) {
-      return email.substring(0, atIndex);
+  Future<void> _editName(BuildContext context) async {
+    final auth = AuthScope.read(context);
+    final updatedName = await showDialog<String>(
+      context: context,
+      builder: (_) => _EditNameDialog(initialName: _editableName(auth)),
+    );
+    if (!context.mounted || updatedName == null) {
+      return;
     }
-    return 'Study buddy';
+    final saved = await AuthScope.read(context).updateDisplayName(updatedName);
+    if (!context.mounted || saved) {
+      return;
+    }
+    final message =
+        AuthScope.read(context).errorMessage ??
+        'Could not update the account profile.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _logOut(BuildContext context) async {
@@ -221,6 +255,68 @@ class SettingsScreen extends StatelessWidget {
       AppRoutes.login,
       (route) => false,
     );
+  }
+}
+
+class _EditNameDialog extends StatefulWidget {
+  const _EditNameDialog({required this.initialName});
+
+  final String initialName;
+
+  @override
+  State<_EditNameDialog> createState() => _EditNameDialogState();
+}
+
+class _EditNameDialogState extends State<_EditNameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName,
+  );
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit name'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        decoration: InputDecoration(labelText: 'Name', errorText: _errorText),
+        onChanged: (_) {
+          if (_errorText == null) {
+            return;
+          }
+          setState(() {
+            _errorText = null;
+          });
+        },
+        onSubmitted: (_) => _save(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
+  }
+
+  void _save() {
+    final trimmedName = _controller.text.trim();
+    if (trimmedName.isEmpty) {
+      setState(() {
+        _errorText = 'Enter your name.';
+      });
+      return;
+    }
+    Navigator.pop(context, trimmedName);
   }
 }
 

@@ -13,6 +13,7 @@ class AuthController extends ChangeNotifier {
   final ProfileRepository profileRepository;
 
   AuthUser? _user;
+  AuthProfile? _profile;
   bool _hasInitialized = false;
   bool _isInitializing = true;
   bool _isLoading = false;
@@ -20,6 +21,29 @@ class AuthController extends ChangeNotifier {
   String? _noticeMessage;
 
   AuthUser? get user => _user;
+
+  AuthProfile? get profile => _profile;
+
+  String get effectiveDisplayName {
+    final profileName = _cleanName(_profile?.displayName);
+    if (profileName != null) {
+      return profileName;
+    }
+
+    final userName = _cleanName(_user?.displayName);
+    if (userName != null) {
+      return userName;
+    }
+
+    final email = _user?.email.trim();
+    if (email != null && email.isNotEmpty) {
+      final atIndex = email.indexOf('@');
+      if (atIndex > 0) {
+        return email.substring(0, atIndex);
+      }
+    }
+    return 'Study buddy';
+  }
 
   bool get hasInitialized => _hasInitialized;
 
@@ -44,11 +68,13 @@ class AuthController extends ChangeNotifier {
     try {
       final existingUser = await authRepository.currentUser();
       _user = existingUser;
+      _profile = null;
       if (existingUser != null) {
-        await _ensureProfileWithoutBlocking(existingUser);
+        _profile = await _loadProfileWithoutBlocking(existingUser);
       }
     } catch (error) {
       _user = null;
+      _profile = null;
       _errorMessage = _messageFor(error);
     } finally {
       _hasInitialized = true;
@@ -80,8 +106,9 @@ class AuthController extends ChangeNotifier {
         _noticeMessage = result.message;
         return false;
       }
-      await profileRepository.ensureProfile(signedInUser);
+      final profile = await _loadOrEnsureProfile(signedInUser);
       _user = signedInUser;
+      _profile = profile;
       return true;
     });
   }
@@ -118,8 +145,9 @@ class AuthController extends ChangeNotifier {
             result.message ?? 'Check your email before logging in.';
         return false;
       }
-      await profileRepository.ensureProfile(signedInUser);
+      final profile = await _loadOrEnsureProfile(signedInUser);
       _user = signedInUser;
+      _profile = profile;
       return true;
     });
   }
@@ -143,6 +171,29 @@ class AuthController extends ChangeNotifier {
     return _runAuthAction(() async {
       await authRepository.signOut();
       _user = null;
+      _profile = null;
+      return true;
+    });
+  }
+
+  Future<bool> updateDisplayName(String displayName) async {
+    final trimmedDisplayName = displayName.trim();
+    if (trimmedDisplayName.isEmpty) {
+      _setError('Enter your name.');
+      return false;
+    }
+
+    final currentUser = _user;
+    if (currentUser == null) {
+      _setError('Log in to edit your profile.');
+      return false;
+    }
+
+    return _runAuthAction(() async {
+      _profile = await profileRepository.updateDisplayName(
+        user: currentUser,
+        displayName: trimmedDisplayName,
+      );
       return true;
     });
   }
@@ -163,11 +214,20 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<void> _ensureProfileWithoutBlocking(AuthUser user) async {
+  Future<AuthProfile> _loadOrEnsureProfile(AuthUser user) async {
+    final profile = await profileRepository.fetchProfile(user);
+    if (profile != null) {
+      return profile;
+    }
+    return profileRepository.ensureProfile(user);
+  }
+
+  Future<AuthProfile?> _loadProfileWithoutBlocking(AuthUser user) async {
     try {
-      await profileRepository.ensureProfile(user);
+      return await _loadOrEnsureProfile(user);
     } catch (error) {
       debugPrint('Profile upsert skipped during startup: $error');
+      return null;
     }
   }
 
@@ -186,6 +246,14 @@ class AuthController extends ChangeNotifier {
 
   bool _looksLikeEmail(String email) {
     return email.contains('@') && email.contains('.');
+  }
+
+  String? _cleanName(String? name) {
+    final trimmedName = name?.trim();
+    if (trimmedName == null || trimmedName.isEmpty) {
+      return null;
+    }
+    return trimmedName;
   }
 
   void _setError(String message) {

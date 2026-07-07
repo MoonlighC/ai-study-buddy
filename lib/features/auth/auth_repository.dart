@@ -20,7 +20,14 @@ abstract class AuthRepository {
 }
 
 abstract class ProfileRepository {
-  Future<void> ensureProfile(AuthUser user);
+  Future<AuthProfile?> fetchProfile(AuthUser user);
+
+  Future<AuthProfile> ensureProfile(AuthUser user);
+
+  Future<AuthProfile> updateDisplayName({
+    required AuthUser user,
+    required String displayName,
+  });
 }
 
 class AuthRepositoryException implements Exception {
@@ -78,5 +85,28 @@ class MockAuthRepository implements AuthRepository {
 
 class NoopProfileRepository implements ProfileRepository {
   @override
-  Future<void> ensureProfile(AuthUser user) async {}
+  Future<AuthProfile?> fetchProfile(AuthUser user) async {
+    return null;
+  }
+
+  @override
+  Future<AuthProfile> ensureProfile(AuthUser user) async {
+    return AuthProfile(
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+    );
+  }
+
+  @override
+  Future<AuthProfile> updateDisplayName({
+    required AuthUser user,
+    required String displayName,
+  }) async {
+    return AuthProfile(
+      id: user.id,
+      email: user.email,
+      displayName: displayName.trim(),
+    );
+  }
 }
