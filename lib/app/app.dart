@@ -1,29 +1,55 @@
 import 'package:flutter/material.dart';
 
+import 'app_config.dart';
 import 'app_state.dart';
 import 'routes.dart';
 import 'theme.dart';
+import '../features/auth/auth_controller.dart';
+import '../features/auth/auth_repository.dart';
 
 class StudyBuddyApp extends StatefulWidget {
-  const StudyBuddyApp({super.key});
+  const StudyBuddyApp({
+    this.config,
+    this.authRepository,
+    this.profileRepository,
+    super.key,
+  });
+
+  final AppConfig? config;
+  final AuthRepository? authRepository;
+  final ProfileRepository? profileRepository;
 
   @override
   State<StudyBuddyApp> createState() => _StudyBuddyAppState();
 }
 
 class _StudyBuddyAppState extends State<StudyBuddyApp> {
-  late final AppState state = AppState();
+  late final AppConfig config = widget.config ?? AppConfig.fromValues();
+  late final AppState state = AppState(config: config);
+  late final AuthController authController = AuthController(
+    authRepository: widget.authRepository ?? MockAuthRepository(),
+    profileRepository: widget.profileRepository ?? NoopProfileRepository(),
+  );
+
+  @override
+  void dispose() {
+    authController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return AppStateScope(
       state: state,
-      child: MaterialApp(
-        title: 'AI Study Buddy',
-        debugShowCheckedModeBanner: false,
-        theme: buildAppTheme(),
-        initialRoute: AppRoutes.login,
-        onGenerateRoute: AppRoutes.onGenerateRoute,
+      child: AuthScope(
+        controller: authController,
+        child: MaterialApp(
+          title: 'AI Study Buddy',
+          debugShowCheckedModeBanner: false,
+          theme: buildAppTheme(),
+          initialRoute: AppRoutes.authGate,
+          onGenerateRoute: AppRoutes.onGenerateRoute,
+        ),
       ),
     );
   }

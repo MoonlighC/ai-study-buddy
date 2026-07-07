@@ -10,6 +10,7 @@ void main() {
       expect(config.supabaseUrl, isEmpty);
       expect(config.supabaseAnonKey, isEmpty);
       expect(config.hasSupabaseConfig, isFalse);
+      expect(config.effectiveBackendMode, AppBackendMode.mock);
       expect(config.shouldInitializeSupabase, isFalse);
     });
 
@@ -22,6 +23,7 @@ void main() {
 
       expect(config.backendMode, AppBackendMode.mock);
       expect(config.hasSupabaseConfig, isTrue);
+      expect(config.effectiveBackendMode, AppBackendMode.mock);
       expect(config.shouldInitializeSupabase, isFalse);
     });
 
@@ -36,6 +38,7 @@ void main() {
       expect(config.supabaseUrl, 'https://example.supabase.co');
       expect(config.supabaseAnonKey, 'placeholder-anon-key');
       expect(config.hasSupabaseConfig, isTrue);
+      expect(config.effectiveBackendMode, AppBackendMode.supabase);
       expect(config.shouldInitializeSupabase, isTrue);
     });
 
@@ -44,6 +47,7 @@ void main() {
 
       expect(config.backendMode, AppBackendMode.supabase);
       expect(config.hasSupabaseConfig, isFalse);
+      expect(config.effectiveBackendMode, AppBackendMode.mock);
       expect(config.shouldInitializeSupabase, isFalse);
     });
   });

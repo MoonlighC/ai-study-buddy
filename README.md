@@ -18,17 +18,21 @@ configuration with `--dart-define`:
 ```powershell
 flutter run `
   --dart-define=APP_BACKEND_MODE=supabase `
-  --dart-define=SUPABASE_URL=https://msaaqhqnnhpmclgdzowo.supabase.co `
-  --dart-define=SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_OR_ANON_KEY
+  --dart-define=SUPABASE_URL=https://YOUR-PROJECT.supabase.co `
+  --dart-define=SUPABASE_ANON_KEY=YOUR-PUBLISHABLE-OR-ANON-KEY
 ```
 
 Only the exact value `APP_BACKEND_MODE=supabase` enables Supabase mode. If the
 URL or publishable/anon key is missing, the app continues in mock mode and logs
 a sanitized debug message.
 
-Do not commit real Supabase keys, service role keys, OpenAI keys, or local
-`.env` files. Phase 5C only initializes the Supabase Flutter client; it does
-not add auth UI, data sync, Edge Functions, or AI calls.
+Supabase mode supports email/password login, signup, password reset email, and
+logout. On login or signup with an active session, the app upserts the signed-in
+user's `public.profiles` row using the authenticated client.
+
+Do not commit real Supabase keys, server-only keys, OpenAI keys, or local
+`.env` files. The app still does not add data sync, file uploads, Edge
+Functions, or AI calls.
 
 ## Getting Started
 

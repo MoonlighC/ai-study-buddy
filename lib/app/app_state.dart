@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_config.dart';
 import '../core/models/flashcard.dart';
 import '../core/models/material.dart';
 import '../core/models/quiz_question.dart';
@@ -11,19 +12,66 @@ import '../mock/mock_ai_service.dart';
 import '../mock/mock_data.dart';
 
 class AppState extends ChangeNotifier {
-  AppState()
-    : subjects = List<Subject>.of(MockData.subjects),
+  AppState({AppConfig? config})
+    : config = config ?? AppConfig.fromValues(),
+      subjects = List<Subject>.of(MockData.subjects),
       _materials = List<StudyMaterial>.of(MockData.materials),
       _flashcards = List<Flashcard>.of(MockData.flashcards);
 
   static const _ai = MockAiService();
 
+  final AppConfig config;
   final List<Subject> subjects;
   final List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
   final List<StudySession> _studySessions = [];
   int _materialCounter = 0;
   int _sessionCounter = 0;
+  AppLanguagePreference _languagePreference = AppLanguagePreference.system;
+  int _defaultFlashcardSessionSize = 5;
+  int _dailyStudyGoalMinutes = 20;
+  StudyDifficultyPreference _defaultDifficulty =
+      StudyDifficultyPreference.medium;
+
+  AppLanguagePreference get languagePreference => _languagePreference;
+
+  int get defaultFlashcardSessionSize => _defaultFlashcardSessionSize;
+
+  int get dailyStudyGoalMinutes => _dailyStudyGoalMinutes;
+
+  StudyDifficultyPreference get defaultDifficulty => _defaultDifficulty;
+
+  void setLanguagePreference(AppLanguagePreference value) {
+    if (_languagePreference == value) {
+      return;
+    }
+    _languagePreference = value;
+    notifyListeners();
+  }
+
+  void setDefaultFlashcardSessionSize(int value) {
+    if (_defaultFlashcardSessionSize == value) {
+      return;
+    }
+    _defaultFlashcardSessionSize = value;
+    notifyListeners();
+  }
+
+  void setDailyStudyGoalMinutes(int value) {
+    if (_dailyStudyGoalMinutes == value) {
+      return;
+    }
+    _dailyStudyGoalMinutes = value;
+    notifyListeners();
+  }
+
+  void setDefaultDifficulty(StudyDifficultyPreference value) {
+    if (_defaultDifficulty == value) {
+      return;
+    }
+    _defaultDifficulty = value;
+    notifyListeners();
+  }
 
   List<StudyMaterial> materialsFor(String subjectId) {
     return _materials
@@ -362,6 +410,30 @@ class AppState extends ChangeNotifier {
       ];
     }
     return topics;
+  }
+}
+
+enum AppLanguagePreference { system, english, german }
+
+extension AppLanguagePreferenceLabel on AppLanguagePreference {
+  String get label {
+    return switch (this) {
+      AppLanguagePreference.system => 'System default',
+      AppLanguagePreference.english => 'English',
+      AppLanguagePreference.german => 'Deutsch',
+    };
+  }
+}
+
+enum StudyDifficultyPreference { easy, medium, exam }
+
+extension StudyDifficultyPreferenceLabel on StudyDifficultyPreference {
+  String get label {
+    return switch (this) {
+      StudyDifficultyPreference.easy => 'easy',
+      StudyDifficultyPreference.medium => 'medium',
+      StudyDifficultyPreference.exam => 'exam',
+    };
   }
 }
 

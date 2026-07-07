@@ -41,6 +41,13 @@ class AppConfig {
   }
 
   bool get shouldInitializeSupabase {
-    return backendMode == AppBackendMode.supabase && hasSupabaseConfig;
+    return effectiveBackendMode == AppBackendMode.supabase;
+  }
+
+  AppBackendMode get effectiveBackendMode {
+    if (backendMode == AppBackendMode.supabase && hasSupabaseConfig) {
+      return AppBackendMode.supabase;
+    }
+    return AppBackendMode.mock;
   }
 }

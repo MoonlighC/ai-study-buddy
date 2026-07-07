@@ -10,6 +10,7 @@ class AppBottomNav extends StatelessWidget {
     AppRoutes.subjects,
     AppRoutes.favorites,
     AppRoutes.progress,
+    AppRoutes.settings,
   ];
 
   @override
@@ -46,6 +47,11 @@ class AppBottomNav extends StatelessWidget {
           icon: Icon(Icons.trending_up_outlined),
           selectedIcon: Icon(Icons.trending_up),
           label: 'Progress',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.settings_outlined),
+          selectedIcon: Icon(Icons.settings),
+          label: 'Settings',
         ),
       ],
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/models/material.dart';
 import '../core/models/subject.dart';
+import '../features/auth/auth_gate_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/favorites/favorites_screen.dart';
@@ -11,6 +12,7 @@ import '../features/materials/add_material_screen.dart';
 import '../features/materials/material_detail_screen.dart';
 import '../features/progress/progress_screen.dart';
 import '../features/search/search_screen.dart';
+import '../features/settings/settings_screen.dart';
 import '../features/study_modes/after_lecture_screen.dart';
 import '../features/study_modes/exam_prep_screen.dart';
 import '../features/study_sessions/ai_teacher_screen.dart';
@@ -22,6 +24,7 @@ import '../features/usage/usage_limits_screen.dart';
 import '../mock/mock_data.dart';
 
 class AppRoutes {
+  static const authGate = '/auth';
   static const login = '/';
   static const dashboard = '/dashboard';
   static const subjects = '/subjects';
@@ -39,16 +42,18 @@ class AppRoutes {
   static const progress = '/progress';
   static const usage = '/usage';
   static const search = '/search';
+  static const settings = '/settings';
 
-  static Route<void> onGenerateRoute(RouteSettings settings) {
-    final subject = settings.arguments is Subject
-        ? settings.arguments! as Subject
+  static Route<void> onGenerateRoute(RouteSettings routeSettings) {
+    final subject = routeSettings.arguments is Subject
+        ? routeSettings.arguments! as Subject
         : MockData.subjects.first;
-    final material = settings.arguments is StudyMaterial
-        ? settings.arguments! as StudyMaterial
+    final material = routeSettings.arguments is StudyMaterial
+        ? routeSettings.arguments! as StudyMaterial
         : MockData.materials.first;
 
-    final widget = switch (settings.name) {
+    final widget = switch (routeSettings.name) {
+      authGate => const AuthGateScreen(),
       login => const LoginScreen(),
       dashboard => const DashboardScreen(),
       subjects => const SubjectsScreen(),
@@ -66,9 +71,13 @@ class AppRoutes {
       progress => const ProgressScreen(),
       usage => const UsageLimitsScreen(),
       search => const SearchScreen(),
+      settings => const SettingsScreen(),
       _ => const LoginScreen(),
     };
 
-    return MaterialPageRoute<void>(builder: (_) => widget, settings: settings);
+    return MaterialPageRoute<void>(
+      builder: (_) => widget,
+      settings: routeSettings,
+    );
   }
 }

@@ -13,12 +13,14 @@ class FlashcardsScreen extends StatefulWidget {
 }
 
 class _FlashcardsScreenState extends State<FlashcardsScreen> {
-  int sessionSize = 5;
+  int? sessionSize;
 
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
     final cards = state.flashcardsFor(widget.subject.id);
+    final selectedSessionSize =
+        sessionSize ?? state.defaultFlashcardSessionSize;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Flashcards')),
@@ -38,7 +40,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
               for (final size in [5, 10, 20])
                 ChoiceChip(
                   label: Text('$size'),
-                  selected: sessionSize == size,
+                  selected: selectedSessionSize == size,
                   onSelected: (_) => setState(() => sessionSize = size),
                 ),
               ChoiceChip(
