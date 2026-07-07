@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_config.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import 'auth_message.dart';
 import 'auth_controller.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -60,14 +61,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 32),
                   if (auth.errorMessage != null) ...[
-                    _AuthMessage(
-                      message: auth.errorMessage!,
-                      isError: true,
-                    ),
+                    AuthMessage(message: auth.errorMessage!, isError: true),
                     const SizedBox(height: 12),
                   ],
                   if (auth.noticeMessage != null) ...[
-                    _AuthMessage(message: auth.noticeMessage!),
+                    AuthMessage(message: auth.noticeMessage!),
                     const SizedBox(height: 12),
                   ],
                   if (isSupabaseMode)
@@ -176,14 +174,12 @@ class _SupabaseEmailForm extends StatelessWidget {
 
   Future<void> _createAccount(BuildContext context) async {
     FocusScope.of(context).unfocus();
-    final signedIn = await AuthScope.read(context).signUpWithEmail(
-      email: emailController.text,
-      password: passwordController.text,
-    );
-    if (!context.mounted || !signedIn) {
+    AuthScope.read(context).clearMessages();
+    await Navigator.pushNamed(context, AppRoutes.signup);
+    if (!context.mounted) {
       return;
     }
-    Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+    AuthScope.read(context).clearMessages();
   }
 
   Future<void> _resetPassword(BuildContext context) async {
@@ -215,32 +211,5 @@ class _MockLoginButton extends StatelessWidget {
       return;
     }
     Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-  }
-}
-
-class _AuthMessage extends StatelessWidget {
-  const _AuthMessage({required this.message, this.isError = false});
-
-  final String message;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final background = isError
-        ? colorScheme.errorContainer
-        : colorScheme.secondaryContainer;
-    final foreground = isError
-        ? colorScheme.onErrorContainer
-        : colorScheme.onSecondaryContainer;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(message, style: TextStyle(color: foreground)),
-    );
   }
 }

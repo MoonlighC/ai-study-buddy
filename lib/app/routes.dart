@@ -4,6 +4,7 @@ import '../core/models/material.dart';
 import '../core/models/subject.dart';
 import '../features/auth/auth_gate_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/signup_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/favorites/favorites_screen.dart';
 import '../features/flashcards/flashcards_screen.dart';
@@ -26,6 +27,7 @@ import '../mock/mock_data.dart';
 class AppRoutes {
   static const authGate = '/auth';
   static const login = '/';
+  static const signup = '/signup';
   static const dashboard = '/dashboard';
   static const subjects = '/subjects';
   static const subjectDetail = '/subjects/detail';
@@ -55,6 +57,7 @@ class AppRoutes {
     final widget = switch (routeSettings.name) {
       authGate => const AuthGateScreen(),
       login => const LoginScreen(),
+      signup => const SignupScreen(),
       dashboard => const DashboardScreen(),
       subjects => const SubjectsScreen(),
       subjectDetail => SubjectDetailScreen(subject: subject),

@@ -4,7 +4,11 @@ import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  const user = AuthUser(id: 'user-1', email: 'learner@example.test');
+  const user = AuthUser(
+    id: 'user-1',
+    email: 'learner@example.test',
+    displayName: 'Learner One',
+  );
 
   group('AuthController', () {
     test('startup without a session remains signed out', () async {
@@ -67,6 +71,7 @@ void main() {
       );
 
       final signedIn = await controller.signUpWithEmail(
+        displayName: 'Learner One',
         email: 'learner@example.test',
         password: 'secret1',
       );
@@ -75,6 +80,45 @@ void main() {
       expect(controller.user, user);
       expect(authRepository.signUpCount, 1);
       expect(profileRepository.ensuredUsers, [user]);
+    });
+
+    test('signup requires a display name before calling repository', () async {
+      final authRepository = _FakeAuthRepository();
+      final controller = AuthController(
+        authRepository: authRepository,
+        profileRepository: _FakeProfileRepository(),
+      );
+
+      final signedIn = await controller.signUpWithEmail(
+        displayName: '  ',
+        email: 'learner@example.test',
+        password: 'secret1',
+      );
+
+      expect(signedIn, isFalse);
+      expect(controller.errorMessage, 'Enter your name.');
+      expect(authRepository.signUpCount, 0);
+    });
+
+    test('signup forwards display name and ensures profile with it', () async {
+      final authRepository = _FakeAuthRepository(
+        signUpResult: AuthResult.signedIn(user),
+      );
+      final profileRepository = _FakeProfileRepository();
+      final controller = AuthController(
+        authRepository: authRepository,
+        profileRepository: profileRepository,
+      );
+
+      final signedIn = await controller.signUpWithEmail(
+        displayName: '  Learner One  ',
+        email: 'learner@example.test',
+        password: 'secret1',
+      );
+
+      expect(signedIn, isTrue);
+      expect(authRepository.signUpDisplayNames, ['Learner One']);
+      expect(profileRepository.ensuredUsers.single.displayName, 'Learner One');
     });
 
     test('signup requiring confirmation does not ensure profile', () async {
@@ -90,6 +134,7 @@ void main() {
       );
 
       final signedIn = await controller.signUpWithEmail(
+        displayName: 'Learner One',
         email: 'learner@example.test',
         password: 'secret1',
       );
@@ -141,7 +186,11 @@ class _FakeAuthRepository implements AuthRepository {
   }) : signInResult = signInResult ?? AuthResult.signedIn(initialUser ?? _user),
        signUpResult = signUpResult ?? AuthResult.signedIn(initialUser ?? _user);
 
-  static const _user = AuthUser(id: 'fake-user', email: 'fake@example.test');
+  static const _user = AuthUser(
+    id: 'fake-user',
+    email: 'fake@example.test',
+    displayName: 'Fake User',
+  );
 
   final AuthUser? initialUser;
   final AuthResult signInResult;
@@ -150,6 +199,7 @@ class _FakeAuthRepository implements AuthRepository {
   int signInCount = 0;
   int signUpCount = 0;
   int signOutCount = 0;
+  final List<String> signUpDisplayNames = [];
   final List<String> resetEmails = [];
 
   @override
@@ -168,10 +218,12 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<AuthResult> signUpWithEmail({
+    required String displayName,
     required String email,
     required String password,
   }) async {
     signUpCount += 1;
+    signUpDisplayNames.add(displayName);
     return signUpResult;
   }
 

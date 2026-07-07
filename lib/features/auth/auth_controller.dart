@@ -87,9 +87,16 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<bool> signUpWithEmail({
+    required String displayName,
     required String email,
     required String password,
   }) async {
+    final trimmedDisplayName = displayName.trim();
+    if (trimmedDisplayName.isEmpty) {
+      _setError('Enter your name.');
+      return false;
+    }
+
     final validationMessage = _validateCredentials(
       email: email,
       password: password,
@@ -101,6 +108,7 @@ class AuthController extends ChangeNotifier {
 
     return _runAuthAction(() async {
       final result = await authRepository.signUpWithEmail(
+        displayName: trimmedDisplayName,
         email: email,
         password: password,
       );
@@ -186,6 +194,11 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearMessages() {
+    _clearMessages();
+    notifyListeners();
+  }
+
   void _clearMessages() {
     _errorMessage = null;
     _noticeMessage = null;
@@ -216,7 +229,8 @@ class AuthScope extends InheritedNotifier<AuthController> {
   }
 
   static AuthController read(BuildContext context) {
-    final element = context.getElementForInheritedWidgetOfExactType<AuthScope>();
+    final element = context
+        .getElementForInheritedWidgetOfExactType<AuthScope>();
     final scope = element?.widget as AuthScope?;
     assert(scope != null, 'No AuthScope found in context.');
     return scope!.notifier!;

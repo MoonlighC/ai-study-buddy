@@ -277,6 +277,133 @@ void main() {
     expect(find.text('Apple coming later'), findsOneWidget);
   });
 
+  testWidgets('supabase login Create account navigates to signup', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Create account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set up your study profile.'), findsOneWidget);
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+  });
+
+  testWidgets('signup screen renders name email and password fields', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.signup);
+
+    expect(find.text('Create account'), findsWidgets);
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+  });
+
+  testWidgets('signup missing name prevents repository call', (tester) async {
+    final authRepository = _RecordingAuthRepository();
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: authRepository,
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.signup);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'casey@example.test',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'secret1',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Enter your name.'), findsOneWidget);
+    expect(authRepository.signUpCount, 0);
+  });
+
+  testWidgets('signup forwards display name and ensures profile with it', (
+    tester,
+  ) async {
+    final authRepository = _RecordingAuthRepository();
+    final profileRepository = _RecordingProfileRepository();
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: authRepository,
+        profileRepository: profileRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.signup);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Name'),
+      'Casey Student',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'casey@example.test',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'secret1',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.signUpDisplayNames, ['Casey Student']);
+    expect(profileRepository.ensuredUsers.single.displayName, 'Casey Student');
+    expect(find.text('What do you want to do today?'), findsOneWidget);
+  });
+
+  testWidgets('supabase settings shows display name when available', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(
+          initialUser: const AuthUser(
+            id: 'supabase-user',
+            email: 'learner@example.test',
+            displayName: 'Learner Prime',
+          ),
+        ),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.settings);
+
+    expect(find.text('Learner Prime'), findsOneWidget);
+    expect(find.text('learner@example.test'), findsOneWidget);
+  });
+
   testWidgets('supabase settings logout calls auth repository', (tester) async {
     final authRepository = _RecordingAuthRepository(
       initialUser: const AuthUser(
@@ -468,7 +595,9 @@ class _RecordingAuthRepository implements AuthRepository {
   _RecordingAuthRepository({AuthUser? initialUser}) : _user = initialUser;
 
   AuthUser? _user;
+  int signUpCount = 0;
   int signOutCount = 0;
+  final List<String> signUpDisplayNames = [];
 
   @override
   Future<AuthUser?> currentUser() async {
@@ -480,16 +609,27 @@ class _RecordingAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
-    _user = AuthUser(id: 'signed-in-user', email: email.trim());
+    _user = AuthUser(
+      id: 'signed-in-user',
+      email: email.trim(),
+      displayName: 'Supabase Student',
+    );
     return AuthResult.signedIn(_user!);
   }
 
   @override
   Future<AuthResult> signUpWithEmail({
+    required String displayName,
     required String email,
     required String password,
   }) async {
-    _user = AuthUser(id: 'signed-up-user', email: email.trim());
+    signUpCount += 1;
+    signUpDisplayNames.add(displayName);
+    _user = AuthUser(
+      id: 'signed-up-user',
+      email: email.trim(),
+      displayName: displayName.trim(),
+    );
     return AuthResult.signedIn(_user!);
   }
 
@@ -504,6 +644,10 @@ class _RecordingAuthRepository implements AuthRepository {
 }
 
 class _RecordingProfileRepository implements ProfileRepository {
+  final List<AuthUser> ensuredUsers = [];
+
   @override
-  Future<void> ensureProfile(AuthUser user) async {}
+  Future<void> ensureProfile(AuthUser user) async {
+    ensuredUsers.add(user);
+  }
 }

@@ -45,18 +45,22 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Future<AuthResult> signUpWithEmail({
+    required String displayName,
     required String email,
     required String password,
   }) async {
+    final trimmedEmail = email.trim();
+    final trimmedDisplayName = displayName.trim();
     try {
       final response = await _client.auth.signUp(
-        email: email.trim(),
+        email: trimmedEmail,
         password: password,
+        data: <String, dynamic>{'display_name': trimmedDisplayName},
       );
       final user = response.user ?? _client.auth.currentUser;
       final session = response.session ?? _client.auth.currentSession;
       if (user == null || session == null) {
-        return AuthResult.emailConfirmationRequired(email.trim());
+        return AuthResult.emailConfirmationRequired(trimmedEmail);
       }
       return AuthResult.signedIn(_mapUser(user));
     } on supabase.AuthException catch (error) {
@@ -95,7 +99,20 @@ class SupabaseAuthRepository implements AuthRepository {
   }
 
   AuthUser _mapUser(supabase.User user) {
-    return AuthUser(id: user.id, email: user.email ?? '');
+    return AuthUser(
+      id: user.id,
+      email: user.email ?? '',
+      displayName: _metadataString(user.userMetadata, 'display_name'),
+    );
+  }
+
+  String? _metadataString(Map<String, dynamic>? metadata, String key) {
+    final value = metadata?[key];
+    if (value is! String) {
+      return null;
+    }
+    final trimmedValue = value.trim();
+    return trimmedValue.isEmpty ? null : trimmedValue;
   }
 }
 
@@ -110,6 +127,7 @@ class SupabaseProfileRepository implements ProfileRepository {
       await _client.from('profiles').upsert(<String, Object?>{
         'id': user.id,
         'email': user.email,
+        'display_name': user.displayName,
       });
     } catch (_) {
       throw const ProfileRepositoryException(

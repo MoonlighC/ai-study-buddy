@@ -19,6 +19,9 @@ class SettingsScreen extends StatelessWidget {
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
     final accountEmail = auth.user?.email ?? 'alex.student@example.test';
+    final accountName = isSupabaseMode
+        ? _accountName(displayName: auth.user?.displayName, email: accountEmail)
+        : 'Alex Student';
 
     return Scaffold(
       appBar: AppBar(
@@ -37,15 +40,14 @@ class SettingsScreen extends StatelessWidget {
           SectionCard(
             icon: Icons.person_outline,
             title: 'Account',
-            subtitle: isSupabaseMode ? 'Supabase account' : 'Local mock profile',
+            subtitle: isSupabaseMode
+                ? 'Supabase account'
+                : 'Local mock profile',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _InfoRow(label: 'Name', value: 'Alex Student'),
-                _InfoRow(
-                  label: 'Email',
-                  value: accountEmail,
-                ),
+                _InfoRow(label: 'Name', value: accountName),
+                _InfoRow(label: 'Email', value: accountEmail),
                 const SizedBox(height: 12),
                 FilledButton.tonalIcon(
                   onPressed: auth.isLoading ? null : () => _logOut(context),
@@ -188,6 +190,19 @@ class SettingsScreen extends StatelessWidget {
     };
   }
 
+  String _accountName({required String? displayName, required String email}) {
+    final trimmedName = displayName?.trim();
+    if (trimmedName != null && trimmedName.isNotEmpty) {
+      return trimmedName;
+    }
+
+    final atIndex = email.indexOf('@');
+    if (atIndex > 0) {
+      return email.substring(0, atIndex);
+    }
+    return 'Study buddy';
+  }
+
   Future<void> _logOut(BuildContext context) async {
     final signedOut = await AuthScope.read(context).signOut();
     if (!context.mounted) {
@@ -196,9 +211,9 @@ class SettingsScreen extends StatelessWidget {
     if (!signedOut) {
       final message =
           AuthScope.read(context).errorMessage ?? 'Could not log out.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
     Navigator.pushNamedAndRemoveUntil(

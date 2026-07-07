@@ -9,6 +9,7 @@ abstract class AuthRepository {
   });
 
   Future<AuthResult> signUpWithEmail({
+    required String displayName,
     required String email,
     required String password,
   });
@@ -52,12 +53,14 @@ class MockAuthRepository implements AuthRepository {
     _user = const AuthUser(
       id: 'mock-user',
       email: 'alex.student@example.test',
+      displayName: 'Alex Student',
     );
     return AuthResult.signedIn(_user!);
   }
 
   @override
   Future<AuthResult> signUpWithEmail({
+    required String displayName,
     required String email,
     required String password,
   }) async {
