@@ -1,8 +1,10 @@
 import 'package:ai_study_buddy/app/app.dart';
 import 'package:ai_study_buddy/app/app_config.dart';
 import 'package:ai_study_buddy/app/routes.dart';
+import 'package:ai_study_buddy/core/models/subject.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
+import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -708,6 +710,85 @@ void main() {
     expect(find.text('What do you want to do today?'), findsNothing);
   });
 
+  testWidgets('supabase subjects load from fake repository after auth', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [
+            Subject(
+              id: 'cloud-biology',
+              name: 'Cloud Biology',
+              description: 'Synced from Supabase',
+              colorValue: 0xFF16A34A,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.subjects);
+
+    expect(find.text('Cloud Biology'), findsOneWidget);
+    expect(find.text('Synced from Supabase'), findsOneWidget);
+    expect(find.text('Biology'), findsNothing);
+  });
+
+  testWidgets('supabase subject create uses repository and updates UI', (
+    tester,
+  ) async {
+    final subjectRepository = _RecordingSubjectRepository();
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: subjectRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.subjects);
+
+    await tester.tap(find.text('Create subject'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Subject name'),
+      'History',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Description'),
+      'Exam prep',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(subjectRepository.createdNames, ['History']);
+    expect(subjectRepository.createdUsers, [_supabaseUser]);
+    expect(find.text('History'), findsOneWidget);
+    expect(find.text('Exam prep'), findsOneWidget);
+  });
+
+  testWidgets('supabase subject sync failure shows safe error', (tester) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(throwOnLoad: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.subjects);
+
+    expect(find.text('Could not sync subjects.'), findsOneWidget);
+    expect(find.text('No subjects yet'), findsOneWidget);
+  });
+
   testWidgets('top quick actions open search and home', (tester) async {
     await _enterDashboard(tester);
     await _pushRoute(
@@ -819,6 +900,12 @@ void main() {
     expect(find.text('Biology quick quiz: 0%'), findsOneWidget);
   });
 }
+
+const _supabaseUser = AuthUser(
+  id: 'supabase-user',
+  email: 'learner@example.test',
+  displayName: 'Supabase Student',
+);
 
 Future<void> _enterDashboard(WidgetTester tester) async {
   await tester.pumpWidget(const StudyBuddyApp());
@@ -970,5 +1057,45 @@ class _RecordingProfileRepository implements ProfileRepository {
     );
     profile = updatedProfile;
     return updatedProfile;
+  }
+}
+
+class _RecordingSubjectRepository implements SubjectRepository {
+  _RecordingSubjectRepository({
+    this.loadedSubjects = const [],
+    this.throwOnLoad = false,
+  });
+
+  final List<Subject> loadedSubjects;
+  final bool throwOnLoad;
+  final List<AuthUser> loadedUsers = [];
+  final List<AuthUser> createdUsers = [];
+  final List<String> createdNames = [];
+
+  @override
+  Future<List<Subject>> loadSubjects(AuthUser user) async {
+    loadedUsers.add(user);
+    if (throwOnLoad) {
+      throw const SubjectRepositoryException('Could not sync subjects.');
+    }
+    return List<Subject>.of(loadedSubjects);
+  }
+
+  @override
+  Future<Subject> createSubject({
+    required AuthUser user,
+    required String name,
+    required String description,
+    required int colorValue,
+    required int sortOrder,
+  }) async {
+    createdUsers.add(user);
+    createdNames.add(name);
+    return Subject(
+      id: 'created-${createdNames.length}',
+      name: name,
+      description: description,
+      colorValue: colorValue,
+    );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import 'auth_controller.dart';
 import 'auth_message.dart';
@@ -182,6 +183,12 @@ class _SignupScreenState extends State<SignupScreen> {
       confirmPassword: _confirmPasswordController.text,
     );
     if (!context.mounted || !signedIn) {
+      return;
+    }
+    await AppStateScope.read(
+      context,
+    ).loadSubjectsFor(AuthScope.read(context).user);
+    if (!context.mounted) {
       return;
     }
     Navigator.pushNamedAndRemoveUntil(

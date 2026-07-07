@@ -45,11 +45,17 @@ class AppRoutes {
   static const usage = '/usage';
   static const search = '/search';
   static const settings = '/settings';
+  static const _fallbackSubject = Subject(
+    id: 'missing-subject',
+    name: 'Subject',
+    description: 'Subject unavailable.',
+    colorValue: 0xFF64748B,
+  );
 
   static Route<void> onGenerateRoute(RouteSettings routeSettings) {
     final subject = routeSettings.arguments is Subject
         ? routeSettings.arguments! as Subject
-        : MockData.subjects.first;
+        : _fallbackSubject;
     final material = routeSettings.arguments is StudyMaterial
         ? routeSettings.arguments! as StudyMaterial
         : MockData.materials.first;

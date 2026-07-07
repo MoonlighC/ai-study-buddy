@@ -20,17 +20,26 @@ class ExamPrepScreen extends StatefulWidget {
 
 class _ExamPrepScreenState extends State<ExamPrepScreen> {
   static const ai = MockAiService();
-  late Subject selectedSubject = MockData.subjects.first;
+  Subject? selectedSubject;
 
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
-    final materials = state.materialsFor(selectedSubject.id);
+    final subjects = state.subjects;
+    final effectiveSubject = _selectedSubjectFrom(subjects);
+    final materials = effectiveSubject == null
+        ? []
+        : state.materialsFor(effectiveSubject.id);
     final score = MockData.knowledgeScores.firstWhere(
-      (item) => item.subjectId == selectedSubject.id,
+      (item) => item.subjectId == effectiveSubject?.id,
+      orElse: () => MockData.knowledgeScores.first,
     );
-    final weakTopics = ai.weakTopicsFor(selectedSubject);
-    final plan = ai.examPlanFor(selectedSubject);
+    final weakTopics = effectiveSubject == null
+        ? []
+        : ai.weakTopicsFor(effectiveSubject);
+    final plan = effectiveSubject == null
+        ? []
+        : ai.examPlanFor(effectiveSubject);
 
     return Scaffold(
       appBar: AppBar(
@@ -49,112 +58,133 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
-          SectionCard(
-            icon: Icons.folder_outlined,
-            title: 'Choose subject',
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final subject in MockData.subjects)
-                  ChoiceChip(
-                    label: Text(subject.name),
-                    selected: selectedSubject.id == subject.id,
-                    onSelected: (_) =>
-                        setState(() => selectedSubject = subject),
-                  ),
-              ],
+          if (effectiveSubject == null) ...[
+            const SectionCard(
+              icon: Icons.folder_open_outlined,
+              title: 'No subjects yet',
+              subtitle: 'Create a subject before preparing an exam plan.',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.folder_outlined),
+                title: Text('Subjects will appear here after sync.'),
+              ),
             ),
-          ),
-          SectionCard(
-            icon: Icons.event_outlined,
-            title: 'Exam date',
-            child: TextField(
-              readOnly: true,
-              decoration: InputDecoration(
-                labelText: 'Exam date',
-                hintText: 'Mock date: 2 weeks from now',
-                suffixIcon: IconButton(
-                  tooltip: 'Pick date placeholder',
-                  onPressed: () {},
-                  icon: const Icon(Icons.calendar_today_outlined),
+          ] else ...[
+            SectionCard(
+              icon: Icons.folder_outlined,
+              title: 'Choose subject',
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final subject in subjects)
+                    ChoiceChip(
+                      label: Text(subject.name),
+                      selected: effectiveSubject.id == subject.id,
+                      onSelected: (_) =>
+                          setState(() => selectedSubject = subject),
+                    ),
+                ],
+              ),
+            ),
+            SectionCard(
+              icon: Icons.event_outlined,
+              title: 'Exam date',
+              child: TextField(
+                readOnly: true,
+                decoration: InputDecoration(
+                  labelText: 'Exam date',
+                  hintText: 'Mock date: 2 weeks from now',
+                  suffixIcon: IconButton(
+                    tooltip: 'Pick date placeholder',
+                    onPressed: () {},
+                    icon: const Icon(Icons.calendar_today_outlined),
+                  ),
                 ),
               ),
             ),
-          ),
-          SectionCard(
-            icon: Icons.article_outlined,
-            title: 'Selected materials',
-            child: Column(
-              children: [
-                for (final material in materials)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.article_outlined),
-                    title: Text(material.title),
-                    subtitle: Text(
-                      '${material.createdLabel} - included in mock plan',
+            SectionCard(
+              icon: Icons.article_outlined,
+              title: 'Selected materials',
+              child: Column(
+                children: [
+                  for (final material in materials)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.article_outlined),
+                      title: Text(material.title),
+                      subtitle: Text(
+                        '${material.createdLabel} - included in mock plan',
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          SectionCard(
-            icon: Icons.trending_up_outlined,
-            title: '${selectedSubject.name} knowledge score',
-            trailing: Text('${score.scorePercent}%'),
-            child: LinearProgressIndicator(value: score.scorePercent / 100),
-          ),
-          SectionCard(
-            icon: Icons.flag_outlined,
-            title: 'Weak topics',
-            child: Column(
-              children: [
-                for (final topic in weakTopics)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.flag_outlined),
-                    title: Text(topic.title),
-                    subtitle: Text(topic.reason),
-                  ),
-              ],
+            SectionCard(
+              icon: Icons.trending_up_outlined,
+              title: '${effectiveSubject.name} knowledge score',
+              trailing: Text('${score.scorePercent}%'),
+              child: LinearProgressIndicator(value: score.scorePercent / 100),
             ),
-          ),
-          SectionCard(
-            icon: Icons.calendar_month_outlined,
-            title: 'Daily preparation plan',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final item in plan)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(item),
-                  ),
-                const SizedBox(height: 6),
-                const Text('Recommended: flashcards first, then quick quiz.'),
-              ],
+            SectionCard(
+              icon: Icons.flag_outlined,
+              title: 'Weak topics',
+              child: Column(
+                children: [
+                  for (final topic in weakTopics)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.flag_outlined),
+                      title: Text(topic.title),
+                      subtitle: Text(topic.reason),
+                    ),
+                ],
+              ),
             ),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              AppStateScope.read(context).createStudySession(
-                subject: selectedSubject,
-                confidence: LectureConfidence.mostly,
-                materialId: materials.firstOrNull?.id,
-              );
-              Navigator.pushNamed(
-                context,
-                AppRoutes.studySessionResult,
-                arguments: selectedSubject,
-              );
-            },
-            icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('Create study session'),
-          ),
+            SectionCard(
+              icon: Icons.calendar_month_outlined,
+              title: 'Daily preparation plan',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final item in plan)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(item),
+                    ),
+                  const SizedBox(height: 6),
+                  const Text('Recommended: flashcards first, then quick quiz.'),
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                AppStateScope.read(context).createStudySession(
+                  subject: effectiveSubject,
+                  confidence: LectureConfidence.mostly,
+                  materialId: materials.firstOrNull?.id,
+                );
+                Navigator.pushNamed(
+                  context,
+                  AppRoutes.studySessionResult,
+                  arguments: effectiveSubject,
+                );
+              },
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('Create study session'),
+            ),
+          ],
         ],
       ),
       bottomNavigationBar: const AppBottomNav(),
     );
+  }
+
+  Subject? _selectedSubjectFrom(List<Subject> subjects) {
+    final current = selectedSubject;
+    if (current != null && subjects.any((item) => item.id == current.id)) {
+      return current;
+    }
+    return subjects.firstOrNull;
   }
 }

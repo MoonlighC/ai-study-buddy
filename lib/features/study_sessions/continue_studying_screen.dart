@@ -11,15 +11,36 @@ class ContinueStudyingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
     final latest = state.latestStudySession;
-    final weakTopics =
-        latest?.weakTopics ?? state.weakTopicsFor(state.subjects.first.id);
-    final dueFlashcards = state.dueFlashcards;
+    final fallbackSubject = state.subjects.firstOrNull;
+    if (fallbackSubject == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Continue Studying'),
+          actions: const [AppTopActions()],
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: const [
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.folder_open_outlined),
+                title: Text('No subjects yet'),
+                subtitle: Text('Create a subject before continuing study.'),
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: const AppBottomNav(),
+      );
+    }
     final subject = latest == null
-        ? state.subjects.first
+        ? fallbackSubject
         : state.subjects.firstWhere(
             (item) => item.id == latest.subjectId,
-            orElse: () => state.subjects.first,
+            orElse: () => fallbackSubject,
           );
+    final weakTopics = latest?.weakTopics ?? state.weakTopicsFor(subject.id);
+    final dueFlashcards = state.dueFlashcards;
 
     return Scaffold(
       appBar: AppBar(

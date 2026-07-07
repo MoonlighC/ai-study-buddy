@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import 'auth_controller.dart';
 
@@ -35,6 +36,12 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
       return;
     }
     final route = auth.isAuthenticated ? AppRoutes.dashboard : AppRoutes.login;
+    if (auth.isAuthenticated) {
+      await AppStateScope.read(context).loadSubjectsFor(auth.user);
+      if (!mounted) {
+        return;
+      }
+    }
     Navigator.pushReplacementNamed(context, route);
   }
 

@@ -191,6 +191,12 @@ class _SupabaseEmailFormState extends State<_SupabaseEmailForm> {
     if (!context.mounted || !signedIn) {
       return;
     }
+    await AppStateScope.read(
+      context,
+    ).loadSubjectsFor(AuthScope.read(context).user);
+    if (!context.mounted) {
+      return;
+    }
     Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
   }
 
@@ -232,6 +238,12 @@ class _MockLoginButton extends StatelessWidget {
       password: 'mock-password',
     );
     if (!context.mounted || !signedIn) {
+      return;
+    }
+    await AppStateScope.read(
+      context,
+    ).loadSubjectsFor(AuthScope.read(context).user);
+    if (!context.mounted) {
       return;
     }
     Navigator.pushReplacementNamed(context, AppRoutes.dashboard);

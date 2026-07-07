@@ -8,20 +8,39 @@ import '../core/models/study_session.dart';
 import '../core/models/study_time_block.dart';
 import '../core/models/subject.dart';
 import '../core/models/weak_topic.dart';
+import '../features/auth/auth_models.dart';
+import '../features/subjects/subject_repository.dart';
 import '../mock/mock_ai_service.dart';
 import '../mock/mock_data.dart';
 
 class AppState extends ChangeNotifier {
-  AppState({AppConfig? config})
+  AppState({AppConfig? config, SubjectRepository? subjectRepository})
     : config = config ?? AppConfig.fromValues(),
-      subjects = List<Subject>.of(MockData.subjects),
+      subjectRepository =
+          subjectRepository ??
+          ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                  AppBackendMode.supabase
+              ? const EmptySubjectRepository()
+              : MockSubjectRepository()),
+      _subjects =
+          (config ?? AppConfig.fromValues()).effectiveBackendMode ==
+              AppBackendMode.supabase
+          ? <Subject>[]
+          : List<Subject>.of(MockData.subjects),
       _materials = List<StudyMaterial>.of(MockData.materials),
       _flashcards = List<Flashcard>.of(MockData.flashcards);
 
   static const _ai = MockAiService();
+  static const _fallbackSubject = Subject(
+    id: 'missing-subject',
+    name: 'Subject',
+    description: 'Subject unavailable.',
+    colorValue: 0xFF64748B,
+  );
 
   final AppConfig config;
-  final List<Subject> subjects;
+  final SubjectRepository subjectRepository;
+  List<Subject> _subjects;
   final List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
   final List<StudySession> _studySessions = [];
@@ -32,6 +51,17 @@ class AppState extends ChangeNotifier {
   int _dailyStudyGoalMinutes = 20;
   StudyDifficultyPreference _defaultDifficulty =
       StudyDifficultyPreference.medium;
+  bool _isLoadingSubjects = false;
+  bool _isCreatingSubject = false;
+  String? _subjectSyncErrorMessage;
+
+  List<Subject> get subjects => List.unmodifiable(_subjects);
+
+  bool get isLoadingSubjects => _isLoadingSubjects;
+
+  bool get isCreatingSubject => _isCreatingSubject;
+
+  String? get subjectSyncErrorMessage => _subjectSyncErrorMessage;
 
   AppLanguagePreference get languagePreference => _languagePreference;
 
@@ -40,6 +70,101 @@ class AppState extends ChangeNotifier {
   int get dailyStudyGoalMinutes => _dailyStudyGoalMinutes;
 
   StudyDifficultyPreference get defaultDifficulty => _defaultDifficulty;
+
+  Future<void> loadSubjectsFor(AuthUser? user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      _subjects = await subjectRepository.loadSubjects(
+        user ??
+            const AuthUser(
+              id: 'mock-user',
+              email: 'alex.student@example.test',
+              displayName: 'Alex Student',
+            ),
+      );
+      _subjectSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    if (user == null) {
+      _subjects = [];
+      _subjectSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingSubjects = true;
+    _subjectSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      _subjects = await subjectRepository.loadSubjects(user);
+    } catch (error) {
+      _subjectSyncErrorMessage = _subjectMessageFor(error);
+    } finally {
+      _isLoadingSubjects = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> createSubjectFor(
+    AuthUser? user, {
+    required String name,
+    required String description,
+    required int colorValue,
+  }) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) {
+      _subjectSyncErrorMessage = 'Enter a subject name.';
+      notifyListeners();
+      return false;
+    }
+
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _subjectSyncErrorMessage = 'Log in to sync subjects.';
+      notifyListeners();
+      return false;
+    }
+
+    _isCreatingSubject = true;
+    _subjectSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      final createdSubject = await subjectRepository.createSubject(
+        user: effectiveUser,
+        name: cleanName,
+        description: description,
+        colorValue: colorValue,
+        sortOrder: _subjects.length,
+      );
+      _subjects = [..._subjects, createdSubject];
+      return true;
+    } catch (error) {
+      _subjectSyncErrorMessage = _subjectMessageFor(error);
+      return false;
+    } finally {
+      _isCreatingSubject = false;
+      notifyListeners();
+    }
+  }
+
+  void clearSyncedSubjectsForSignOut() {
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      return;
+    }
+    _subjects = [];
+    _subjectSyncErrorMessage = null;
+    _isLoadingSubjects = false;
+    _isCreatingSubject = false;
+    notifyListeners();
+  }
 
   void setLanguagePreference(AppLanguagePreference value) {
     if (_languagePreference == value) {
@@ -123,13 +248,20 @@ class AppState extends ChangeNotifier {
     if (session != null && session.subjectId == subjectId) {
       return session.weakTopics;
     }
-    return _ai.weakTopicsFor(_subjectFor(subjectId));
+    final subject = _subjectForOrNull(subjectId);
+    if (subject == null) {
+      return const [];
+    }
+    return _ai.weakTopicsFor(subject);
   }
 
   List<Flashcard> get dueFlashcards {
     final session = latestStudySession;
     if (session != null) {
       return session.flashcards;
+    }
+    if (_subjects.isEmpty) {
+      return const [];
     }
     return flashcardsFor(subjects.first.id);
   }
@@ -155,7 +287,10 @@ class AppState extends ChangeNotifier {
     }
     for (final material in _materials) {
       if (material.title.toLowerCase().contains(normalized)) {
-        final subject = _subjectFor(material.subjectId);
+        final subject = _subjectForOrNull(material.subjectId);
+        if (subject == null) {
+          continue;
+        }
         results.add(
           LocalSearchResult(
             kind: LocalSearchResultKind.material,
@@ -169,7 +304,10 @@ class AppState extends ChangeNotifier {
     }
     for (final card in _flashcards) {
       if (card.front.toLowerCase().contains(normalized)) {
-        final subject = _subjectFor(card.subjectId);
+        final subject = _subjectForOrNull(card.subjectId);
+        if (subject == null) {
+          continue;
+        }
         results.add(
           LocalSearchResult(
             kind: LocalSearchResultKind.flashcard,
@@ -258,7 +396,10 @@ class AppState extends ChangeNotifier {
 
     final session = _studySessions[index];
     final isCorrect = answer == session.quizQuestion.correctAnswer;
-    final subject = _subjectFor(session.subjectId);
+    final subject = _subjectForOrNull(session.subjectId);
+    if (subject == null) {
+      return;
+    }
     final updatedWeakTopics = isCorrect
         ? _ai.weakTopicsFor(subject).take(1).toList()
         : [
@@ -283,10 +424,29 @@ class AppState extends ChangeNotifier {
   }
 
   Subject _subjectFor(String subjectId) {
-    return subjects.firstWhere(
+    if (_subjects.isEmpty) {
+      return _fallbackSubject;
+    }
+    return _subjects.firstWhere(
       (subject) => subject.id == subjectId,
-      orElse: () => subjects.first,
+      orElse: () => _fallbackSubject,
     );
+  }
+
+  Subject? _subjectForOrNull(String subjectId) {
+    for (final subject in _subjects) {
+      if (subject.id == subjectId) {
+        return subject;
+      }
+    }
+    return null;
+  }
+
+  String _subjectMessageFor(Object error) {
+    if (error is SubjectRepositoryException) {
+      return error.message;
+    }
+    return 'Could not sync subjects. Try again.';
   }
 
   String _summaryFor(

@@ -24,8 +24,8 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
-    final subject = state.subjects.first;
-    final materials = state.materialsFor(subject.id);
+    final subject = state.subjects.firstOrNull;
+    final materials = subject == null ? [] : state.materialsFor(subject.id);
     final previewBlocks = _blocksFor(confidence);
 
     return Scaffold(
@@ -45,81 +45,95 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
-          SectionCard(
-            icon: Icons.article_outlined,
-            title: 'Choose material',
-            subtitle: 'Using the first mock subject for this scenario.',
-            child: Column(
-              children: [
-                for (final material in materials)
-                  ListTile(
+          if (subject == null) ...[
+            const SectionCard(
+              icon: Icons.folder_open_outlined,
+              title: 'No subjects yet',
+              subtitle:
+                  'Create a subject before starting an after-lecture session.',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.folder_outlined),
+                title: Text('Subjects will appear here after sync.'),
+              ),
+            ),
+          ] else ...[
+            SectionCard(
+              icon: Icons.article_outlined,
+              title: 'Choose material',
+              subtitle: 'Using the first mock subject for this scenario.',
+              child: Column(
+                children: [
+                  for (final material in materials)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.article_outlined),
+                      title: Text(material.title),
+                      subtitle: Text('${material.createdLabel} - pasted text'),
+                      trailing: const Icon(Icons.check_circle_outline),
+                    ),
+                  const ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.article_outlined),
-                    title: Text(material.title),
-                    subtitle: Text('${material.createdLabel} - pasted text'),
-                    trailing: const Icon(Icons.check_circle_outline),
+                    leading: Icon(Icons.upload_file_outlined),
+                    title: Text('Paste or upload material placeholder'),
+                    subtitle: Text('Mock only: no file upload is performed.'),
                   ),
-                const ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.upload_file_outlined),
-                  title: Text('Paste or upload material placeholder'),
-                  subtitle: Text('Mock only: no file upload is performed.'),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          SectionCard(
-            icon: Icons.sentiment_satisfied_outlined,
-            title: 'How confident do you feel?',
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final option in [
-                  LectureConfidence.understoodEverything,
-                  LectureConfidence.mostly,
-                  LectureConfidence.aboutHalf,
-                  LectureConfidence.completelyLost,
-                ])
-                  ChoiceChip(
-                    label: Text(option.label),
-                    selected: confidence == option,
-                    onSelected: (_) => setState(() => confidence = option),
-                  ),
-              ],
+            SectionCard(
+              icon: Icons.sentiment_satisfied_outlined,
+              title: 'How confident do you feel?',
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final option in [
+                    LectureConfidence.understoodEverything,
+                    LectureConfidence.mostly,
+                    LectureConfidence.aboutHalf,
+                    LectureConfidence.completelyLost,
+                  ])
+                    ChoiceChip(
+                      label: Text(option.label),
+                      selected: confidence == option,
+                      onSelected: (_) => setState(() => confidence = option),
+                    ),
+                ],
+              ),
             ),
-          ),
-          SectionCard(
-            icon: Icons.schedule_outlined,
-            title: 'Estimated study time',
-            child: Column(
-              children: [
-                for (final block in previewBlocks)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text(block.label),
-                    trailing: Text('${block.minutes} min'),
-                  ),
-              ],
+            SectionCard(
+              icon: Icons.schedule_outlined,
+              title: 'Estimated study time',
+              child: Column(
+                children: [
+                  for (final block in previewBlocks)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: Text(block.label),
+                      trailing: Text('${block.minutes} min'),
+                    ),
+                ],
+              ),
             ),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              AppStateScope.read(context).createStudySession(
-                subject: subject,
-                confidence: confidence,
-                materialId: materials.firstOrNull?.id,
-              );
-              Navigator.pushNamed(
-                context,
-                AppRoutes.studySessionResult,
-                arguments: subject,
-              );
-            },
-            icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('Create study session'),
-          ),
+            FilledButton.icon(
+              onPressed: () {
+                AppStateScope.read(context).createStudySession(
+                  subject: subject,
+                  confidence: confidence,
+                  materialId: materials.firstOrNull?.id,
+                );
+                Navigator.pushNamed(
+                  context,
+                  AppRoutes.studySessionResult,
+                  arguments: subject,
+                );
+              },
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('Create study session'),
+            ),
+          ],
         ],
       ),
       bottomNavigationBar: const AppBottomNav(),
