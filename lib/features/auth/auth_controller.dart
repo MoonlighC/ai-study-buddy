@@ -117,6 +117,7 @@ class AuthController extends ChangeNotifier {
     required String displayName,
     required String email,
     required String password,
+    required String confirmPassword,
   }) async {
     final trimmedDisplayName = displayName.trim();
     if (trimmedDisplayName.isEmpty) {
@@ -132,6 +133,14 @@ class AuthController extends ChangeNotifier {
       _setError(validationMessage);
       return false;
     }
+    if (confirmPassword.isEmpty) {
+      _setError('Confirm your password.');
+      return false;
+    }
+    if (password != confirmPassword) {
+      _setError('Passwords do not match.');
+      return false;
+    }
 
     return _runAuthAction(() async {
       final result = await authRepository.signUpWithEmail(
@@ -142,7 +151,8 @@ class AuthController extends ChangeNotifier {
       final signedInUser = result.user;
       if (signedInUser == null) {
         _noticeMessage =
-            result.message ?? 'Check your email before logging in.';
+            result.message ??
+            'Check your email to confirm your account, then log in.';
         return false;
       }
       final profile = await _loadOrEnsureProfile(signedInUser);
@@ -274,6 +284,10 @@ class AuthController extends ChangeNotifier {
 
   String _messageFor(Object error) {
     if (error is AuthRepositoryException) {
+      final normalizedMessage = error.message.toLowerCase();
+      if (normalizedMessage.contains('user already registered')) {
+        return 'An account already exists for this email. Try logging in instead.';
+      }
       return error.message;
     }
     if (error is ProfileRepositoryException) {

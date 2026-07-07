@@ -33,8 +33,7 @@ class AuthResult {
     return AuthResult._(
       user: null,
       needsEmailConfirmation: true,
-      message:
-          'Check $email for a confirmation link, then return here to log in.',
+      message: 'Check your email to confirm your account, then log in.',
     );
   }
 

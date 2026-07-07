@@ -15,12 +15,16 @@ class _SignupScreenState extends State<SignupScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -89,11 +93,57 @@ class _SignupScreenState extends State<SignupScreen> {
                   TextField(
                     controller: _passwordController,
                     enabled: !auth.isLoading,
-                    obscureText: true,
-                    textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(
+                    obscureText: !_isPasswordVisible,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: Icon(Icons.lock_outline),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        tooltip: _isPasswordVisible
+                            ? 'Hide password'
+                            : 'Show password',
+                        onPressed: auth.isLoading
+                            ? null
+                            : () {
+                                setState(() {
+                                  _isPasswordVisible = !_isPasswordVisible;
+                                });
+                              },
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _confirmPasswordController,
+                    enabled: !auth.isLoading,
+                    obscureText: !_isConfirmPasswordVisible,
+                    textInputAction: TextInputAction.done,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        tooltip: _isConfirmPasswordVisible
+                            ? 'Hide password'
+                            : 'Show password',
+                        onPressed: auth.isLoading
+                            ? null
+                            : () {
+                                setState(() {
+                                  _isConfirmPasswordVisible =
+                                      !_isConfirmPasswordVisible;
+                                });
+                              },
+                        icon: Icon(
+                          _isConfirmPasswordVisible
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                      ),
                     ),
                     onSubmitted: (_) => _createAccount(context),
                   ),
@@ -129,6 +179,7 @@ class _SignupScreenState extends State<SignupScreen> {
       displayName: _nameController.text,
       email: _emailController.text,
       password: _passwordController.text,
+      confirmPassword: _confirmPasswordController.text,
     );
     if (!context.mounted || !signedIn) {
       return;

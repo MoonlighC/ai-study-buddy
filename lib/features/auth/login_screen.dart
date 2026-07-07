@@ -97,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class _SupabaseEmailForm extends StatelessWidget {
+class _SupabaseEmailForm extends StatefulWidget {
   const _SupabaseEmailForm({
     required this.emailController,
     required this.passwordController,
@@ -107,6 +107,13 @@ class _SupabaseEmailForm extends StatelessWidget {
   final TextEditingController passwordController;
 
   @override
+  State<_SupabaseEmailForm> createState() => _SupabaseEmailFormState();
+}
+
+class _SupabaseEmailFormState extends State<_SupabaseEmailForm> {
+  bool _isPasswordVisible = false;
+
+  @override
   Widget build(BuildContext context) {
     final auth = AuthScope.watch(context);
 
@@ -114,7 +121,7 @@ class _SupabaseEmailForm extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
-          controller: emailController,
+          controller: widget.emailController,
           enabled: !auth.isLoading,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
@@ -125,13 +132,28 @@ class _SupabaseEmailForm extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         TextField(
-          controller: passwordController,
+          controller: widget.passwordController,
           enabled: !auth.isLoading,
-          obscureText: true,
+          obscureText: !_isPasswordVisible,
           textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Password',
-            prefixIcon: Icon(Icons.lock_outline),
+            prefixIcon: const Icon(Icons.lock_outline),
+            suffixIcon: IconButton(
+              tooltip: _isPasswordVisible ? 'Hide password' : 'Show password',
+              onPressed: auth.isLoading
+                  ? null
+                  : () {
+                      setState(() {
+                        _isPasswordVisible = !_isPasswordVisible;
+                      });
+                    },
+              icon: Icon(
+                _isPasswordVisible
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+              ),
+            ),
           ),
           onSubmitted: (_) => _logIn(context),
         ),
@@ -163,8 +185,8 @@ class _SupabaseEmailForm extends StatelessWidget {
   Future<void> _logIn(BuildContext context) async {
     FocusScope.of(context).unfocus();
     final signedIn = await AuthScope.read(context).signInWithEmail(
-      email: emailController.text,
-      password: passwordController.text,
+      email: widget.emailController.text,
+      password: widget.passwordController.text,
     );
     if (!context.mounted || !signedIn) {
       return;
@@ -184,7 +206,9 @@ class _SupabaseEmailForm extends StatelessWidget {
 
   Future<void> _resetPassword(BuildContext context) async {
     FocusScope.of(context).unfocus();
-    await AuthScope.read(context).sendPasswordResetEmail(emailController.text);
+    await AuthScope.read(
+      context,
+    ).sendPasswordResetEmail(widget.emailController.text);
   }
 }
 

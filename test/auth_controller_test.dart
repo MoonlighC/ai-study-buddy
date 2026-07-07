@@ -132,6 +132,7 @@ void main() {
         displayName: 'Learner One',
         email: 'learner@example.test',
         password: 'secret1',
+        confirmPassword: 'secret1',
       );
 
       expect(signedIn, isTrue);
@@ -151,12 +152,57 @@ void main() {
         displayName: '  ',
         email: 'learner@example.test',
         password: 'secret1',
+        confirmPassword: 'secret1',
       );
 
       expect(signedIn, isFalse);
       expect(controller.errorMessage, 'Enter your name.');
       expect(authRepository.signUpCount, 0);
     });
+
+    test(
+      'signup requires confirm password before calling repository',
+      () async {
+        final authRepository = _FakeAuthRepository();
+        final controller = AuthController(
+          authRepository: authRepository,
+          profileRepository: _FakeProfileRepository(),
+        );
+
+        final signedIn = await controller.signUpWithEmail(
+          displayName: 'Learner One',
+          email: 'learner@example.test',
+          password: 'secret1',
+          confirmPassword: '',
+        );
+
+        expect(signedIn, isFalse);
+        expect(controller.errorMessage, 'Confirm your password.');
+        expect(authRepository.signUpCount, 0);
+      },
+    );
+
+    test(
+      'signup requires matching passwords before calling repository',
+      () async {
+        final authRepository = _FakeAuthRepository();
+        final controller = AuthController(
+          authRepository: authRepository,
+          profileRepository: _FakeProfileRepository(),
+        );
+
+        final signedIn = await controller.signUpWithEmail(
+          displayName: 'Learner One',
+          email: 'learner@example.test',
+          password: 'secret1',
+          confirmPassword: 'secret2',
+        );
+
+        expect(signedIn, isFalse);
+        expect(controller.errorMessage, 'Passwords do not match.');
+        expect(authRepository.signUpCount, 0);
+      },
+    );
 
     test('signup forwards display name and ensures profile with it', () async {
       final authRepository = _FakeAuthRepository(
@@ -172,6 +218,7 @@ void main() {
         displayName: '  Learner One  ',
         email: 'learner@example.test',
         password: 'secret1',
+        confirmPassword: 'secret1',
       );
 
       expect(signedIn, isTrue);
@@ -195,12 +242,38 @@ void main() {
         displayName: 'Learner One',
         email: 'learner@example.test',
         password: 'secret1',
+        confirmPassword: 'secret1',
       );
 
       expect(signedIn, isFalse);
       expect(controller.user, isNull);
-      expect(controller.noticeMessage, contains('Check learner@example.test'));
+      expect(
+        controller.noticeMessage,
+        'Check your email to confirm your account, then log in.',
+      );
       expect(profileRepository.ensuredUsers, isEmpty);
+    });
+
+    test('already registered signup error shows friendly message', () async {
+      final controller = AuthController(
+        authRepository: _FakeAuthRepository(
+          signUpError: const AuthRepositoryException('User already registered'),
+        ),
+        profileRepository: _FakeProfileRepository(),
+      );
+
+      final signedIn = await controller.signUpWithEmail(
+        displayName: 'Learner One',
+        email: 'learner@example.test',
+        password: 'secret1',
+        confirmPassword: 'secret1',
+      );
+
+      expect(signedIn, isFalse);
+      expect(
+        controller.errorMessage,
+        'An account already exists for this email. Try logging in instead.',
+      );
     });
 
     test('forgot password calls repository and shows notice', () async {
@@ -273,6 +346,7 @@ class _FakeAuthRepository implements AuthRepository {
     this.initialUser,
     AuthResult? signInResult,
     AuthResult? signUpResult,
+    this.signUpError,
   }) : signInResult = signInResult ?? AuthResult.signedIn(initialUser ?? _user),
        signUpResult = signUpResult ?? AuthResult.signedIn(initialUser ?? _user);
 
@@ -285,6 +359,7 @@ class _FakeAuthRepository implements AuthRepository {
   final AuthUser? initialUser;
   final AuthResult signInResult;
   final AuthResult signUpResult;
+  final Object? signUpError;
 
   int signInCount = 0;
   int signUpCount = 0;
@@ -314,6 +389,10 @@ class _FakeAuthRepository implements AuthRepository {
   }) async {
     signUpCount += 1;
     signUpDisplayNames.add(displayName);
+    final error = signUpError;
+    if (error != null) {
+      throw error;
+    }
     return signUpResult;
   }
 

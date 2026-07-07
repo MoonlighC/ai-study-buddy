@@ -278,6 +278,29 @@ void main() {
     expect(find.text('Apple coming later'), findsOneWidget);
   });
 
+  testWidgets('login password visibility toggle works', (tester) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_textField(tester, 'Password').obscureText, isTrue);
+
+    await tester.tap(find.byTooltip('Show password'));
+    await tester.pumpAndSettle();
+
+    expect(_textField(tester, 'Password').obscureText, isFalse);
+
+    await tester.tap(find.byTooltip('Hide password'));
+    await tester.pumpAndSettle();
+
+    expect(_textField(tester, 'Password').obscureText, isTrue);
+  });
+
   testWidgets('supabase login Create account navigates to signup', (
     tester,
   ) async {
@@ -297,6 +320,7 @@ void main() {
     expect(find.text('Name'), findsOneWidget);
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Confirm password'), findsOneWidget);
   });
 
   testWidgets('signup screen renders name email and password fields', (
@@ -316,6 +340,7 @@ void main() {
     expect(find.text('Name'), findsOneWidget);
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Confirm password'), findsOneWidget);
   });
 
   testWidgets('signup missing name prevents repository call', (tester) async {
@@ -343,6 +368,78 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Enter your name.'), findsOneWidget);
+    expect(authRepository.signUpCount, 0);
+  });
+
+  testWidgets('signup empty confirm password prevents repository call', (
+    tester,
+  ) async {
+    final authRepository = _RecordingAuthRepository();
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: authRepository,
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.signup);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Name'),
+      'Casey Student',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'casey@example.test',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'secret1',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm your password.'), findsOneWidget);
+    expect(authRepository.signUpCount, 0);
+  });
+
+  testWidgets('signup mismatched passwords prevents repository call', (
+    tester,
+  ) async {
+    final authRepository = _RecordingAuthRepository();
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: authRepository,
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.signup);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Name'),
+      'Casey Student',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'casey@example.test',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'secret1',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Confirm password'),
+      'secret2',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Passwords do not match.'), findsOneWidget);
     expect(authRepository.signUpCount, 0);
   });
 
@@ -374,12 +471,109 @@ void main() {
       find.widgetWithText(TextField, 'Password'),
       'secret1',
     );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Confirm password'),
+      'secret1',
+    );
     await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
     await tester.pumpAndSettle();
 
+    expect(authRepository.signUpCount, 1);
     expect(authRepository.signUpDisplayNames, ['Casey Student']);
     expect(profileRepository.ensuredUsers.single.displayName, 'Casey Student');
     expect(find.text('What do you want to do today?'), findsOneWidget);
+  });
+
+  testWidgets('signup password visibility toggle works', (tester) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.signup);
+
+    expect(_textField(tester, 'Password').obscureText, isTrue);
+
+    await tester.tap(find.byTooltip('Show password').first);
+    await tester.pumpAndSettle();
+
+    expect(_textField(tester, 'Password').obscureText, isFalse);
+
+    await tester.tap(find.byTooltip('Hide password'));
+    await tester.pumpAndSettle();
+
+    expect(_textField(tester, 'Password').obscureText, isTrue);
+  });
+
+  testWidgets('signup confirm password visibility toggle works', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.signup);
+
+    expect(_textField(tester, 'Confirm password').obscureText, isTrue);
+
+    await tester.tap(find.byTooltip('Show password').last);
+    await tester.pumpAndSettle();
+
+    expect(_textField(tester, 'Confirm password').obscureText, isFalse);
+
+    await tester.tap(find.byTooltip('Hide password'));
+    await tester.pumpAndSettle();
+
+    expect(_textField(tester, 'Confirm password').obscureText, isTrue);
+  });
+
+  testWidgets('signup already registered error shows friendly message', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(
+          signUpError: const AuthRepositoryException('User already registered'),
+        ),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.signup);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Name'),
+      'Casey Student',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'casey@example.test',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'secret1',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Confirm password'),
+      'secret1',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'An account already exists for this email. Try logging in instead.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('supabase settings shows profile display name', (tester) async {
@@ -665,6 +859,10 @@ void _expectChoiceSelected(WidgetTester tester, String label) {
   expect(chip.selected, isTrue);
 }
 
+TextField _textField(WidgetTester tester, String label) {
+  return tester.widget<TextField>(find.widgetWithText(TextField, label));
+}
+
 AppConfig _supabaseConfig() {
   return AppConfig.fromValues(
     backendModeValue: 'supabase',
@@ -674,9 +872,11 @@ AppConfig _supabaseConfig() {
 }
 
 class _RecordingAuthRepository implements AuthRepository {
-  _RecordingAuthRepository({AuthUser? initialUser}) : _user = initialUser;
+  _RecordingAuthRepository({AuthUser? initialUser, this.signUpError})
+    : _user = initialUser;
 
   AuthUser? _user;
+  final Object? signUpError;
   int signUpCount = 0;
   int signOutCount = 0;
   final List<String> signUpDisplayNames = [];
@@ -707,6 +907,10 @@ class _RecordingAuthRepository implements AuthRepository {
   }) async {
     signUpCount += 1;
     signUpDisplayNames.add(displayName);
+    final error = signUpError;
+    if (error != null) {
+      throw error;
+    }
     _user = AuthUser(
       id: 'signed-up-user',
       email: email.trim(),
