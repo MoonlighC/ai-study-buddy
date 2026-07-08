@@ -1,9 +1,11 @@
 import 'package:ai_study_buddy/app/app.dart';
 import 'package:ai_study_buddy/app/app_config.dart';
 import 'package:ai_study_buddy/app/routes.dart';
+import 'package:ai_study_buddy/core/models/material.dart';
 import 'package:ai_study_buddy/core/models/subject.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
+import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
 import 'package:flutter/material.dart';
@@ -47,7 +49,7 @@ void main() {
       find.widgetWithText(TextField, 'Paste lecture text'),
       'Cells release energy from glucose during respiration.',
     );
-    await tester.tap(find.text('Save mock material'));
+    await tester.tap(find.text('Save material'));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
@@ -789,6 +791,164 @@ void main() {
     expect(find.text('No subjects yet'), findsOneWidget);
   });
 
+  testWidgets('supabase materials load from fake repository after auth', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [
+            Subject(
+              id: 'cloud-biology',
+              name: 'Cloud Biology',
+              description: 'Synced from Supabase',
+              colorValue: 0xFF16A34A,
+            ),
+          ],
+        ),
+        materialRepository: _RecordingMaterialRepository(
+          loadedMaterials: const [
+            StudyMaterial(
+              id: 'cloud-material',
+              subjectId: 'cloud-biology',
+              title: 'Cloud lecture notes',
+              kind: MaterialKind.pastedText,
+              content: 'Synced material text.',
+              createdLabel: 'Synced',
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.subjectDetail,
+      arguments: const Subject(
+        id: 'cloud-biology',
+        name: 'Cloud Biology',
+        description: 'Synced from Supabase',
+        colorValue: 0xFF16A34A,
+      ),
+    );
+
+    expect(find.text('Cloud lecture notes'), findsOneWidget);
+    expect(find.text('Photosynthesis lecture notes'), findsNothing);
+  });
+
+  testWidgets('supabase fresh account shows material empty state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [
+            Subject(
+              id: 'cloud-biology',
+              name: 'Cloud Biology',
+              description: 'Synced from Supabase',
+              colorValue: 0xFF16A34A,
+            ),
+          ],
+        ),
+        materialRepository: _RecordingMaterialRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.subjectDetail,
+      arguments: const Subject(
+        id: 'cloud-biology',
+        name: 'Cloud Biology',
+        description: 'Synced from Supabase',
+        colorValue: 0xFF16A34A,
+      ),
+    );
+
+    expect(find.text('No materials yet'), findsOneWidget);
+    expect(find.text('Photosynthesis lecture notes'), findsNothing);
+  });
+
+  testWidgets('supabase material create uses repository and updates UI', (
+    tester,
+  ) async {
+    final materialRepository = _RecordingMaterialRepository();
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: materialRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.subjectDetail, arguments: subject);
+
+    await tester.tap(find.text('Add pasted text'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Material title'),
+      'Cloud cell notes',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Paste lecture text'),
+      'Cells sync their source text.',
+    );
+    await tester.tap(find.text('Save material'));
+    await tester.pumpAndSettle();
+
+    expect(materialRepository.createdUsers, [_supabaseUser]);
+    expect(materialRepository.createdSubjectIds, ['cloud-biology']);
+    expect(materialRepository.createdTitles, ['Cloud cell notes']);
+    expect(find.text('Cloud cell notes'), findsOneWidget);
+  });
+
+  testWidgets('supabase material sync failure shows safe error', (
+    tester,
+  ) async {
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: _RecordingMaterialRepository(throwOnLoad: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.subjectDetail, arguments: subject);
+
+    expect(find.text('Cloud Biology'), findsWidgets);
+    expect(find.text('Could not sync materials.'), findsOneWidget);
+    expect(find.text('No materials yet'), findsOneWidget);
+  });
+
   testWidgets('top quick actions open search and home', (tester) async {
     await _enterDashboard(tester);
     await _pushRoute(
@@ -1096,6 +1256,49 @@ class _RecordingSubjectRepository implements SubjectRepository {
       name: name,
       description: description,
       colorValue: colorValue,
+    );
+  }
+}
+
+class _RecordingMaterialRepository implements MaterialRepository {
+  _RecordingMaterialRepository({
+    this.loadedMaterials = const [],
+    this.throwOnLoad = false,
+  });
+
+  final List<StudyMaterial> loadedMaterials;
+  final bool throwOnLoad;
+  final List<AuthUser> loadedUsers = [];
+  final List<AuthUser> createdUsers = [];
+  final List<String> createdSubjectIds = [];
+  final List<String> createdTitles = [];
+
+  @override
+  Future<List<StudyMaterial>> loadMaterials(AuthUser user) async {
+    loadedUsers.add(user);
+    if (throwOnLoad) {
+      throw const MaterialRepositoryException('Could not sync materials.');
+    }
+    return List<StudyMaterial>.of(loadedMaterials);
+  }
+
+  @override
+  Future<StudyMaterial> createMaterial({
+    required AuthUser user,
+    required String subjectId,
+    required String title,
+    required String content,
+  }) async {
+    createdUsers.add(user);
+    createdSubjectIds.add(subjectId);
+    createdTitles.add(title);
+    return StudyMaterial(
+      id: 'created-${createdTitles.length}',
+      subjectId: subjectId,
+      title: title,
+      kind: MaterialKind.pastedText,
+      content: content,
+      createdLabel: 'Just now',
     );
   }
 }

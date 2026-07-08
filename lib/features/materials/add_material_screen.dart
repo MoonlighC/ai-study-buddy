@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../core/models/subject.dart';
+import '../auth/auth_controller.dart';
 
 class AddMaterialScreen extends StatefulWidget {
   const AddMaterialScreen({required this.subject, super.key});
@@ -25,6 +26,8 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Add pasted text')),
       body: ListView(
@@ -51,22 +54,41 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: () {
-              AppStateScope.read(context).addMaterial(
-                subjectId: widget.subject.id,
-                title: titleController.text,
-                content: contentController.text,
-              );
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Mock material saved locally.')),
-              );
-              Navigator.pop(context);
-            },
+            onPressed: state.isCreatingMaterial
+                ? null
+                : () => _saveMaterial(context),
             icon: const Icon(Icons.save_outlined),
-            label: const Text('Save mock material'),
+            label: Text(
+              state.isCreatingMaterial ? 'Saving material' : 'Save material',
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _saveMaterial(BuildContext context) async {
+    final state = AppStateScope.read(context);
+    final saved = await state.createMaterialFor(
+      AuthScope.read(context).user,
+      subjectId: widget.subject.id,
+      title: titleController.text,
+      content: contentController.text,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    if (!saved) {
+      final message =
+          state.materialSyncErrorMessage ?? 'Could not save material.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Material saved.')));
+    Navigator.pop(context);
   }
 }

@@ -7,6 +7,7 @@ import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
+import '../auth/auth_controller.dart';
 
 class SubjectDetailScreen extends StatelessWidget {
   const SubjectDetailScreen({required this.subject, super.key});
@@ -15,7 +16,8 @@ class SubjectDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final materials = AppStateScope.watch(context).materialsFor(subject.id);
+    final state = AppStateScope.watch(context);
+    final materials = state.materialsFor(subject.id);
 
     return Scaffold(
       appBar: AppBar(
@@ -29,7 +31,7 @@ class SubjectDetailScreen extends StatelessWidget {
           SectionCard(
             icon: Icons.auto_awesome_outlined,
             title: 'Study actions',
-            subtitle: 'Use local mock content for this subject.',
+            subtitle: 'Use pasted text for this subject.',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -60,19 +62,51 @@ class SubjectDetailScreen extends StatelessWidget {
             title: 'Materials',
             child: Column(
               children: [
-                for (final material in materials)
+                if (state.isLoadingMaterials)
+                  const ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    title: Text('Loading synced materials'),
+                  ),
+                if (state.materialSyncErrorMessage != null)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.article_outlined),
-                    title: Text(material.title),
-                    subtitle: Text('${material.createdLabel} - pasted text'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      AppRoutes.materialDetail,
-                      arguments: material,
+                    leading: const Icon(Icons.cloud_off_outlined),
+                    title: Text(state.materialSyncErrorMessage!),
+                    subtitle: const Text('Your subject is still usable.'),
+                    trailing: TextButton(
+                      onPressed: state.isLoadingMaterials
+                          ? null
+                          : () => state.loadMaterialsFor(
+                              AuthScope.read(context).user,
+                            ),
+                      child: const Text('Retry'),
                     ),
                   ),
+                if (!state.isLoadingMaterials && materials.isEmpty)
+                  const ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.article_outlined),
+                    title: Text('No materials yet'),
+                    subtitle: Text('Add pasted text to start from notes.'),
+                  )
+                else
+                  for (final material in materials)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.article_outlined),
+                      title: Text(material.title),
+                      subtitle: Text('${material.createdLabel} - pasted text'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.pushNamed(
+                        context,
+                        AppRoutes.materialDetail,
+                        arguments: material,
+                      ),
+                    ),
               ],
             ),
           ),

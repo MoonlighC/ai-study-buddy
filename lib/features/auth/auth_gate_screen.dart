@@ -37,7 +37,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     }
     final route = auth.isAuthenticated ? AppRoutes.dashboard : AppRoutes.login;
     if (auth.isAuthenticated) {
-      await AppStateScope.read(context).loadSubjectsFor(auth.user);
+      await AppStateScope.read(context).loadSyncedWorkspaceFor(auth.user);
       if (!mounted) {
         return;
       }

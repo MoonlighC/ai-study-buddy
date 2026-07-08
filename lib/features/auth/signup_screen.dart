@@ -187,7 +187,7 @@ class _SignupScreenState extends State<SignupScreen> {
     }
     await AppStateScope.read(
       context,
-    ).loadSubjectsFor(AuthScope.read(context).user);
+    ).loadSyncedWorkspaceFor(AuthScope.read(context).user);
     if (!context.mounted) {
       return;
     }

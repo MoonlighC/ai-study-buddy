@@ -49,7 +49,7 @@ class _SearchScreenState extends State<SearchScreen> {
           SectionCard(
             icon: Icons.manage_search_outlined,
             title: 'Results',
-            subtitle: 'Subjects, materials, and flashcards from local state.',
+            subtitle: 'Subjects, materials, and flashcards from app state.',
             child: Column(
               children: [
                 if (query.trim().isEmpty)
@@ -62,7 +62,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   const ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.search_off_outlined),
-                    title: Text('No local results'),
+                    title: Text('No results'),
                   )
                 else
                   for (final result in results)

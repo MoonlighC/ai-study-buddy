@@ -6,6 +6,7 @@ import 'routes.dart';
 import 'theme.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_repository.dart';
+import '../features/materials/material_repository.dart';
 import '../features/subjects/subject_repository.dart';
 
 class StudyBuddyApp extends StatefulWidget {
@@ -14,6 +15,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.authRepository,
     this.profileRepository,
     this.subjectRepository,
+    this.materialRepository,
     super.key,
   });
 
@@ -21,6 +23,7 @@ class StudyBuddyApp extends StatefulWidget {
   final AuthRepository? authRepository;
   final ProfileRepository? profileRepository;
   final SubjectRepository? subjectRepository;
+  final MaterialRepository? materialRepository;
 
   @override
   State<StudyBuddyApp> createState() => _StudyBuddyAppState();
@@ -31,6 +34,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
   late final AppState state = AppState(
     config: config,
     subjectRepository: widget.subjectRepository,
+    materialRepository: widget.materialRepository,
   );
   late final AuthController authController = AuthController(
     authRepository: widget.authRepository ?? MockAuthRepository(),

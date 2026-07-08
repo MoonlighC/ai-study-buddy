@@ -22,7 +22,6 @@ import '../features/study_sessions/study_session_result_screen.dart';
 import '../features/subjects/subject_detail_screen.dart';
 import '../features/subjects/subjects_screen.dart';
 import '../features/usage/usage_limits_screen.dart';
-import '../mock/mock_data.dart';
 
 class AppRoutes {
   static const authGate = '/auth';
@@ -51,6 +50,14 @@ class AppRoutes {
     description: 'Subject unavailable.',
     colorValue: 0xFF64748B,
   );
+  static const _fallbackMaterial = StudyMaterial(
+    id: 'missing-material',
+    subjectId: 'missing-subject',
+    title: 'Material unavailable',
+    kind: MaterialKind.pastedText,
+    content: '',
+    createdLabel: 'Not synced',
+  );
 
   static Route<void> onGenerateRoute(RouteSettings routeSettings) {
     final subject = routeSettings.arguments is Subject
@@ -58,7 +65,7 @@ class AppRoutes {
         : _fallbackSubject;
     final material = routeSettings.arguments is StudyMaterial
         ? routeSettings.arguments! as StudyMaterial
-        : MockData.materials.first;
+        : _fallbackMaterial;
 
     final widget = switch (routeSettings.name) {
       authGate => const AuthGateScreen(),

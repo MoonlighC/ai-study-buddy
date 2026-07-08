@@ -193,7 +193,7 @@ class _SupabaseEmailFormState extends State<_SupabaseEmailForm> {
     }
     await AppStateScope.read(
       context,
-    ).loadSubjectsFor(AuthScope.read(context).user);
+    ).loadSyncedWorkspaceFor(AuthScope.read(context).user);
     if (!context.mounted) {
       return;
     }
@@ -242,7 +242,7 @@ class _MockLoginButton extends StatelessWidget {
     }
     await AppStateScope.read(
       context,
-    ).loadSubjectsFor(AuthScope.read(context).user);
+    ).loadSyncedWorkspaceFor(AuthScope.read(context).user);
     if (!context.mounted) {
       return;
     }

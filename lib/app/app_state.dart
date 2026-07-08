@@ -9,26 +9,40 @@ import '../core/models/study_time_block.dart';
 import '../core/models/subject.dart';
 import '../core/models/weak_topic.dart';
 import '../features/auth/auth_models.dart';
+import '../features/materials/material_repository.dart';
 import '../features/subjects/subject_repository.dart';
 import '../mock/mock_ai_service.dart';
 import '../mock/mock_data.dart';
 
 class AppState extends ChangeNotifier {
-  AppState({AppConfig? config, SubjectRepository? subjectRepository})
-    : config = config ?? AppConfig.fromValues(),
-      subjectRepository =
-          subjectRepository ??
-          ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
-                  AppBackendMode.supabase
-              ? const EmptySubjectRepository()
-              : MockSubjectRepository()),
-      _subjects =
-          (config ?? AppConfig.fromValues()).effectiveBackendMode ==
-              AppBackendMode.supabase
-          ? <Subject>[]
-          : List<Subject>.of(MockData.subjects),
-      _materials = List<StudyMaterial>.of(MockData.materials),
-      _flashcards = List<Flashcard>.of(MockData.flashcards);
+  AppState({
+    AppConfig? config,
+    SubjectRepository? subjectRepository,
+    MaterialRepository? materialRepository,
+  }) : config = config ?? AppConfig.fromValues(),
+       subjectRepository =
+           subjectRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptySubjectRepository()
+               : MockSubjectRepository()),
+       materialRepository =
+           materialRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyMaterialRepository()
+               : MockMaterialRepository()),
+       _subjects =
+           (config ?? AppConfig.fromValues()).effectiveBackendMode ==
+               AppBackendMode.supabase
+           ? <Subject>[]
+           : List<Subject>.of(MockData.subjects),
+       _materials =
+           (config ?? AppConfig.fromValues()).effectiveBackendMode ==
+               AppBackendMode.supabase
+           ? <StudyMaterial>[]
+           : List<StudyMaterial>.of(MockData.materials),
+       _flashcards = List<Flashcard>.of(MockData.flashcards);
 
   static const _ai = MockAiService();
   static const _fallbackSubject = Subject(
@@ -40,8 +54,9 @@ class AppState extends ChangeNotifier {
 
   final AppConfig config;
   final SubjectRepository subjectRepository;
+  final MaterialRepository materialRepository;
   List<Subject> _subjects;
-  final List<StudyMaterial> _materials;
+  List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
   final List<StudySession> _studySessions = [];
   int _materialCounter = 0;
@@ -54,6 +69,9 @@ class AppState extends ChangeNotifier {
   bool _isLoadingSubjects = false;
   bool _isCreatingSubject = false;
   String? _subjectSyncErrorMessage;
+  bool _isLoadingMaterials = false;
+  bool _isCreatingMaterial = false;
+  String? _materialSyncErrorMessage;
 
   List<Subject> get subjects => List.unmodifiable(_subjects);
 
@@ -62,6 +80,14 @@ class AppState extends ChangeNotifier {
   bool get isCreatingSubject => _isCreatingSubject;
 
   String? get subjectSyncErrorMessage => _subjectSyncErrorMessage;
+
+  List<StudyMaterial> get materials => List.unmodifiable(_materials);
+
+  bool get isLoadingMaterials => _isLoadingMaterials;
+
+  bool get isCreatingMaterial => _isCreatingMaterial;
+
+  String? get materialSyncErrorMessage => _materialSyncErrorMessage;
 
   AppLanguagePreference get languagePreference => _languagePreference;
 
@@ -102,6 +128,46 @@ class AppState extends ChangeNotifier {
       _subjectSyncErrorMessage = _subjectMessageFor(error);
     } finally {
       _isLoadingSubjects = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadSyncedWorkspaceFor(AuthUser? user) async {
+    await loadSubjectsFor(user);
+    await loadMaterialsFor(user);
+  }
+
+  Future<void> loadMaterialsFor(AuthUser? user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      _materials = await materialRepository.loadMaterials(
+        user ??
+            const AuthUser(
+              id: 'mock-user',
+              email: 'alex.student@example.test',
+              displayName: 'Alex Student',
+            ),
+      );
+      _materialSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    if (user == null) {
+      _materials = [];
+      _materialSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingMaterials = true;
+    _materialSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      _materials = await materialRepository.loadMaterials(user);
+    } catch (error) {
+      _materialSyncErrorMessage = _materialMessageFor(error);
+    } finally {
+      _isLoadingMaterials = false;
       notifyListeners();
     }
   }
@@ -155,15 +221,76 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> createMaterialFor(
+    AuthUser? user, {
+    required String subjectId,
+    required String title,
+    required String content,
+  }) async {
+    final cleanTitle = title.trim();
+    final cleanContent = content.trim();
+    if (cleanTitle.isEmpty || cleanContent.isEmpty) {
+      _materialSyncErrorMessage = 'Enter a title and pasted text.';
+      notifyListeners();
+      return false;
+    }
+
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _materialSyncErrorMessage = 'Log in to sync materials.';
+      notifyListeners();
+      return false;
+    }
+
+    _isCreatingMaterial = true;
+    _materialSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      final createdMaterial = await materialRepository.createMaterial(
+        user: effectiveUser,
+        subjectId: subjectId,
+        title: cleanTitle,
+        content: cleanContent,
+      );
+      _materials = [
+        createdMaterial,
+        for (final material in _materials)
+          if (material.id != createdMaterial.id) material,
+      ];
+      return true;
+    } catch (error) {
+      _materialSyncErrorMessage = _materialMessageFor(error);
+      return false;
+    } finally {
+      _isCreatingMaterial = false;
+      notifyListeners();
+    }
+  }
+
   void clearSyncedSubjectsForSignOut() {
     if (config.effectiveBackendMode != AppBackendMode.supabase) {
       return;
     }
     _subjects = [];
+    _materials = [];
     _subjectSyncErrorMessage = null;
+    _materialSyncErrorMessage = null;
     _isLoadingSubjects = false;
     _isCreatingSubject = false;
+    _isLoadingMaterials = false;
+    _isCreatingMaterial = false;
     notifyListeners();
+  }
+
+  void clearSyncedWorkspaceForSignOut() {
+    clearSyncedSubjectsForSignOut();
   }
 
   void setLanguagePreference(AppLanguagePreference value) {
@@ -447,6 +574,13 @@ class AppState extends ChangeNotifier {
       return error.message;
     }
     return 'Could not sync subjects. Try again.';
+  }
+
+  String _materialMessageFor(Object error) {
+    if (error is MaterialRepositoryException) {
+      return error.message;
+    }
+    return 'Could not sync materials. Try again.';
   }
 
   String _summaryFor(

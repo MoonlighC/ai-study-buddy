@@ -250,7 +250,7 @@ class SettingsScreen extends StatelessWidget {
       ).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
-    AppStateScope.read(context).clearSyncedSubjectsForSignOut();
+    AppStateScope.read(context).clearSyncedWorkspaceForSignOut();
     Navigator.pushNamedAndRemoveUntil(
       context,
       AppRoutes.login,

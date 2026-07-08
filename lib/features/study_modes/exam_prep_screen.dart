@@ -54,7 +54,7 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Create a local mock plan from a subject, materials, and weak topics.',
+            'Create a local study plan from a subject, materials, and weak topics.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
@@ -108,15 +108,25 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
               title: 'Selected materials',
               child: Column(
                 children: [
-                  for (final material in materials)
-                    ListTile(
+                  if (materials.isEmpty)
+                    const ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.article_outlined),
-                      title: Text(material.title),
+                      leading: Icon(Icons.article_outlined),
+                      title: Text('No materials yet'),
                       subtitle: Text(
-                        '${material.createdLabel} - included in mock plan',
+                        'The plan can still start from the selected subject.',
                       ),
-                    ),
+                    )
+                  else
+                    for (final material in materials)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.article_outlined),
+                        title: Text(material.title),
+                        subtitle: Text(
+                          '${material.createdLabel} - included in plan',
+                        ),
+                      ),
                 ],
               ),
             ),

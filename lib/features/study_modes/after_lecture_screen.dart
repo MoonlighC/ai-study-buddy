@@ -41,7 +41,7 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Start from local mock material and choose how confident you feel.',
+            'Start from pasted material and choose how confident you feel.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
@@ -61,22 +61,34 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
             SectionCard(
               icon: Icons.article_outlined,
               title: 'Choose material',
-              subtitle: 'Using the first mock subject for this scenario.',
+              subtitle: 'Using the first subject for this scenario.',
               child: Column(
                 children: [
-                  for (final material in materials)
-                    ListTile(
+                  if (materials.isEmpty)
+                    const ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.article_outlined),
-                      title: Text(material.title),
-                      subtitle: Text('${material.createdLabel} - pasted text'),
-                      trailing: const Icon(Icons.check_circle_outline),
-                    ),
+                      leading: Icon(Icons.article_outlined),
+                      title: Text('No materials yet'),
+                      subtitle: Text(
+                        'You can still create a subject-based session.',
+                      ),
+                    )
+                  else
+                    for (final material in materials)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.article_outlined),
+                        title: Text(material.title),
+                        subtitle: Text(
+                          '${material.createdLabel} - pasted text',
+                        ),
+                        trailing: const Icon(Icons.check_circle_outline),
+                      ),
                   const ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.upload_file_outlined),
-                    title: Text('Paste or upload material placeholder'),
-                    subtitle: Text('Mock only: no file upload is performed.'),
+                    leading: Icon(Icons.post_add_outlined),
+                    title: Text('Add pasted text from a subject page'),
+                    subtitle: Text('Uploads and files come later.'),
                   ),
                 ],
               ),
