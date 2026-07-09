@@ -56,6 +56,56 @@ void main() {
       },
     );
 
+    test('too-short material blocks summary generation safely', () async {
+      final summaryRepository = _FakeSummaryRepository();
+      final state = AppState(
+        config: _supabaseConfig(),
+        materialRepository: _FakeMaterialRepository(
+          loadedMaterials: const [
+            StudyMaterial(
+              id: 'short-material',
+              subjectId: 'subject-1',
+              title: 'Short note',
+              kind: MaterialKind.pastedText,
+              content: 'Test',
+              createdLabel: 'Synced',
+            ),
+          ],
+        ),
+        summaryRepository: summaryRepository,
+      );
+      await state.loadMaterialsFor(user);
+
+      final generated = await state.generateSummaryFor(user, 'short-material');
+
+      expect(generated, isFalse);
+      expect(summaryRepository.generatedMaterialIds, isEmpty);
+      expect(
+        state.summaryGenerationErrorMessage,
+        AppState.summaryTooShortMessage,
+      );
+    });
+
+    test('valid material still generates after quality guard', () async {
+      final summaryRepository = _FakeSummaryRepository(
+        summary: 'Valid guarded summary.',
+      );
+      final state = AppState(
+        config: _supabaseConfig(),
+        materialRepository: _FakeMaterialRepository(
+          loadedMaterials: const [_material],
+        ),
+        summaryRepository: summaryRepository,
+      );
+      await state.loadMaterialsFor(user);
+
+      final generated = await state.generateSummaryFor(user, 'material-1');
+
+      expect(generated, isTrue);
+      expect(summaryRepository.generatedMaterialIds, ['material-1']);
+      expect(state.materialById('material-1')?.summary, 'Valid guarded summary.');
+    });
+
     test('unauthenticated supabase summary generation fails safely', () async {
       final summaryRepository = _FakeSummaryRepository();
       final state = AppState(
@@ -87,7 +137,7 @@ void main() {
               subjectId: 'subject-1',
               title: 'Cloud notes',
               kind: MaterialKind.pastedText,
-              content: 'Synced lecture text.',
+              content: _validMaterialContent,
               createdLabel: 'Synced',
               summary: 'Existing summary.',
             ),
@@ -114,9 +164,12 @@ const _material = StudyMaterial(
   subjectId: 'subject-1',
   title: 'Cloud notes',
   kind: MaterialKind.pastedText,
-  content: 'Synced lecture text.',
+  content: _validMaterialContent,
   createdLabel: 'Synced',
 );
+
+const _validMaterialContent =
+    'Synced lecture text with enough detail to generate a focused study summary. It explains the core idea, supporting evidence, and one point to review.';
 
 AppConfig _supabaseConfig() {
   return AppConfig.fromValues(

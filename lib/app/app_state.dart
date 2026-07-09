@@ -61,6 +61,9 @@ class AppState extends ChangeNotifier {
        _flashcards = List<Flashcard>.of(MockData.flashcards);
 
   static const _ai = MockAiService();
+  static const summaryMinimumContentCharacters = 80;
+  static const summaryTooShortMessage =
+      'Add more lecture text before generating a summary.';
   static const _fallbackSubject = Subject(
     id: 'missing-subject',
     name: 'Subject',
@@ -452,6 +455,11 @@ class AppState extends ChangeNotifier {
     return _favoriteMaterialIds.contains(materialId);
   }
 
+  bool canGenerateSummaryForMaterial(StudyMaterial material) {
+    return material.kind == MaterialKind.pastedText &&
+        material.content.trim().length >= summaryMinimumContentCharacters;
+  }
+
   StudySession? get latestStudySession {
     if (_studySessions.isEmpty) {
       return null;
@@ -640,8 +648,13 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (material.kind != MaterialKind.pastedText || material.content.isEmpty) {
+    if (material.kind != MaterialKind.pastedText) {
       _summaryGenerationErrorMessage = 'Could not generate summary. Try again.';
+      notifyListeners();
+      return false;
+    }
+    if (material.content.trim().length < summaryMinimumContentCharacters) {
+      _summaryGenerationErrorMessage = summaryTooShortMessage;
       notifyListeners();
       return false;
     }

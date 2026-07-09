@@ -15,6 +15,9 @@ class SummaryRepositoryException implements Exception {
   final String message;
 }
 
+const summaryTooShortMessage =
+    'Add more lecture text before generating a summary.';
+
 class MockSummaryRepository implements SummaryRepository {
   const MockSummaryRepository();
 
@@ -44,6 +47,10 @@ class SupabaseSummaryRepository implements SummaryRepository {
       );
       final data = response.data;
       final summary = data['summary'];
+      final error = data['error'];
+      if (error == summaryTooShortMessage) {
+        throw const SummaryRepositoryException(summaryTooShortMessage);
+      }
       if (summary is! String || summary.trim().isEmpty) {
         throw const SummaryRepositoryException(
           'Could not generate summary. Try again.',

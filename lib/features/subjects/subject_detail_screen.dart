@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../core/models/material.dart';
 import '../../core/models/subject.dart';
 import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_page.dart';
@@ -18,6 +19,9 @@ class SubjectDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
     final materials = state.materialsFor(subject.id);
+    final summaryMaterials = materials
+        .where((material) => material.summary?.trim().isNotEmpty ?? false)
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -132,6 +136,11 @@ class SubjectDetailScreen extends StatelessWidget {
             ),
           ),
           SectionCard(
+            icon: Icons.auto_awesome_outlined,
+            title: 'Summaries',
+            child: _SummariesList(materials: summaryMaterials),
+          ),
+          SectionCard(
             icon: Icons.hourglass_empty_outlined,
             title: 'Coming later',
             subtitle: 'Visible placeholders only; no upload is performed.',
@@ -174,6 +183,45 @@ class SubjectDetailScreen extends StatelessWidget {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _SummariesList extends StatelessWidget {
+  const _SummariesList({required this.materials});
+
+  final List<StudyMaterial> materials;
+
+  @override
+  Widget build(BuildContext context) {
+    if (materials.isEmpty) {
+      return const ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(Icons.auto_awesome_outlined),
+        title: Text('No summaries yet. Generate one from a material.'),
+      );
+    }
+
+    return Column(
+      children: [
+        for (final material in materials)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: Text(material.title),
+            subtitle: Text(
+              '${material.createdLabel} - ${material.summary!.trim()}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.pushNamed(
+              context,
+              AppRoutes.materialDetail,
+              arguments: material,
+            ),
+          ),
+      ],
+    );
   }
 }
 

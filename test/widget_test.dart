@@ -135,13 +135,14 @@ void main() {
 
     expect(find.text('Photosynthesis lecture notes'), findsOneWidget);
     expect(
-      find.text(
-        'Plants convert light, water, and carbon dioxide into glucose.',
+      find.textContaining(
+        'Plants convert light, water, and carbon dioxide into glucose',
       ),
       findsOneWidget,
     );
     expect(find.text('Generate mock summary'), findsOneWidget);
 
+    await _scrollTo(tester, find.text('Create study session'));
     await tester.tap(find.text('Create study session'));
     await tester.pumpAndSettle();
 
@@ -194,6 +195,42 @@ void main() {
       find.text('Widget summary from the selected material.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('material detail shows helper for too-short summary input', (
+    tester,
+  ) async {
+    const shortMaterial = StudyMaterial(
+      id: 'short-material',
+      subjectId: 'biology',
+      title: 'Tiny note',
+      kind: MaterialKind.pastedText,
+      content: 'Test',
+      createdLabel: 'Today',
+    );
+    final summaryRepository = _RecordingSummaryRepository();
+
+    await tester.pumpWidget(
+      StudyBuddyApp(summaryRepository: summaryRepository),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: shortMaterial,
+    );
+
+    expect(
+      find.text('Add more lecture text before generating a summary.'),
+      findsOneWidget,
+    );
+    final button = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Generate mock summary'),
+    );
+    expect(button.onPressed, isNull);
+    expect(summaryRepository.generatedMaterialIds, isEmpty);
   });
 
   testWidgets('material detail shows loading while summary generates', (
@@ -935,6 +972,95 @@ void main() {
     expect(find.text('Photosynthesis lecture notes'), findsNothing);
   });
 
+  testWidgets('subject detail shows summaries section with empty state', (
+    tester,
+  ) async {
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: _RecordingMaterialRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.subjectDetail, arguments: subject);
+    await _scrollTo(tester, find.text('Summaries'));
+
+    expect(find.text('Summaries'), findsOneWidget);
+    expect(
+      find.text('No summaries yet. Generate one from a material.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('subject summary hub lists summaries and opens material detail', (
+    tester,
+  ) async {
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+    const material = StudyMaterial(
+      id: 'cloud-material',
+      subjectId: 'cloud-biology',
+      title: 'Cloud lecture notes',
+      kind: MaterialKind.pastedText,
+      content:
+          'Synced material text with enough detail for the quality guard. It explains a topic, adds context, and gives the learner useful source content.',
+      createdLabel: 'Synced',
+      summary:
+          'This summary explains the main cloud biology idea and the supporting detail to review before practice.',
+    );
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: _RecordingMaterialRepository(
+          loadedMaterials: const [material],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.subjectDetail, arguments: subject);
+    await _scrollTo(tester, find.text('Summaries'));
+
+    expect(find.text('Summaries'), findsOneWidget);
+    expect(find.text('Cloud lecture notes'), findsWidgets);
+    expect(
+      find.textContaining('Synced - This summary explains'),
+      findsOneWidget,
+    );
+
+    final summaryTile = find.ancestor(
+      of: find.textContaining('Synced - This summary explains'),
+      matching: find.byType(ListTile),
+    );
+    await tester.tap(summaryTile);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Material'), findsOneWidget);
+    expect(find.text('Pasted text'), findsOneWidget);
+    expect(find.textContaining('This summary explains'), findsOneWidget);
+  });
+
   testWidgets('supabase fresh account shows material empty state', (
     tester,
   ) async {
@@ -1257,8 +1383,8 @@ void main() {
 
     expect(find.text('Pasted text'), findsOneWidget);
     expect(
-      find.text(
-        'Plants convert light, water, and carbon dioxide into glucose.',
+      find.textContaining(
+        'Plants convert light, water, and carbon dioxide into glucose',
       ),
       findsOneWidget,
     );

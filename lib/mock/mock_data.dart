@@ -36,7 +36,8 @@ class MockData {
       subjectId: 'biology',
       title: 'Photosynthesis lecture notes',
       kind: MaterialKind.pastedText,
-      content: 'Plants convert light, water, and carbon dioxide into glucose.',
+      content:
+          'Plants convert light, water, and carbon dioxide into glucose during photosynthesis. Chloroplasts capture light energy, and the plant releases oxygen while storing energy in sugar.',
       createdLabel: 'Today',
     ),
     StudyMaterial(
@@ -44,7 +45,8 @@ class MockData {
       subjectId: 'math',
       title: 'Linear equations worksheet',
       kind: MaterialKind.pastedText,
-      content: 'Solving equations requires inverse operations.',
+      content:
+          'Solving linear equations requires inverse operations that keep both sides balanced. Each step should isolate the unknown while preserving equality across the equation.',
       createdLabel: 'Yesterday',
     ),
     StudyMaterial(
@@ -52,7 +54,8 @@ class MockData {
       subjectId: 'german',
       title: 'Short story vocabulary',
       kind: MaterialKind.pastedText,
-      content: 'Vocabulary and sentence starters for text analysis.',
+      content:
+          'Vocabulary and sentence starters for short story analysis help describe characters, setting, conflict, and narrative perspective with clear evidence from the text.',
       createdLabel: '2 days ago',
     ),
   ];

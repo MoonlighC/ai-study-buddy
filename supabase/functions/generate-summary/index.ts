@@ -8,6 +8,8 @@ const corsHeaders = {
 };
 
 const maxInputChars = 12000;
+const minSummaryInputChars = 80;
+const shortInputMessage = "Add more lecture text before generating a summary.";
 const defaultModel = "gpt-4.1-mini";
 
 serve(async (request) => {
@@ -84,6 +86,12 @@ serve(async (request) => {
     material_id: materialId,
     content_length: contentText.length,
   });
+  if (contentText.length < minSummaryInputChars) {
+    logKnownFailure("material_content_too_short", {
+      content_length: contentText.length,
+    });
+    return jsonResponse({ error: shortInputMessage }, 400);
+  }
   if (openAiApiKey.length === 0) {
     await markMaterialFailed(supabaseClient, materialId, user.id);
     logKnownFailure("openai_key_missing");
@@ -142,7 +150,7 @@ async function generateSummary(
     body: JSON.stringify({
       model,
       instructions:
-        "Create a concise study summary for a student. Focus only on the provided material. Use 4 to 6 sentences. Do not add flashcards, quiz questions, or unrelated advice.",
+        "Create a concise, study-focused summary for a student. Summarize only the provided material. Do not ask the user to provide material. Do not invent facts or use outside knowledge. Use 4 to 6 sentences. Do not add flashcards, quiz questions, or unrelated advice.",
       input: inputText,
       max_output_tokens: 220,
     }),
@@ -240,8 +248,8 @@ function logStage(stage: string, details: Record<string, unknown> = {}) {
   console.log(JSON.stringify({ stage, ...details }));
 }
 
-function logKnownFailure(reason: string) {
-  logStage("known_failure", { reason });
+function logKnownFailure(reason: string, details: Record<string, unknown> = {}) {
+  logStage("known_failure", { reason, ...details });
 }
 
 function logOpenAiResponse(status: number, data: unknown) {

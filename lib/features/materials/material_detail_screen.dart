@@ -120,6 +120,7 @@ class _SummarySection extends StatelessWidget {
     final summary = material.summary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
     final canGenerate = material.kind == MaterialKind.pastedText;
+    final hasEnoughText = state.canGenerateSummaryForMaterial(material);
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
     final buttonLabel = hasSummary
@@ -132,6 +133,13 @@ class _SummarySection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (hasSummary) Text(summary) else const Text('No summary yet.'),
+        if (canGenerate && !hasEnoughText) ...[
+          const SizedBox(height: 8),
+          Text(
+            AppState.summaryTooShortMessage,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
         if (state.summaryGenerationErrorMessage != null) ...[
           const SizedBox(height: 8),
           Text(
@@ -142,7 +150,7 @@ class _SummarySection extends StatelessWidget {
         if (canGenerate) ...[
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: state.isGeneratingSummary
+            onPressed: state.isGeneratingSummary || !hasEnoughText
                 ? null
                 : () => _generateSummary(context, material.id),
             icon: state.isGeneratingSummary
