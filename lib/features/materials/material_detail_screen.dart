@@ -8,6 +8,7 @@ import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
+import '../auth/auth_controller.dart';
 
 class MaterialDetailScreen extends StatelessWidget {
   const MaterialDetailScreen({required this.material, super.key});
@@ -19,11 +20,21 @@ class MaterialDetailScreen extends StatelessWidget {
     final state = AppStateScope.watch(context);
     final freshMaterial = state.materialById(material.id) ?? material;
     final subject = state.subjectFor(freshMaterial.subjectId);
+    final isFavorite = state.isMaterialFavorite(freshMaterial.id);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Material'),
-        actions: const [AppTopActions()],
+        actions: [
+          IconButton(
+            tooltip: isFavorite ? 'Unfavorite material' : 'Favorite material',
+            onPressed: state.isUpdatingMaterialFavorite
+                ? null
+                : () => _toggleMaterialFavorite(context, freshMaterial.id),
+            icon: Icon(isFavorite ? Icons.star : Icons.star_border),
+          ),
+          const AppTopActions(),
+        ],
       ),
       body: AppPage(
         children: [
@@ -71,5 +82,23 @@ class MaterialDetailScreen extends StatelessWidget {
       ),
       bottomNavigationBar: const AppBottomNav(),
     );
+  }
+
+  Future<void> _toggleMaterialFavorite(
+    BuildContext context,
+    String materialId,
+  ) async {
+    final saved = await AppStateScope.read(
+      context,
+    ).toggleMaterialFavoriteFor(AuthScope.read(context).user, materialId);
+    if (!context.mounted || saved) {
+      return;
+    }
+    final message =
+        AppStateScope.read(context).favoriteSyncErrorMessage ??
+        'Could not update favorite.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }

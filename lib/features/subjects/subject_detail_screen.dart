@@ -100,7 +100,28 @@ class SubjectDetailScreen extends StatelessWidget {
                       leading: const Icon(Icons.article_outlined),
                       title: Text(material.title),
                       subtitle: Text('${material.createdLabel} - pasted text'),
-                      trailing: const Icon(Icons.chevron_right),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: state.isMaterialFavorite(material.id)
+                                ? 'Unfavorite material'
+                                : 'Favorite material',
+                            onPressed: state.isUpdatingMaterialFavorite
+                                ? null
+                                : () => _toggleMaterialFavorite(
+                                    context,
+                                    material.id,
+                                  ),
+                            icon: Icon(
+                              state.isMaterialFavorite(material.id)
+                                  ? Icons.star
+                                  : Icons.star_border,
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right),
+                        ],
+                      ),
                       onTap: () => Navigator.pushNamed(
                         context,
                         AppRoutes.materialDetail,
@@ -135,6 +156,24 @@ class SubjectDetailScreen extends StatelessWidget {
       ),
       bottomNavigationBar: const AppBottomNav(),
     );
+  }
+
+  Future<void> _toggleMaterialFavorite(
+    BuildContext context,
+    String materialId,
+  ) async {
+    final saved = await AppStateScope.read(
+      context,
+    ).toggleMaterialFavoriteFor(AuthScope.read(context).user, materialId);
+    if (!context.mounted || saved) {
+      return;
+    }
+    final message =
+        AppStateScope.read(context).favoriteSyncErrorMessage ??
+        'Could not update favorite.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

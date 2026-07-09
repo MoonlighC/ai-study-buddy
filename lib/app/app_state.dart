@@ -9,6 +9,7 @@ import '../core/models/study_time_block.dart';
 import '../core/models/subject.dart';
 import '../core/models/weak_topic.dart';
 import '../features/auth/auth_models.dart';
+import '../features/favorites/favorite_repository.dart';
 import '../features/materials/material_repository.dart';
 import '../features/subjects/subject_repository.dart';
 import '../mock/mock_ai_service.dart';
@@ -19,6 +20,7 @@ class AppState extends ChangeNotifier {
     AppConfig? config,
     SubjectRepository? subjectRepository,
     MaterialRepository? materialRepository,
+    FavoriteRepository? favoriteRepository,
   }) : config = config ?? AppConfig.fromValues(),
        subjectRepository =
            subjectRepository ??
@@ -32,6 +34,12 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyMaterialRepository()
                : MockMaterialRepository()),
+       favoriteRepository =
+           favoriteRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyFavoriteRepository()
+               : MockFavoriteRepository()),
        _subjects =
            (config ?? AppConfig.fromValues()).effectiveBackendMode ==
                AppBackendMode.supabase
@@ -55,9 +63,11 @@ class AppState extends ChangeNotifier {
   final AppConfig config;
   final SubjectRepository subjectRepository;
   final MaterialRepository materialRepository;
+  final FavoriteRepository favoriteRepository;
   List<Subject> _subjects;
   List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
+  final Set<String> _favoriteMaterialIds = {};
   final List<StudySession> _studySessions = [];
   int _materialCounter = 0;
   int _sessionCounter = 0;
@@ -72,6 +82,9 @@ class AppState extends ChangeNotifier {
   bool _isLoadingMaterials = false;
   bool _isCreatingMaterial = false;
   String? _materialSyncErrorMessage;
+  bool _isLoadingMaterialFavorites = false;
+  bool _isUpdatingMaterialFavorite = false;
+  String? _favoriteSyncErrorMessage;
 
   List<Subject> get subjects => List.unmodifiable(_subjects);
 
@@ -88,6 +101,18 @@ class AppState extends ChangeNotifier {
   bool get isCreatingMaterial => _isCreatingMaterial;
 
   String? get materialSyncErrorMessage => _materialSyncErrorMessage;
+
+  List<StudyMaterial> get favoriteMaterials {
+    return _materials
+        .where((material) => _favoriteMaterialIds.contains(material.id))
+        .toList();
+  }
+
+  bool get isLoadingMaterialFavorites => _isLoadingMaterialFavorites;
+
+  bool get isUpdatingMaterialFavorite => _isUpdatingMaterialFavorite;
+
+  String? get favoriteSyncErrorMessage => _favoriteSyncErrorMessage;
 
   AppLanguagePreference get languagePreference => _languagePreference;
 
@@ -135,6 +160,7 @@ class AppState extends ChangeNotifier {
   Future<void> loadSyncedWorkspaceFor(AuthUser? user) async {
     await loadSubjectsFor(user);
     await loadMaterialsFor(user);
+    await loadMaterialFavoritesFor(user);
   }
 
   Future<void> loadMaterialsFor(AuthUser? user) async {
@@ -274,6 +300,50 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<void> loadMaterialFavoritesFor(AuthUser? user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      _favoriteMaterialIds
+        ..clear()
+        ..addAll(
+          await favoriteRepository.loadMaterialFavoriteIds(
+            user ??
+                const AuthUser(
+                  id: 'mock-user',
+                  email: 'alex.student@example.test',
+                  displayName: 'Alex Student',
+                ),
+          ),
+        );
+      _favoriteSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    if (user == null) {
+      _favoriteMaterialIds.clear();
+      _favoriteSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingMaterialFavorites = true;
+    _favoriteSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      final favoriteIds = await favoriteRepository.loadMaterialFavoriteIds(
+        user,
+      );
+      _favoriteMaterialIds
+        ..clear()
+        ..addAll(favoriteIds);
+    } catch (error) {
+      _favoriteSyncErrorMessage = _favoriteMessageFor(error);
+    } finally {
+      _isLoadingMaterialFavorites = false;
+      notifyListeners();
+    }
+  }
+
   void clearSyncedSubjectsForSignOut() {
     if (config.effectiveBackendMode != AppBackendMode.supabase) {
       return;
@@ -282,10 +352,14 @@ class AppState extends ChangeNotifier {
     _materials = [];
     _subjectSyncErrorMessage = null;
     _materialSyncErrorMessage = null;
+    _favoriteSyncErrorMessage = null;
     _isLoadingSubjects = false;
     _isCreatingSubject = false;
     _isLoadingMaterials = false;
     _isCreatingMaterial = false;
+    _isLoadingMaterialFavorites = false;
+    _isUpdatingMaterialFavorite = false;
+    _favoriteMaterialIds.clear();
     notifyListeners();
   }
 
@@ -351,7 +425,14 @@ class AppState extends ChangeNotifier {
   }
 
   List<Flashcard> get favoriteFlashcards {
+    if (config.effectiveBackendMode == AppBackendMode.supabase) {
+      return const [];
+    }
     return _flashcards.where((flashcard) => flashcard.isFavorite).toList();
+  }
+
+  bool isMaterialFavorite(String materialId) {
+    return _favoriteMaterialIds.contains(materialId);
   }
 
   StudySession? get latestStudySession {
@@ -482,6 +563,59 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> toggleMaterialFavoriteFor(
+    AuthUser? user,
+    String materialId,
+  ) async {
+    final material = materialById(materialId);
+    if (material == null) {
+      _favoriteSyncErrorMessage = 'Material unavailable.';
+      notifyListeners();
+      return false;
+    }
+
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _favoriteSyncErrorMessage = 'Log in to sync favorites.';
+      notifyListeners();
+      return false;
+    }
+
+    final isFavorite = _favoriteMaterialIds.contains(material.id);
+    _isUpdatingMaterialFavorite = true;
+    _favoriteSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      if (isFavorite) {
+        await favoriteRepository.removeMaterialFavorite(
+          user: effectiveUser,
+          materialId: material.id,
+        );
+        _favoriteMaterialIds.remove(material.id);
+      } else {
+        await favoriteRepository.addMaterialFavorite(
+          user: effectiveUser,
+          materialId: material.id,
+        );
+        _favoriteMaterialIds.add(material.id);
+      }
+      return true;
+    } catch (error) {
+      _favoriteSyncErrorMessage = _favoriteUpdateMessageFor(error);
+      return false;
+    } finally {
+      _isUpdatingMaterialFavorite = false;
+      notifyListeners();
+    }
+  }
+
   StudySession createStudySession({
     required Subject subject,
     required LectureConfidence confidence,
@@ -581,6 +715,20 @@ class AppState extends ChangeNotifier {
       return error.message;
     }
     return 'Could not sync materials. Try again.';
+  }
+
+  String _favoriteMessageFor(Object error) {
+    if (error is FavoriteRepositoryException) {
+      return error.message;
+    }
+    return 'Could not sync favorites. Try again.';
+  }
+
+  String _favoriteUpdateMessageFor(Object error) {
+    if (error is FavoriteRepositoryException) {
+      return error.message;
+    }
+    return 'Could not update favorite.';
   }
 
   String _summaryFor(

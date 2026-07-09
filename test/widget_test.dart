@@ -5,6 +5,7 @@ import 'package:ai_study_buddy/core/models/material.dart';
 import 'package:ai_study_buddy/core/models/subject.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
+import 'package:ai_study_buddy/features/favorites/favorite_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
@@ -104,6 +105,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('What is photosynthesis?'), findsNothing);
+  });
+
+  testWidgets('material favorites appear on favorites screen in mock mode', (
+    tester,
+  ) async {
+    await _enterDashboard(tester);
+    await _pushRoute(
+      tester,
+      AppRoutes.subjectDetail,
+      arguments: MockData.subjects.first,
+    );
+
+    await tester.tap(find.byTooltip('Favorite material').first);
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.favorites);
+
+    expect(find.text('Photosynthesis lecture notes'), findsOneWidget);
+    expect(find.text('What is photosynthesis?'), findsOneWidget);
   });
 
   testWidgets('material detail creates a source-specific study session', (
@@ -949,6 +968,164 @@ void main() {
     expect(find.text('No materials yet'), findsOneWidget);
   });
 
+  testWidgets('supabase favorites starts empty without mock flashcards', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(),
+        materialRepository: _RecordingMaterialRepository(),
+        favoriteRepository: _RecordingFavoriteRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.favorites);
+
+    expect(find.text('No favorites yet'), findsOneWidget);
+    expect(find.text('What is photosynthesis?'), findsNothing);
+  });
+
+  testWidgets('supabase material favorites load from fake repository', (
+    tester,
+  ) async {
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+    const material = StudyMaterial(
+      id: 'cloud-material',
+      subjectId: 'cloud-biology',
+      title: 'Cloud lecture notes',
+      kind: MaterialKind.pastedText,
+      content: 'Synced material text.',
+      createdLabel: 'Synced',
+    );
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: _RecordingMaterialRepository(
+          loadedMaterials: const [material],
+        ),
+        favoriteRepository: _RecordingFavoriteRepository(
+          loadedMaterialFavoriteIds: const {'cloud-material'},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.favorites);
+
+    expect(find.text('Cloud lecture notes'), findsOneWidget);
+    expect(find.text('What is photosynthesis?'), findsNothing);
+  });
+
+  testWidgets('supabase material favorite add and remove uses repository', (
+    tester,
+  ) async {
+    final favoriteRepository = _RecordingFavoriteRepository();
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+    const material = StudyMaterial(
+      id: 'cloud-material',
+      subjectId: 'cloud-biology',
+      title: 'Cloud lecture notes',
+      kind: MaterialKind.pastedText,
+      content: 'Synced material text.',
+      createdLabel: 'Synced',
+    );
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: _RecordingMaterialRepository(
+          loadedMaterials: const [material],
+        ),
+        favoriteRepository: favoriteRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.subjectDetail, arguments: subject);
+
+    await tester.tap(find.byTooltip('Favorite material'));
+    await tester.pumpAndSettle();
+
+    expect(favoriteRepository.addedUsers, [_supabaseUser]);
+    expect(favoriteRepository.addedMaterialIds, ['cloud-material']);
+
+    await _pushRoute(tester, AppRoutes.favorites);
+    expect(find.text('Cloud lecture notes'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Unfavorite material'));
+    await tester.pumpAndSettle();
+
+    expect(favoriteRepository.removedUsers, [_supabaseUser]);
+    expect(favoriteRepository.removedMaterialIds, ['cloud-material']);
+    expect(find.text('Cloud lecture notes'), findsNothing);
+  });
+
+  testWidgets('supabase material favorite failure shows safe error', (
+    tester,
+  ) async {
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+    const material = StudyMaterial(
+      id: 'cloud-material',
+      subjectId: 'cloud-biology',
+      title: 'Cloud lecture notes',
+      kind: MaterialKind.pastedText,
+      content: 'Synced material text.',
+      createdLabel: 'Synced',
+    );
+
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: _RecordingMaterialRepository(
+          loadedMaterials: const [material],
+        ),
+        favoriteRepository: _RecordingFavoriteRepository(throwOnAdd: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.subjectDetail, arguments: subject);
+
+    await tester.tap(find.byTooltip('Favorite material'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not update favorite.'), findsOneWidget);
+
+    await _pushRoute(tester, AppRoutes.favorites);
+    expect(find.text('Cloud lecture notes'), findsNothing);
+  });
+
   testWidgets('top quick actions open search and home', (tester) async {
     await _enterDashboard(tester);
     await _pushRoute(
@@ -1300,5 +1477,49 @@ class _RecordingMaterialRepository implements MaterialRepository {
       content: content,
       createdLabel: 'Just now',
     );
+  }
+}
+
+class _RecordingFavoriteRepository implements FavoriteRepository {
+  _RecordingFavoriteRepository({
+    Set<String> loadedMaterialFavoriteIds = const <String>{},
+    this.throwOnAdd = false,
+  }) : _materialFavoriteIds = Set<String>.of(loadedMaterialFavoriteIds);
+
+  final bool throwOnAdd;
+  final Set<String> _materialFavoriteIds;
+  final List<AuthUser> loadedUsers = [];
+  final List<AuthUser> addedUsers = [];
+  final List<String> addedMaterialIds = [];
+  final List<AuthUser> removedUsers = [];
+  final List<String> removedMaterialIds = [];
+
+  @override
+  Future<Set<String>> loadMaterialFavoriteIds(AuthUser user) async {
+    loadedUsers.add(user);
+    return Set<String>.of(_materialFavoriteIds);
+  }
+
+  @override
+  Future<void> addMaterialFavorite({
+    required AuthUser user,
+    required String materialId,
+  }) async {
+    addedUsers.add(user);
+    addedMaterialIds.add(materialId);
+    if (throwOnAdd) {
+      throw const FavoriteRepositoryException('Could not update favorite.');
+    }
+    _materialFavoriteIds.add(materialId);
+  }
+
+  @override
+  Future<void> removeMaterialFavorite({
+    required AuthUser user,
+    required String materialId,
+  }) async {
+    removedUsers.add(user);
+    removedMaterialIds.add(materialId);
+    _materialFavoriteIds.remove(materialId);
   }
 }
