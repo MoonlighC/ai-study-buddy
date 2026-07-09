@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
+import '../../app/app_config.dart';
 import '../../app/routes.dart';
 import '../../core/models/material.dart';
 import '../../core/models/study_session.dart';
@@ -57,6 +58,11 @@ class MaterialDetailScreen extends StatelessWidget {
                   : freshMaterial.content,
             ),
           ),
+          SectionCard(
+            icon: Icons.auto_awesome_outlined,
+            title: 'Summary',
+            child: _SummarySection(material: freshMaterial),
+          ),
           FilledButton.icon(
             onPressed: () {
               AppStateScope.read(context).createStudySession(
@@ -97,6 +103,73 @@ class MaterialDetailScreen extends StatelessWidget {
     final message =
         AppStateScope.read(context).favoriteSyncErrorMessage ??
         'Could not update favorite.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _SummarySection extends StatelessWidget {
+  const _SummarySection({required this.material});
+
+  final StudyMaterial material;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
+    final summary = material.summary?.trim();
+    final hasSummary = summary != null && summary.isNotEmpty;
+    final canGenerate = material.kind == MaterialKind.pastedText;
+    final isSupabaseMode =
+        state.config.effectiveBackendMode == AppBackendMode.supabase;
+    final buttonLabel = hasSummary
+        ? 'Regenerate summary'
+        : isSupabaseMode
+        ? 'Summarize with AI'
+        : 'Generate mock summary';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (hasSummary) Text(summary) else const Text('No summary yet.'),
+        if (state.summaryGenerationErrorMessage != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            state.summaryGenerationErrorMessage!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        if (canGenerate) ...[
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: state.isGeneratingSummary
+                ? null
+                : () => _generateSummary(context, material.id),
+            icon: state.isGeneratingSummary
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome_outlined),
+            label: Text(
+              state.isGeneratingSummary ? 'Generating summary' : buttonLabel,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _generateSummary(BuildContext context, String materialId) async {
+    final generated = await AppStateScope.read(
+      context,
+    ).generateSummaryFor(AuthScope.read(context).user, materialId);
+    if (!context.mounted || generated) {
+      return;
+    }
+    final message =
+        AppStateScope.read(context).summaryGenerationErrorMessage ??
+        'Could not generate summary. Try again.';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));

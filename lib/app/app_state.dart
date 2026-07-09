@@ -10,6 +10,7 @@ import '../core/models/subject.dart';
 import '../core/models/weak_topic.dart';
 import '../features/auth/auth_models.dart';
 import '../features/favorites/favorite_repository.dart';
+import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
 import '../features/subjects/subject_repository.dart';
 import '../mock/mock_ai_service.dart';
@@ -21,6 +22,7 @@ class AppState extends ChangeNotifier {
     SubjectRepository? subjectRepository,
     MaterialRepository? materialRepository,
     FavoriteRepository? favoriteRepository,
+    SummaryRepository? summaryRepository,
   }) : config = config ?? AppConfig.fromValues(),
        subjectRepository =
            subjectRepository ??
@@ -40,6 +42,12 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyFavoriteRepository()
                : MockFavoriteRepository()),
+       summaryRepository =
+           summaryRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptySummaryRepository()
+               : const MockSummaryRepository()),
        _subjects =
            (config ?? AppConfig.fromValues()).effectiveBackendMode ==
                AppBackendMode.supabase
@@ -64,6 +72,7 @@ class AppState extends ChangeNotifier {
   final SubjectRepository subjectRepository;
   final MaterialRepository materialRepository;
   final FavoriteRepository favoriteRepository;
+  final SummaryRepository summaryRepository;
   List<Subject> _subjects;
   List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
@@ -85,6 +94,8 @@ class AppState extends ChangeNotifier {
   bool _isLoadingMaterialFavorites = false;
   bool _isUpdatingMaterialFavorite = false;
   String? _favoriteSyncErrorMessage;
+  bool _isGeneratingSummary = false;
+  String? _summaryGenerationErrorMessage;
 
   List<Subject> get subjects => List.unmodifiable(_subjects);
 
@@ -113,6 +124,10 @@ class AppState extends ChangeNotifier {
   bool get isUpdatingMaterialFavorite => _isUpdatingMaterialFavorite;
 
   String? get favoriteSyncErrorMessage => _favoriteSyncErrorMessage;
+
+  bool get isGeneratingSummary => _isGeneratingSummary;
+
+  String? get summaryGenerationErrorMessage => _summaryGenerationErrorMessage;
 
   AppLanguagePreference get languagePreference => _languagePreference;
 
@@ -353,12 +368,14 @@ class AppState extends ChangeNotifier {
     _subjectSyncErrorMessage = null;
     _materialSyncErrorMessage = null;
     _favoriteSyncErrorMessage = null;
+    _summaryGenerationErrorMessage = null;
     _isLoadingSubjects = false;
     _isCreatingSubject = false;
     _isLoadingMaterials = false;
     _isCreatingMaterial = false;
     _isLoadingMaterialFavorites = false;
     _isUpdatingMaterialFavorite = false;
+    _isGeneratingSummary = false;
     _favoriteMaterialIds.clear();
     notifyListeners();
   }
@@ -616,6 +633,55 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> generateSummaryFor(AuthUser? user, String materialId) async {
+    final material = materialById(materialId);
+    if (material == null) {
+      _summaryGenerationErrorMessage = 'Material unavailable.';
+      notifyListeners();
+      return false;
+    }
+    if (material.kind != MaterialKind.pastedText || material.content.isEmpty) {
+      _summaryGenerationErrorMessage = 'Could not generate summary. Try again.';
+      notifyListeners();
+      return false;
+    }
+
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _summaryGenerationErrorMessage = 'Could not generate summary. Try again.';
+      notifyListeners();
+      return false;
+    }
+
+    _isGeneratingSummary = true;
+    _summaryGenerationErrorMessage = null;
+    notifyListeners();
+    try {
+      final summary = await summaryRepository.generateSummary(
+        user: effectiveUser,
+        materialId: material.id,
+      );
+      _materials = [
+        for (final item in _materials)
+          item.id == material.id ? item.copyWith(summary: summary) : item,
+      ];
+      return true;
+    } catch (error) {
+      _summaryGenerationErrorMessage = _summaryMessageFor(error);
+      return false;
+    } finally {
+      _isGeneratingSummary = false;
+      notifyListeners();
+    }
+  }
+
   StudySession createStudySession({
     required Subject subject,
     required LectureConfidence confidence,
@@ -729,6 +795,13 @@ class AppState extends ChangeNotifier {
       return error.message;
     }
     return 'Could not update favorite.';
+  }
+
+  String _summaryMessageFor(Object error) {
+    if (error is SummaryRepositoryException) {
+      return error.message;
+    }
+    return 'Could not generate summary. Try again.';
   }
 
   String _summaryFor(

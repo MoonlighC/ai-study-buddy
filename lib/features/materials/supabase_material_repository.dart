@@ -73,6 +73,7 @@ class SupabaseMaterialRepository implements MaterialRepository {
       kind: _materialKindFor(_stringValue(row, 'kind')),
       content: _stringValue(row, 'content_text') ?? '',
       createdLabel: _createdLabelFor(_stringValue(row, 'created_at')),
+      summary: _stringValue(row, 'summary'),
     );
   }
 

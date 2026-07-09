@@ -5,6 +5,7 @@ import 'app/app_config.dart';
 import 'app/supabase_bootstrap.dart';
 import 'features/auth/supabase_auth_repository.dart';
 import 'features/favorites/supabase_favorite_repository.dart';
+import 'features/generation/summary_repository.dart';
 import 'features/materials/supabase_material_repository.dart';
 import 'features/subjects/supabase_subject_repository.dart';
 
@@ -30,6 +31,9 @@ Future<void> main() async {
       favoriteRepository: supabaseClient == null
           ? null
           : SupabaseFavoriteRepository(supabaseClient),
+      summaryRepository: supabaseClient == null
+          ? null
+          : SupabaseSummaryRepository(supabaseClient),
     ),
   );
 }

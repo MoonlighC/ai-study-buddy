@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:ai_study_buddy/app/app.dart';
 import 'package:ai_study_buddy/app/app_config.dart';
 import 'package:ai_study_buddy/app/routes.dart';
@@ -6,6 +8,7 @@ import 'package:ai_study_buddy/core/models/subject.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/favorites/favorite_repository.dart';
+import 'package:ai_study_buddy/features/generation/summary_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
@@ -66,12 +69,7 @@ void main() {
       find.text('Cells release energy from glucose during respiration.'),
       findsOneWidget,
     );
-    expect(
-      find.text(
-        'Real AI generation from this material will be connected later.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Generate mock summary'), findsOneWidget);
   });
 
   testWidgets('favorite toggle updates favorites screen', (tester) async {
@@ -142,12 +140,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      find.text(
-        'Real AI generation from this material will be connected later.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Generate mock summary'), findsOneWidget);
 
     await tester.tap(find.text('Create study session'));
     await tester.pumpAndSettle();
@@ -170,6 +163,90 @@ void main() {
       find.text('Which source did this study session use?'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('material detail generates and renders mock summary', (
+    tester,
+  ) async {
+    final summaryRepository = _RecordingSummaryRepository(
+      summary: 'Widget summary from the selected material.',
+    );
+    await tester.pumpWidget(
+      StudyBuddyApp(summaryRepository: summaryRepository),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+
+    expect(find.text('Summary'), findsOneWidget);
+    expect(find.text('No summary yet.'), findsOneWidget);
+
+    await tester.tap(find.text('Generate mock summary'));
+    await tester.pumpAndSettle();
+
+    expect(summaryRepository.generatedMaterialIds, ['bio-lecture-1']);
+    expect(
+      find.text('Widget summary from the selected material.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('material detail shows loading while summary generates', (
+    tester,
+  ) async {
+    final completer = Completer<String>();
+    final summaryRepository = _RecordingSummaryRepository(
+      pendingSummary: completer.future,
+    );
+    await tester.pumpWidget(
+      StudyBuddyApp(summaryRepository: summaryRepository),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+
+    await tester.tap(find.text('Generate mock summary'));
+    await tester.pump();
+
+    expect(find.text('Generating summary'), findsOneWidget);
+
+    completer.complete('Finished mock summary.');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Finished mock summary.'), findsOneWidget);
+  });
+
+  testWidgets('material detail summary failure shows safe error', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        summaryRepository: _RecordingSummaryRepository(throwOnGenerate: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+
+    await tester.tap(find.text('Generate mock summary'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not generate summary. Try again.'), findsWidgets);
   });
 
   testWidgets('bottom navigation opens core routes', (tester) async {
@@ -1521,5 +1598,38 @@ class _RecordingFavoriteRepository implements FavoriteRepository {
     removedUsers.add(user);
     removedMaterialIds.add(materialId);
     _materialFavoriteIds.remove(materialId);
+  }
+}
+
+class _RecordingSummaryRepository implements SummaryRepository {
+  _RecordingSummaryRepository({
+    this.summary = 'Generated summary.',
+    this.pendingSummary,
+    this.throwOnGenerate = false,
+  });
+
+  final String summary;
+  final Future<String>? pendingSummary;
+  final bool throwOnGenerate;
+  final List<AuthUser> generatedUsers = [];
+  final List<String> generatedMaterialIds = [];
+
+  @override
+  Future<String> generateSummary({
+    required AuthUser user,
+    required String materialId,
+  }) async {
+    generatedUsers.add(user);
+    generatedMaterialIds.add(materialId);
+    if (throwOnGenerate) {
+      throw const SummaryRepositoryException(
+        'Could not generate summary. Try again.',
+      );
+    }
+    final pending = pendingSummary;
+    if (pending != null) {
+      return pending;
+    }
+    return summary;
   }
 }
