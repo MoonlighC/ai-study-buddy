@@ -63,6 +63,11 @@ class MaterialDetailScreen extends StatelessWidget {
             title: 'Summary',
             child: _SummarySection(material: freshMaterial),
           ),
+          SectionCard(
+            icon: Icons.style_outlined,
+            title: 'Flashcards',
+            child: _FlashcardsSection(material: freshMaterial),
+          ),
           FilledButton.icon(
             onPressed: () {
               AppStateScope.read(context).createStudySession(
@@ -78,11 +83,6 @@ class MaterialDetailScreen extends StatelessWidget {
             },
             icon: const Icon(Icons.auto_awesome_outlined),
             label: const Text('Create study session'),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Real AI generation from this material will be connected later.',
-            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
@@ -103,6 +103,97 @@ class MaterialDetailScreen extends StatelessWidget {
     final message =
         AppStateScope.read(context).favoriteSyncErrorMessage ??
         'Could not update favorite.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _FlashcardsSection extends StatelessWidget {
+  const _FlashcardsSection({required this.material});
+
+  final StudyMaterial material;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
+    final cards = state.flashcardsForMaterial(material.id);
+    final hasCards = cards.isNotEmpty;
+    final canGenerate = material.kind == MaterialKind.pastedText;
+    final hasEnoughText = state.canGenerateFlashcardsForMaterial(material);
+    final isSupabaseMode =
+        state.config.effectiveBackendMode == AppBackendMode.supabase;
+    final buttonLabel = isSupabaseMode
+        ? 'Generate flashcards'
+        : 'Generate mock flashcards';
+    final subject = state.subjectFor(material.subjectId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (hasCards)
+          Text('${cards.length} flashcards ready.')
+        else
+          const Text('No flashcards yet.'),
+        if (canGenerate && !hasEnoughText) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Add more lecture text before generating flashcards.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (state.flashcardGenerationErrorMessage != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            state.flashcardGenerationErrorMessage!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        const SizedBox(height: 12),
+        if (hasCards)
+          OutlinedButton.icon(
+            onPressed: () => Navigator.pushNamed(
+              context,
+              AppRoutes.flashcards,
+              arguments: subject,
+            ),
+            icon: const Icon(Icons.style_outlined),
+            label: const Text('Review flashcards'),
+          )
+        else if (canGenerate)
+          FilledButton.icon(
+            onPressed: state.isGeneratingFlashcards || !hasEnoughText
+                ? null
+                : () => _generateFlashcards(context, material.id),
+            icon: state.isGeneratingFlashcards
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome_outlined),
+            label: Text(
+              state.isGeneratingFlashcards
+                  ? 'Generating flashcards'
+                  : buttonLabel,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _generateFlashcards(
+    BuildContext context,
+    String materialId,
+  ) async {
+    final generated = await AppStateScope.read(
+      context,
+    ).generateFlashcardsFor(AuthScope.read(context).user, materialId);
+    if (!context.mounted || generated) {
+      return;
+    }
+    final message =
+        AppStateScope.read(context).flashcardGenerationErrorMessage ??
+        'Could not generate flashcards. Try again.';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));

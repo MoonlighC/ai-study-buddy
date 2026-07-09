@@ -35,3 +35,21 @@ C:\src\flutter\bin\flutter.bat run --dart-define=APP_BACKEND_MODE=supabase --dar
 ```
 
 After signing in, create a pasted-text material, open the material detail screen, and use `Summarize with AI`.
+
+## Phase 8B: Generate Flashcards Edge Function
+
+The `generate-flashcards` Edge Function creates study flashcards for synced pasted-text materials. It requires an authenticated Supabase user and reuses the existing `OPENAI_API_KEY` function secret.
+
+Set the function secret with a placeholder value replaced locally:
+
+```powershell
+supabase secrets set OPENAI_API_KEY=<your-openai-api-key>
+```
+
+Deploy the function:
+
+```powershell
+supabase functions deploy generate-flashcards
+```
+
+After signing in, create a pasted-text material, open the material detail screen, and use `Generate flashcards`.

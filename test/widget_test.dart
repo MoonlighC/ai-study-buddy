@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:ai_study_buddy/app/app.dart';
 import 'package:ai_study_buddy/app/app_config.dart';
 import 'package:ai_study_buddy/app/routes.dart';
+import 'package:ai_study_buddy/core/models/flashcard.dart';
 import 'package:ai_study_buddy/core/models/material.dart';
 import 'package:ai_study_buddy/core/models/subject.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/favorites/favorite_repository.dart';
+import 'package:ai_study_buddy/features/flashcards/flashcard_repository.dart';
 import 'package:ai_study_buddy/features/generation/summary_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
@@ -284,6 +286,119 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Could not generate summary. Try again.'), findsWidgets);
+  });
+
+  testWidgets('material detail generates and renders mock flashcards', (
+    tester,
+  ) async {
+    final flashcardRepository = _RecordingFlashcardRepository(
+      generatedCards: const [
+        Flashcard(
+          id: 'generated-card-1',
+          subjectId: 'biology',
+          materialId: 'bio-lecture-1',
+          front: 'Generated card front',
+          back: 'Generated card back',
+          topic: 'Generated topic',
+          isFavorite: false,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      StudyBuddyApp(flashcardRepository: flashcardRepository),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+
+    await _scrollTo(tester, find.text('Flashcards'));
+
+    expect(find.text('Flashcards'), findsOneWidget);
+    expect(find.text('Generate mock flashcards'), findsOneWidget);
+
+    await _scrollTo(tester, find.text('Generate mock flashcards'));
+    await _scrollTo(tester, find.text('Generate mock flashcards'));
+    await tester.tap(find.text('Generate mock flashcards'));
+    await tester.pumpAndSettle();
+
+    expect(flashcardRepository.generatedMaterialIds, ['bio-lecture-1']);
+    expect(find.text('1 flashcards ready.'), findsOneWidget);
+    expect(find.text('Review flashcards'), findsOneWidget);
+  });
+
+  testWidgets('material detail shows loading while flashcards generate', (
+    tester,
+  ) async {
+    final completer = Completer<List<Flashcard>>();
+    final flashcardRepository = _RecordingFlashcardRepository(
+      pendingCards: completer.future,
+    );
+    await tester.pumpWidget(
+      StudyBuddyApp(flashcardRepository: flashcardRepository),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+
+    await _scrollTo(tester, find.text('Generate mock flashcards'));
+    await tester.tap(find.text('Generate mock flashcards'));
+    await tester.pump();
+
+    expect(find.text('Generating flashcards'), findsOneWidget);
+
+    completer.complete(const [
+      Flashcard(
+        id: 'generated-card-1',
+        subjectId: 'biology',
+        materialId: 'bio-lecture-1',
+        front: 'Generated card front',
+        back: 'Generated card back',
+        topic: 'Generated topic',
+        isFavorite: false,
+      ),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 flashcards ready.'), findsOneWidget);
+  });
+
+  testWidgets('material detail flashcard failure shows safe error', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        flashcardRepository: _RecordingFlashcardRepository(
+          throwOnGenerate: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+
+    await _scrollTo(tester, find.text('Generate mock flashcards'));
+    await tester.tap(find.text('Generate mock flashcards'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Could not generate flashcards. Try again.'),
+      findsWidgets,
+    );
   });
 
   testWidgets('bottom navigation opens core routes', (tester) async {
@@ -1191,6 +1306,82 @@ void main() {
     expect(find.text('What is photosynthesis?'), findsNothing);
   });
 
+  testWidgets('supabase flashcards screen starts empty without mock cards', (
+    tester,
+  ) async {
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: _RecordingMaterialRepository(),
+        favoriteRepository: _RecordingFavoriteRepository(),
+        flashcardRepository: _RecordingFlashcardRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.flashcards, arguments: subject);
+
+    expect(find.text('No flashcards yet'), findsOneWidget);
+    expect(
+      find.text('Generate them from a pasted-text material.'),
+      findsOneWidget,
+    );
+    expect(find.text('What is photosynthesis?'), findsNothing);
+  });
+
+  testWidgets('supabase flashcards screen displays loaded generated cards', (
+    tester,
+  ) async {
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: _RecordingMaterialRepository(),
+        favoriteRepository: _RecordingFavoriteRepository(),
+        flashcardRepository: _RecordingFlashcardRepository(
+          loadedCards: const [
+            Flashcard(
+              id: 'cloud-card-1',
+              subjectId: 'cloud-biology',
+              materialId: 'cloud-material',
+              front: 'Cloud generated front',
+              back: 'Cloud generated back',
+              topic: 'Cloud topic',
+              difficulty: FlashcardDifficulty.exam,
+              isFavorite: false,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.flashcards, arguments: subject);
+
+    expect(find.text('Cloud generated front'), findsOneWidget);
+    expect(find.textContaining('Cloud topic - exam'), findsOneWidget);
+    expect(find.byTooltip('Favorite'), findsNothing);
+  });
+
   testWidgets('supabase material favorites load from fake repository', (
     tester,
   ) async {
@@ -1724,6 +1915,51 @@ class _RecordingFavoriteRepository implements FavoriteRepository {
     removedUsers.add(user);
     removedMaterialIds.add(materialId);
     _materialFavoriteIds.remove(materialId);
+  }
+}
+
+class _RecordingFlashcardRepository implements FlashcardRepository {
+  _RecordingFlashcardRepository({
+    this.loadedCards = const [],
+    this.generatedCards = const [],
+    this.pendingCards,
+    this.throwOnGenerate = false,
+  });
+
+  final List<Flashcard> loadedCards;
+  final List<Flashcard> generatedCards;
+  final Future<List<Flashcard>>? pendingCards;
+  final bool throwOnGenerate;
+  final List<AuthUser> loadedUsers = [];
+  final List<AuthUser> generatedUsers = [];
+  final List<String> generatedMaterialIds = [];
+  final List<int> generatedCounts = [];
+
+  @override
+  Future<List<Flashcard>> loadFlashcards(AuthUser user) async {
+    loadedUsers.add(user);
+    return List<Flashcard>.of(loadedCards);
+  }
+
+  @override
+  Future<List<Flashcard>> generateFlashcards({
+    required AuthUser user,
+    required String materialId,
+    required int count,
+  }) async {
+    generatedUsers.add(user);
+    generatedMaterialIds.add(materialId);
+    generatedCounts.add(count);
+    if (throwOnGenerate) {
+      throw const FlashcardRepositoryException(
+        'Could not generate flashcards. Try again.',
+      );
+    }
+    final pending = pendingCards;
+    if (pending != null) {
+      return pending;
+    }
+    return List<Flashcard>.of(generatedCards);
   }
 }
 

@@ -10,6 +10,7 @@ import '../core/models/subject.dart';
 import '../core/models/weak_topic.dart';
 import '../features/auth/auth_models.dart';
 import '../features/favorites/favorite_repository.dart';
+import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -22,6 +23,7 @@ class AppState extends ChangeNotifier {
     SubjectRepository? subjectRepository,
     MaterialRepository? materialRepository,
     FavoriteRepository? favoriteRepository,
+    FlashcardRepository? flashcardRepository,
     SummaryRepository? summaryRepository,
   }) : config = config ?? AppConfig.fromValues(),
        subjectRepository =
@@ -42,6 +44,12 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyFavoriteRepository()
                : MockFavoriteRepository()),
+       flashcardRepository =
+           flashcardRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyFlashcardRepository()
+               : const MockFlashcardRepository()),
        summaryRepository =
            summaryRepository ??
            ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
@@ -58,7 +66,11 @@ class AppState extends ChangeNotifier {
                AppBackendMode.supabase
            ? <StudyMaterial>[]
            : List<StudyMaterial>.of(MockData.materials),
-       _flashcards = List<Flashcard>.of(MockData.flashcards);
+       _flashcards =
+           (config ?? AppConfig.fromValues()).effectiveBackendMode ==
+               AppBackendMode.supabase
+           ? <Flashcard>[]
+           : List<Flashcard>.of(MockData.flashcards);
 
   static const _ai = MockAiService();
   static const summaryMinimumContentCharacters = 80;
@@ -75,6 +87,7 @@ class AppState extends ChangeNotifier {
   final SubjectRepository subjectRepository;
   final MaterialRepository materialRepository;
   final FavoriteRepository favoriteRepository;
+  final FlashcardRepository flashcardRepository;
   final SummaryRepository summaryRepository;
   List<Subject> _subjects;
   List<StudyMaterial> _materials;
@@ -97,6 +110,10 @@ class AppState extends ChangeNotifier {
   bool _isLoadingMaterialFavorites = false;
   bool _isUpdatingMaterialFavorite = false;
   String? _favoriteSyncErrorMessage;
+  bool _isLoadingFlashcards = false;
+  bool _isGeneratingFlashcards = false;
+  String? _flashcardSyncErrorMessage;
+  String? _flashcardGenerationErrorMessage;
   bool _isGeneratingSummary = false;
   String? _summaryGenerationErrorMessage;
 
@@ -127,6 +144,15 @@ class AppState extends ChangeNotifier {
   bool get isUpdatingMaterialFavorite => _isUpdatingMaterialFavorite;
 
   String? get favoriteSyncErrorMessage => _favoriteSyncErrorMessage;
+
+  bool get isLoadingFlashcards => _isLoadingFlashcards;
+
+  bool get isGeneratingFlashcards => _isGeneratingFlashcards;
+
+  String? get flashcardSyncErrorMessage => _flashcardSyncErrorMessage;
+
+  String? get flashcardGenerationErrorMessage =>
+      _flashcardGenerationErrorMessage;
 
   bool get isGeneratingSummary => _isGeneratingSummary;
 
@@ -179,6 +205,7 @@ class AppState extends ChangeNotifier {
     await loadSubjectsFor(user);
     await loadMaterialsFor(user);
     await loadMaterialFavoritesFor(user);
+    await loadFlashcardsFor(user);
   }
 
   Future<void> loadMaterialsFor(AuthUser? user) async {
@@ -362,6 +389,41 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<void> loadFlashcardsFor(AuthUser? user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      _flashcards = await flashcardRepository.loadFlashcards(
+        user ??
+            const AuthUser(
+              id: 'mock-user',
+              email: 'alex.student@example.test',
+              displayName: 'Alex Student',
+            ),
+      );
+      _flashcardSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    if (user == null) {
+      _flashcards = [];
+      _flashcardSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingFlashcards = true;
+    _flashcardSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      _flashcards = await flashcardRepository.loadFlashcards(user);
+    } catch (error) {
+      _flashcardSyncErrorMessage = _flashcardMessageFor(error);
+    } finally {
+      _isLoadingFlashcards = false;
+      notifyListeners();
+    }
+  }
+
   void clearSyncedSubjectsForSignOut() {
     if (config.effectiveBackendMode != AppBackendMode.supabase) {
       return;
@@ -372,6 +434,8 @@ class AppState extends ChangeNotifier {
     _materialSyncErrorMessage = null;
     _favoriteSyncErrorMessage = null;
     _summaryGenerationErrorMessage = null;
+    _flashcardSyncErrorMessage = null;
+    _flashcardGenerationErrorMessage = null;
     _isLoadingSubjects = false;
     _isCreatingSubject = false;
     _isLoadingMaterials = false;
@@ -379,7 +443,10 @@ class AppState extends ChangeNotifier {
     _isLoadingMaterialFavorites = false;
     _isUpdatingMaterialFavorite = false;
     _isGeneratingSummary = false;
+    _isLoadingFlashcards = false;
+    _isGeneratingFlashcards = false;
     _favoriteMaterialIds.clear();
+    _flashcards = [];
     notifyListeners();
   }
 
@@ -444,6 +511,12 @@ class AppState extends ChangeNotifier {
         .toList();
   }
 
+  List<Flashcard> flashcardsForMaterial(String materialId) {
+    return _flashcards
+        .where((flashcard) => flashcard.materialId == materialId)
+        .toList();
+  }
+
   List<Flashcard> get favoriteFlashcards {
     if (config.effectiveBackendMode == AppBackendMode.supabase) {
       return const [];
@@ -456,6 +529,11 @@ class AppState extends ChangeNotifier {
   }
 
   bool canGenerateSummaryForMaterial(StudyMaterial material) {
+    return material.kind == MaterialKind.pastedText &&
+        material.content.trim().length >= summaryMinimumContentCharacters;
+  }
+
+  bool canGenerateFlashcardsForMaterial(StudyMaterial material) {
     return material.kind == MaterialKind.pastedText &&
         material.content.trim().length >= summaryMinimumContentCharacters;
   }
@@ -695,6 +773,76 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> generateFlashcardsFor(
+    AuthUser? user,
+    String materialId, {
+    int? count,
+  }) async {
+    final material = materialById(materialId);
+    if (material == null) {
+      _flashcardGenerationErrorMessage = 'Material unavailable.';
+      notifyListeners();
+      return false;
+    }
+    if (material.kind != MaterialKind.pastedText) {
+      _flashcardGenerationErrorMessage =
+          'Could not generate flashcards. Try again.';
+      notifyListeners();
+      return false;
+    }
+    if (!canGenerateFlashcardsForMaterial(material)) {
+      _flashcardGenerationErrorMessage = flashcardsTooShortMessage;
+      notifyListeners();
+      return false;
+    }
+
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _flashcardGenerationErrorMessage =
+          'Could not generate flashcards. Try again.';
+      notifyListeners();
+      return false;
+    }
+
+    final requestedCount = (count ?? _defaultFlashcardSessionSize)
+        .clamp(1, 20)
+        .toInt();
+    _isGeneratingFlashcards = true;
+    _flashcardGenerationErrorMessage = null;
+    notifyListeners();
+    try {
+      final generatedCards = await flashcardRepository.generateFlashcards(
+        user: effectiveUser,
+        materialId: material.id,
+        count: requestedCount,
+      );
+      final normalizedCards = [
+        for (final card in generatedCards)
+          card.copyWith(subjectId: material.subjectId, materialId: material.id),
+      ];
+      final generatedIds = normalizedCards.map((card) => card.id).toSet();
+      _flashcards = [
+        ...normalizedCards,
+        for (final card in _flashcards)
+          if (!generatedIds.contains(card.id)) card,
+      ];
+      return true;
+    } catch (error) {
+      _flashcardGenerationErrorMessage = _flashcardGenerateMessageFor(error);
+      return false;
+    } finally {
+      _isGeneratingFlashcards = false;
+      notifyListeners();
+    }
+  }
+
   StudySession createStudySession({
     required Subject subject,
     required LectureConfidence confidence,
@@ -815,6 +963,20 @@ class AppState extends ChangeNotifier {
       return error.message;
     }
     return 'Could not generate summary. Try again.';
+  }
+
+  String _flashcardMessageFor(Object error) {
+    if (error is FlashcardRepositoryException) {
+      return error.message;
+    }
+    return 'Could not sync flashcards.';
+  }
+
+  String _flashcardGenerateMessageFor(Object error) {
+    if (error is FlashcardRepositoryException) {
+      return error.message;
+    }
+    return 'Could not generate flashcards. Try again.';
   }
 
   String _summaryFor(

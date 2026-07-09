@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_config.dart';
 import '../../app/app_state.dart';
+import '../../core/models/flashcard.dart';
 import '../../core/models/subject.dart';
 
 class FlashcardsScreen extends StatefulWidget {
@@ -21,6 +23,8 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
     final cards = state.flashcardsFor(widget.subject.id);
     final selectedSessionSize =
         sessionSize ?? state.defaultFlashcardSessionSize;
+    final isSupabaseMode =
+        state.config.effectiveBackendMode == AppBackendMode.supabase;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Flashcards')),
@@ -51,17 +55,52 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
             ],
           ),
           const SizedBox(height: 16),
+          if (state.isLoadingFlashcards)
+            const Card(
+              child: ListTile(
+                leading: SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                title: Text('Loading synced flashcards'),
+              ),
+            ),
+          if (state.flashcardSyncErrorMessage != null)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.cloud_off_outlined),
+                title: Text(state.flashcardSyncErrorMessage!),
+              ),
+            ),
+          if (!state.isLoadingFlashcards && cards.isEmpty)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.style_outlined),
+                title: const Text('No flashcards yet'),
+                subtitle: Text(
+                  isSupabaseMode
+                      ? 'Generate them from a pasted-text material.'
+                      : 'Add or generate cards to start reviewing.',
+                ),
+              ),
+            ),
           for (final card in cards)
             Card(
               child: ListTile(
                 title: Text(card.front),
-                subtitle: Text('${card.back}\nTopic: ${card.topic}'),
-                isThreeLine: true,
-                trailing: IconButton(
-                  tooltip: card.isFavorite ? 'Unfavorite' : 'Favorite',
-                  icon: Icon(card.isFavorite ? Icons.star : Icons.star_border),
-                  onPressed: () => state.toggleFavorite(card.id),
+                subtitle: Text(
+                  '${card.back}\nTopic: ${card.topic} - ${card.difficulty.label}',
                 ),
+                isThreeLine: true,
+                trailing: isSupabaseMode
+                    ? null
+                    : IconButton(
+                        tooltip: card.isFavorite ? 'Unfavorite' : 'Favorite',
+                        icon: Icon(
+                          card.isFavorite ? Icons.star : Icons.star_border,
+                        ),
+                        onPressed: () => state.toggleFavorite(card.id),
+                      ),
               ),
             ),
         ],

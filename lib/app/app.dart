@@ -7,6 +7,7 @@ import 'theme.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/favorites/favorite_repository.dart';
+import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -19,6 +20,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.subjectRepository,
     this.materialRepository,
     this.favoriteRepository,
+    this.flashcardRepository,
     this.summaryRepository,
     super.key,
   });
@@ -29,6 +31,7 @@ class StudyBuddyApp extends StatefulWidget {
   final SubjectRepository? subjectRepository;
   final MaterialRepository? materialRepository;
   final FavoriteRepository? favoriteRepository;
+  final FlashcardRepository? flashcardRepository;
   final SummaryRepository? summaryRepository;
 
   @override
@@ -42,6 +45,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
     subjectRepository: widget.subjectRepository,
     materialRepository: widget.materialRepository,
     favoriteRepository: widget.favoriteRepository,
+    flashcardRepository: widget.flashcardRepository,
     summaryRepository: widget.summaryRepository,
   );
   late final AuthController authController = AuthController(
