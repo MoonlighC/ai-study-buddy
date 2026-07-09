@@ -35,6 +35,15 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
     };
     final selectedSessionSize =
         sessionSize ?? state.defaultFlashcardSessionSize;
+    final availableCount = visibleCards.length;
+    final effectiveSessionSize = availableCount == 0
+        ? 0
+        : selectedSessionSize.clamp(1, availableCount).toInt();
+    final hasUnavailablePreset =
+        availableCount > 0 &&
+        const [5, 10, 20].any((size) => size > availableCount);
+    final isCustomSelected =
+        sessionSize != null && !const [5, 10, 20].contains(selectedSessionSize);
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
 
@@ -57,15 +66,34 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                 ChoiceChip(
                   label: Text('$size'),
                   selected: selectedSessionSize == size,
-                  onSelected: (_) => setState(() => sessionSize = size),
+                  onSelected: size > availableCount
+                      ? null
+                      : (_) => setState(() => sessionSize = size),
                 ),
               ChoiceChip(
                 label: const Text('Custom'),
-                selected: false,
-                onSelected: (_) {},
+                selected: isCustomSelected,
+                onSelected: availableCount == 0
+                    ? null
+                    : (_) => _chooseCustomSessionSize(
+                        availableCount: availableCount,
+                        initialSize: effectiveSessionSize,
+                      ),
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Text(
+            _availableCountText(availableCount),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (hasUnavailablePreset) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Generate more flashcards from a material to unlock larger sessions.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 16),
           if (state.isLoadingFlashcards)
             const Card(
@@ -114,9 +142,11 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
             if (visibleCards.isNotEmpty)
               FilledButton.icon(
                 onPressed: () =>
-                    _startTraining(visibleCards, selectedSessionSize),
+                    _startTraining(visibleCards, effectiveSessionSize),
                 icon: const Icon(Icons.school_outlined),
-                label: const Text('Start training'),
+                label: Text(
+                  'Start training (${_cardsLabel(effectiveSessionSize)})',
+                ),
               )
             else
               Card(
@@ -182,6 +212,25 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
     );
   }
 
+  Future<void> _chooseCustomSessionSize({
+    required int availableCount,
+    required int initialSize,
+  }) async {
+    final customSize = await showDialog<int>(
+      context: context,
+      builder: (_) => _CustomSessionSizeDialog(
+        availableCount: availableCount,
+        initialSize: initialSize,
+      ),
+    );
+    if (!mounted || customSize == null) {
+      return;
+    }
+    setState(() {
+      sessionSize = customSize;
+    });
+  }
+
   bool _isWeak(Flashcard card) {
     return card.incorrectCount > card.correctCount;
   }
@@ -222,9 +271,117 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
       _FlashcardFilter.due => 'Reviewed cards will appear here when due.',
     };
   }
+
+  String _availableCountText(int count) {
+    return '${_cardsLabel(count)} available for this selection.';
+  }
+
+  String _cardsLabel(int count) {
+    return count == 1 ? '1 card' : '$count cards';
+  }
 }
 
 enum _FlashcardFilter { all, weak, due }
+
+class _CustomSessionSizeDialog extends StatefulWidget {
+  const _CustomSessionSizeDialog({
+    required this.availableCount,
+    required this.initialSize,
+  });
+
+  final int availableCount;
+  final int initialSize;
+
+  @override
+  State<_CustomSessionSizeDialog> createState() =>
+      _CustomSessionSizeDialogState();
+}
+
+class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: '${widget.initialSize}',
+  );
+  String? _errorText;
+  bool _showGenerateMoreGuidance = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Custom session size'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(signed: true),
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: 'Cards',
+              helperText: 'Maximum: ${widget.availableCount}',
+              errorText: _errorText,
+            ),
+            onChanged: (_) {
+              if (_errorText == null && !_showGenerateMoreGuidance) {
+                return;
+              }
+              setState(() {
+                _errorText = null;
+                _showGenerateMoreGuidance = false;
+              });
+            },
+            onSubmitted: (_) => _save(),
+          ),
+          if (_showGenerateMoreGuidance) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Generate more flashcards from a material to unlock larger sessions.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
+  }
+
+  void _save() {
+    final requestedSize = int.tryParse(_controller.text.trim());
+    if (requestedSize == null || requestedSize < 1) {
+      setState(() {
+        _errorText = 'Choose at least 1 card.';
+        _showGenerateMoreGuidance = false;
+      });
+      return;
+    }
+    if (requestedSize > widget.availableCount) {
+      setState(() {
+        _errorText =
+            'Only ${_cardsLabel(widget.availableCount)} available for this selection.';
+        _showGenerateMoreGuidance = true;
+      });
+      return;
+    }
+    Navigator.pop(context, requestedSize);
+  }
+
+  String _cardsLabel(int count) {
+    return count == 1 ? '1 card' : '$count cards';
+  }
+}
 
 class _FlashcardListItem extends StatelessWidget {
   const _FlashcardListItem({

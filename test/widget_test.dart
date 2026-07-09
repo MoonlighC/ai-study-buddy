@@ -412,7 +412,141 @@ void main() {
       arguments: MockData.subjects.first,
     );
 
-    expect(find.text('Start training'), findsOneWidget);
+    expect(find.text('2 cards available for this selection.'), findsOneWidget);
+    expect(find.text('Start training (2 cards)'), findsOneWidget);
+
+    await tester.tap(find.text('Start training (2 cards)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 2'), findsOneWidget);
+  });
+
+  testWidgets('flashcards size chips disable unavailable larger sessions', (
+    tester,
+  ) async {
+    await _pumpFlashcardsHarness(tester, _reviewCards(5));
+
+    expect(find.text('5 cards available for this selection.'), findsOneWidget);
+    expect(
+      find.text(
+        'Generate more flashcards from a material to unlock larger sessions.',
+      ),
+      findsOneWidget,
+    );
+    _expectChoiceEnabled(tester, '5');
+    _expectChoiceDisabled(tester, '10');
+    _expectChoiceDisabled(tester, '20');
+    expect(find.text('Start training (5 cards)'), findsOneWidget);
+  });
+
+  testWidgets('custom session size above availability shows safe message', (
+    tester,
+  ) async {
+    await _pumpFlashcardsHarness(tester, _reviewCards(5));
+
+    await tester.tap(find.text('Custom'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Cards'), '100');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Only 5 cards available for this selection.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Generate more flashcards from a material to unlock larger sessions.',
+      ),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('custom session size validates minimum card count', (
+    tester,
+  ) async {
+    await _pumpFlashcardsHarness(tester, _reviewCards(5));
+
+    await tester.tap(find.text('Custom'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Cards'), '0');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose at least 1 card.'), findsOneWidget);
+  });
+
+  testWidgets('filter changes update available count and custom cap', (
+    tester,
+  ) async {
+    await _pumpFlashcardsHarness(tester, [
+      _weakReviewCard,
+      _weakReviewCard.copyWith(id: 'weak-review-card-2', front: 'Weak front 2'),
+      _knownReviewCard,
+      _knownReviewCard.copyWith(
+        id: 'known-review-card-2',
+        front: 'Known front 2',
+      ),
+      _futureReviewCard,
+    ]);
+
+    expect(find.text('5 cards available for this selection.'), findsOneWidget);
+
+    await tester.tap(find.text('Weak'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 cards available for this selection.'), findsOneWidget);
+    expect(find.text('Start training (2 cards)'), findsOneWidget);
+
+    await tester.tap(find.text('Due'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 cards available for this selection.'), findsOneWidget);
+    expect(find.text('No due cards'), findsOneWidget);
+    expect(find.textContaining('Start training'), findsNothing);
+    _expectChoiceDisabled(tester, 'Custom');
+  });
+
+  testWidgets('custom valid size starts training with requested cards', (
+    tester,
+  ) async {
+    await _pumpFlashcardsHarness(tester, _reviewCards(5));
+
+    await tester.tap(find.text('Custom'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Cards'), '3');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start training (3 cards)'), findsOneWidget);
+
+    await tester.tap(find.text('Start training (3 cards)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 3'), findsOneWidget);
+  });
+
+  testWidgets('mock flashcards cap larger default session size', (
+    tester,
+  ) async {
+    await _enterDashboard(tester);
+    await _pushRoute(tester, AppRoutes.settings);
+    await _scrollTo(tester, find.text('Default flashcard session size'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '10'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.flashcards,
+      arguments: MockData.subjects.first,
+    );
+
+    expect(find.text('2 cards available for this selection.'), findsOneWidget);
+    expect(find.text('Start training (2 cards)'), findsOneWidget);
+
+    await tester.tap(find.text('Start training (2 cards)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 2'), findsOneWidget);
   });
 
   testWidgets('flashcards screen hides and toggles browse answers', (
@@ -648,7 +782,7 @@ void main() {
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.flashcards, arguments: subject);
 
-    await tester.tap(find.text('Start training'));
+    await tester.tap(find.text('Start training (1 card)'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Show answer'));
     await tester.pumpAndSettle();
@@ -2030,6 +2164,20 @@ final _futureReviewCard = Flashcard(
   nextReviewAt: DateTime.utc(2099),
 );
 
+List<Flashcard> _reviewCards(int count) {
+  return [
+    for (var index = 1; index <= count; index += 1)
+      Flashcard(
+        id: 'review-card-$index',
+        subjectId: 'review-subject',
+        front: 'Review front $index',
+        back: 'Review back $index',
+        topic: 'Review topic',
+        isFavorite: false,
+      ),
+  ];
+}
+
 Future<void> _pumpFlashcardsHarness(
   WidgetTester tester,
   List<Flashcard> cards,
@@ -2088,6 +2236,20 @@ void _expectChoiceSelected(WidgetTester tester, String label) {
     find.widgetWithText(ChoiceChip, label),
   );
   expect(chip.selected, isTrue);
+}
+
+void _expectChoiceEnabled(WidgetTester tester, String label) {
+  final chip = tester.widget<ChoiceChip>(
+    find.widgetWithText(ChoiceChip, label),
+  );
+  expect(chip.onSelected, isNotNull);
+}
+
+void _expectChoiceDisabled(WidgetTester tester, String label) {
+  final chip = tester.widget<ChoiceChip>(
+    find.widgetWithText(ChoiceChip, label),
+  );
+  expect(chip.onSelected, isNull);
 }
 
 TextField _textField(WidgetTester tester, String label) {
