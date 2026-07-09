@@ -12,7 +12,16 @@ abstract class FlashcardRepository {
     required String materialId,
     required int count,
   });
+
+  Future<Flashcard> updateReviewResult({
+    required AuthUser user,
+    required Flashcard card,
+    required FlashcardReviewResult result,
+    required DateTime reviewedAt,
+  });
 }
+
+enum FlashcardReviewResult { missed, known }
 
 class FlashcardRepositoryException implements Exception {
   const FlashcardRepositoryException(this.message);
@@ -45,12 +54,23 @@ class MockFlashcardRepository implements FlashcardRepository {
           subjectId: 'biology',
           materialId: materialId,
           front: 'Mock generated question ${index + 1}',
-          back: 'Mock generated answer ${index + 1} from the selected material.',
+          back:
+              'Mock generated answer ${index + 1} from the selected material.',
           topic: 'Generated practice',
           difficulty: FlashcardDifficulty.medium,
           isFavorite: false,
         ),
     ];
+  }
+
+  @override
+  Future<Flashcard> updateReviewResult({
+    required AuthUser user,
+    required Flashcard card,
+    required FlashcardReviewResult result,
+    required DateTime reviewedAt,
+  }) async {
+    return _reviewedCard(card, result, reviewedAt);
   }
 }
 
@@ -65,7 +85,7 @@ class SupabaseFlashcardRepository implements FlashcardRepository {
       final rows = await _client
           .from('flashcards')
           .select(
-            'id,subject_id,material_id,front,back,topic,difficulty,created_at',
+            'id,subject_id,material_id,front,back,topic,difficulty,correct_count,incorrect_count,last_reviewed_at,next_review_at,created_at',
           )
           .eq('user_id', user.id)
           .filter('deleted_at', 'is', null)
@@ -113,6 +133,38 @@ class SupabaseFlashcardRepository implements FlashcardRepository {
     }
   }
 
+  @override
+  Future<Flashcard> updateReviewResult({
+    required AuthUser user,
+    required Flashcard card,
+    required FlashcardReviewResult result,
+    required DateTime reviewedAt,
+  }) async {
+    final reviewedCard = _reviewedCard(card, result, reviewedAt);
+    try {
+      final row = await _client
+          .from('flashcards')
+          .update(<String, Object>{
+            'correct_count': reviewedCard.correctCount,
+            'incorrect_count': reviewedCard.incorrectCount,
+            'last_reviewed_at': reviewedCard.lastReviewedAt!.toIso8601String(),
+            'next_review_at': reviewedCard.nextReviewAt!.toIso8601String(),
+          })
+          .eq('id', card.id)
+          .eq('user_id', user.id)
+          .select(
+            'id,subject_id,material_id,front,back,topic,difficulty,correct_count,incorrect_count,last_reviewed_at,next_review_at,created_at',
+          )
+          .single();
+
+      return _mapFlashcard(row);
+    } catch (_) {
+      throw const FlashcardRepositoryException(
+        'Could not save review progress.',
+      );
+    }
+  }
+
   Flashcard _mapFlashcard(Map<String, dynamic> row) {
     return Flashcard(
       id: _stringValue(row, 'id') ?? '',
@@ -123,6 +175,10 @@ class SupabaseFlashcardRepository implements FlashcardRepository {
       topic: _stringValue(row, 'topic') ?? 'General',
       difficulty: _difficultyFor(_stringValue(row, 'difficulty')),
       isFavorite: false,
+      correctCount: _intValue(row, 'correct_count'),
+      incorrectCount: _intValue(row, 'incorrect_count'),
+      lastReviewedAt: _dateTimeValue(row, 'last_reviewed_at'),
+      nextReviewAt: _dateTimeValue(row, 'next_review_at'),
     );
   }
 
@@ -141,6 +197,25 @@ class SupabaseFlashcardRepository implements FlashcardRepository {
     }
     final trimmedValue = value.trim();
     return trimmedValue.isEmpty ? null : trimmedValue;
+  }
+
+  int _intValue(Map<String, dynamic> row, String key) {
+    final value = row[key];
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return 0;
+  }
+
+  DateTime? _dateTimeValue(Map<String, dynamic> row, String key) {
+    final value = _stringValue(row, key);
+    if (value == null) {
+      return null;
+    }
+    return DateTime.tryParse(value);
   }
 }
 
@@ -162,4 +237,35 @@ class EmptyFlashcardRepository implements FlashcardRepository {
       'Flashcard generation is not configured.',
     );
   }
+
+  @override
+  Future<Flashcard> updateReviewResult({
+    required AuthUser user,
+    required Flashcard card,
+    required FlashcardReviewResult result,
+    required DateTime reviewedAt,
+  }) async {
+    throw const FlashcardRepositoryException('Could not save review progress.');
+  }
+}
+
+Flashcard _reviewedCard(
+  Flashcard card,
+  FlashcardReviewResult result,
+  DateTime reviewedAt,
+) {
+  final nextReviewAt = switch (result) {
+    FlashcardReviewResult.missed => reviewedAt.add(const Duration(days: 1)),
+    FlashcardReviewResult.known => reviewedAt.add(const Duration(days: 3)),
+  };
+  return card.copyWith(
+    correctCount: result == FlashcardReviewResult.known
+        ? card.correctCount + 1
+        : card.correctCount,
+    incorrectCount: result == FlashcardReviewResult.missed
+        ? card.incorrectCount + 1
+        : card.incorrectCount,
+    lastReviewedAt: reviewedAt,
+    nextReviewAt: nextReviewAt,
+  );
 }

@@ -10,6 +10,7 @@ import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
 import '../auth/auth_controller.dart';
+import '../flashcards/flashcard_training_screen.dart';
 
 class MaterialDetailScreen extends StatelessWidget {
   const MaterialDetailScreen({required this.material, super.key});
@@ -151,14 +152,33 @@ class _FlashcardsSection extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         if (hasCards)
-          OutlinedButton.icon(
-            onPressed: () => Navigator.pushNamed(
-              context,
-              AppRoutes.flashcards,
-              arguments: subject,
-            ),
-            icon: const Icon(Icons.style_outlined),
-            label: const Text('Review flashcards'),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FilledButton.icon(
+                onPressed: () => Navigator.pushNamed(
+                  context,
+                  AppRoutes.flashcardTraining,
+                  arguments: FlashcardTrainingArgs(
+                    subject: subject,
+                    material: material,
+                    cards: cards,
+                  ),
+                ),
+                icon: const Icon(Icons.school_outlined),
+                label: const Text('Start training'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.pushNamed(
+                  context,
+                  AppRoutes.flashcards,
+                  arguments: subject,
+                ),
+                icon: const Icon(Icons.style_outlined),
+                label: const Text('Review flashcards'),
+              ),
+            ],
           )
         else if (canGenerate)
           FilledButton.icon(

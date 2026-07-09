@@ -112,8 +112,10 @@ class AppState extends ChangeNotifier {
   String? _favoriteSyncErrorMessage;
   bool _isLoadingFlashcards = false;
   bool _isGeneratingFlashcards = false;
+  bool _isSavingFlashcardReview = false;
   String? _flashcardSyncErrorMessage;
   String? _flashcardGenerationErrorMessage;
+  String? _flashcardReviewErrorMessage;
   bool _isGeneratingSummary = false;
   String? _summaryGenerationErrorMessage;
 
@@ -149,10 +151,14 @@ class AppState extends ChangeNotifier {
 
   bool get isGeneratingFlashcards => _isGeneratingFlashcards;
 
+  bool get isSavingFlashcardReview => _isSavingFlashcardReview;
+
   String? get flashcardSyncErrorMessage => _flashcardSyncErrorMessage;
 
   String? get flashcardGenerationErrorMessage =>
       _flashcardGenerationErrorMessage;
+
+  String? get flashcardReviewErrorMessage => _flashcardReviewErrorMessage;
 
   bool get isGeneratingSummary => _isGeneratingSummary;
 
@@ -436,6 +442,7 @@ class AppState extends ChangeNotifier {
     _summaryGenerationErrorMessage = null;
     _flashcardSyncErrorMessage = null;
     _flashcardGenerationErrorMessage = null;
+    _flashcardReviewErrorMessage = null;
     _isLoadingSubjects = false;
     _isCreatingSubject = false;
     _isLoadingMaterials = false;
@@ -445,6 +452,7 @@ class AppState extends ChangeNotifier {
     _isGeneratingSummary = false;
     _isLoadingFlashcards = false;
     _isGeneratingFlashcards = false;
+    _isSavingFlashcardReview = false;
     _favoriteMaterialIds.clear();
     _flashcards = [];
     notifyListeners();
@@ -843,6 +851,56 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> reviewFlashcardFor(
+    AuthUser? user,
+    String cardId,
+    FlashcardReviewResult result, {
+    DateTime? reviewedAt,
+  }) async {
+    final card = _flashcardById(cardId);
+    if (card == null) {
+      _flashcardReviewErrorMessage = 'Could not save review progress.';
+      notifyListeners();
+      return false;
+    }
+
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _flashcardReviewErrorMessage = 'Could not save review progress.';
+      notifyListeners();
+      return false;
+    }
+
+    _isSavingFlashcardReview = true;
+    _flashcardReviewErrorMessage = null;
+    notifyListeners();
+    try {
+      final updatedCard = await flashcardRepository.updateReviewResult(
+        user: effectiveUser,
+        card: card,
+        result: result,
+        reviewedAt: reviewedAt ?? DateTime.now().toUtc(),
+      );
+      _flashcards = [
+        for (final item in _flashcards) item.id == card.id ? updatedCard : item,
+      ];
+      return true;
+    } catch (error) {
+      _flashcardReviewErrorMessage = _flashcardReviewMessageFor(error);
+      return false;
+    } finally {
+      _isSavingFlashcardReview = false;
+      notifyListeners();
+    }
+  }
+
   StudySession createStudySession({
     required Subject subject,
     required LectureConfidence confidence,
@@ -930,6 +988,15 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  Flashcard? _flashcardById(String cardId) {
+    for (final card in _flashcards) {
+      if (card.id == cardId) {
+        return card;
+      }
+    }
+    return null;
+  }
+
   String _subjectMessageFor(Object error) {
     if (error is SubjectRepositoryException) {
       return error.message;
@@ -977,6 +1044,13 @@ class AppState extends ChangeNotifier {
       return error.message;
     }
     return 'Could not generate flashcards. Try again.';
+  }
+
+  String _flashcardReviewMessageFor(Object error) {
+    if (error is FlashcardRepositoryException) {
+      return error.message;
+    }
+    return 'Could not save review progress.';
   }
 
   String _summaryFor(

@@ -46,27 +46,30 @@ void main() {
       expect(state.flashcardGenerationErrorMessage, isNull);
     });
 
-    test('supabase generation calls repository with material id and count', () async {
-      final flashcardRepository = _FakeFlashcardRepository(
-        generatedCards: const [_generatedCard],
-      );
-      final state = AppState(
-        config: _supabaseConfig(),
-        materialRepository: _FakeMaterialRepository(
-          loadedMaterials: const [_material],
-        ),
-        flashcardRepository: flashcardRepository,
-      );
-      await state.loadMaterialsFor(user);
+    test(
+      'supabase generation calls repository with material id and count',
+      () async {
+        final flashcardRepository = _FakeFlashcardRepository(
+          generatedCards: const [_generatedCard],
+        );
+        final state = AppState(
+          config: _supabaseConfig(),
+          materialRepository: _FakeMaterialRepository(
+            loadedMaterials: const [_material],
+          ),
+          flashcardRepository: flashcardRepository,
+        );
+        await state.loadMaterialsFor(user);
 
-      final generated = await state.generateFlashcardsFor(user, 'material-1');
+        final generated = await state.generateFlashcardsFor(user, 'material-1');
 
-      expect(generated, isTrue);
-      expect(flashcardRepository.generatedUsers, [user]);
-      expect(flashcardRepository.generatedMaterialIds, ['material-1']);
-      expect(flashcardRepository.generatedCounts, [5]);
-      expect(state.flashcardsForMaterial('material-1'), hasLength(1));
-    });
+        expect(generated, isTrue);
+        expect(flashcardRepository.generatedUsers, [user]);
+        expect(flashcardRepository.generatedMaterialIds, ['material-1']);
+        expect(flashcardRepository.generatedCounts, [5]);
+        expect(state.flashcardsForMaterial('material-1'), hasLength(1));
+      },
+    );
 
     test('unauthenticated supabase generation fails safely', () async {
       final flashcardRepository = _FakeFlashcardRepository(
@@ -140,7 +143,10 @@ void main() {
       await reloadedState.loadFlashcardsFor(user);
 
       expect(reloadedState.flashcardsForMaterial('material-1'), hasLength(1));
-      expect(reloadedState.flashcardsForMaterial('material-1').single.front, 'Generated front');
+      expect(
+        reloadedState.flashcardsForMaterial('material-1').single.front,
+        'Generated front',
+      );
     });
 
     test('supabase mode starts without mock flashcards', () {
@@ -148,6 +154,76 @@ void main() {
 
       expect(state.flashcardsFor('biology'), isEmpty);
       expect(state.favoriteFlashcards, isEmpty);
+    });
+
+    test('known review increments correct count', () async {
+      final flashcardRepository = _FakeFlashcardRepository(
+        loadedCards: const [_existingCard],
+      );
+      final state = AppState(flashcardRepository: flashcardRepository);
+      await state.loadFlashcardsFor(null);
+
+      final reviewed = await state.reviewFlashcardFor(
+        null,
+        'existing-1',
+        FlashcardReviewResult.known,
+        reviewedAt: DateTime.utc(2026, 7, 9, 12),
+      );
+
+      expect(reviewed, isTrue);
+      expect(flashcardRepository.reviewedCardIds, ['existing-1']);
+      expect(flashcardRepository.reviewResults, [FlashcardReviewResult.known]);
+      final card = state.flashcardsForMaterial('material-1').single;
+      expect(card.correctCount, 1);
+      expect(card.incorrectCount, 0);
+      expect(card.lastReviewedAt, DateTime.utc(2026, 7, 9, 12));
+      expect(card.nextReviewAt, DateTime.utc(2026, 7, 12, 12));
+    });
+
+    test('missed review increments incorrect count', () async {
+      final state = AppState(
+        flashcardRepository: _FakeFlashcardRepository(
+          loadedCards: const [_existingCard],
+        ),
+      );
+      await state.loadFlashcardsFor(null);
+
+      final reviewed = await state.reviewFlashcardFor(
+        null,
+        'existing-1',
+        FlashcardReviewResult.missed,
+        reviewedAt: DateTime.utc(2026, 7, 9, 12),
+      );
+
+      expect(reviewed, isTrue);
+      final card = state.flashcardsForMaterial('material-1').single;
+      expect(card.correctCount, 0);
+      expect(card.incorrectCount, 1);
+      expect(card.nextReviewAt, DateTime.utc(2026, 7, 10, 12));
+    });
+
+    test('review failure preserves card and stores safe error', () async {
+      final state = AppState(
+        flashcardRepository: _FakeFlashcardRepository(
+          loadedCards: const [_existingCard],
+          throwOnReview: true,
+        ),
+      );
+      await state.loadFlashcardsFor(null);
+
+      final reviewed = await state.reviewFlashcardFor(
+        null,
+        'existing-1',
+        FlashcardReviewResult.known,
+        reviewedAt: DateTime.utc(2026, 7, 9, 12),
+      );
+
+      expect(reviewed, isFalse);
+      expect(state.flashcardsForMaterial('material-1').single.correctCount, 0);
+      expect(
+        state.flashcardReviewErrorMessage,
+        'Could not save review progress.',
+      );
     });
   });
 }
@@ -196,16 +272,21 @@ class _FakeFlashcardRepository implements FlashcardRepository {
     List<Flashcard> loadedCards = const [],
     List<Flashcard> generatedCards = const [],
     this.throwOnGenerate = false,
+    this.throwOnReview = false,
   }) : _cards = List<Flashcard>.of(loadedCards),
        _generatedCards = List<Flashcard>.of(generatedCards);
 
   final List<Flashcard> _cards;
   final List<Flashcard> _generatedCards;
   final bool throwOnGenerate;
+  final bool throwOnReview;
   final List<AuthUser> loadedUsers = [];
   final List<AuthUser> generatedUsers = [];
   final List<String> generatedMaterialIds = [];
   final List<int> generatedCounts = [];
+  final List<AuthUser> reviewedUsers = [];
+  final List<String> reviewedCardIds = [];
+  final List<FlashcardReviewResult> reviewResults = [];
 
   @override
   Future<List<Flashcard>> loadFlashcards(AuthUser user) async {
@@ -231,6 +312,42 @@ class _FakeFlashcardRepository implements FlashcardRepository {
       ..removeWhere((card) => card.materialId == materialId)
       ..addAll(_generatedCards);
     return List<Flashcard>.of(_generatedCards);
+  }
+
+  @override
+  Future<Flashcard> updateReviewResult({
+    required AuthUser user,
+    required Flashcard card,
+    required FlashcardReviewResult result,
+    required DateTime reviewedAt,
+  }) async {
+    reviewedUsers.add(user);
+    reviewedCardIds.add(card.id);
+    reviewResults.add(result);
+    if (throwOnReview) {
+      throw const FlashcardRepositoryException(
+        'Could not save review progress.',
+      );
+    }
+    final updatedCard = card.copyWith(
+      correctCount: result == FlashcardReviewResult.known
+          ? card.correctCount + 1
+          : card.correctCount,
+      incorrectCount: result == FlashcardReviewResult.missed
+          ? card.incorrectCount + 1
+          : card.incorrectCount,
+      lastReviewedAt: reviewedAt,
+      nextReviewAt: reviewedAt.add(
+        Duration(days: result == FlashcardReviewResult.known ? 3 : 1),
+      ),
+    );
+    final index = _cards.indexWhere((item) => item.id == card.id);
+    if (index == -1) {
+      _cards.add(updatedCard);
+    } else {
+      _cards[index] = updatedCard;
+    }
+    return updatedCard;
   }
 }
 

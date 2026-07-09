@@ -10,6 +10,7 @@ import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/favorites/favorite_repository.dart';
 import 'package:ai_study_buddy/features/flashcards/flashcard_repository.dart';
+import 'package:ai_study_buddy/features/flashcards/flashcard_training_screen.dart';
 import 'package:ai_study_buddy/features/generation/summary_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
@@ -399,6 +400,192 @@ void main() {
       find.text('Could not generate flashcards. Try again.'),
       findsWidgets,
     );
+  });
+
+  testWidgets('flashcards screen shows Start training when cards exist', (
+    tester,
+  ) async {
+    await _enterDashboard(tester);
+    await _pushRoute(
+      tester,
+      AppRoutes.flashcards,
+      arguments: MockData.subjects.first,
+    );
+
+    expect(find.text('Start training'), findsOneWidget);
+  });
+
+  testWidgets('training shows front first and Show answer reveals back', (
+    tester,
+  ) async {
+    await _enterDashboard(tester);
+    await _pushRoute(
+      tester,
+      AppRoutes.flashcardTraining,
+      arguments: FlashcardTrainingArgs(
+        subject: MockData.subjects.first,
+        cards: const [_trainingCardOne],
+      ),
+    );
+
+    expect(find.text('Training front 1'), findsOneWidget);
+    expect(find.text('Training back 1'), findsNothing);
+
+    await tester.tap(find.text('Show answer'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Training back 1'), findsOneWidget);
+    expect(find.text('I missed it'), findsOneWidget);
+    expect(find.text('I knew it'), findsOneWidget);
+  });
+
+  testWidgets('tapping training card reveals back', (tester) async {
+    await _enterDashboard(tester);
+    await _pushRoute(
+      tester,
+      AppRoutes.flashcardTraining,
+      arguments: FlashcardTrainingArgs(
+        subject: MockData.subjects.first,
+        cards: const [_trainingCardOne],
+      ),
+    );
+
+    await tester.tap(find.byType(Card).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Training back 1'), findsOneWidget);
+  });
+
+  testWidgets('rating advances and completion can review again', (
+    tester,
+  ) async {
+    await _enterDashboard(tester);
+    await _pushRoute(
+      tester,
+      AppRoutes.flashcardTraining,
+      arguments: FlashcardTrainingArgs(
+        subject: MockData.subjects.first,
+        cards: const [_trainingCardOne, _trainingCardTwo],
+      ),
+    );
+
+    await tester.tap(find.text('Show answer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('I knew it'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Training front 2'), findsOneWidget);
+
+    await tester.tap(find.text('Show answer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('I missed it'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Training complete'), findsWidgets);
+    expect(find.text('Cards reviewed'), findsOneWidget);
+    expect(find.text('Known'), findsOneWidget);
+    expect(find.text('Missed'), findsOneWidget);
+
+    await tester.tap(find.text('Review again'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Training front 1'), findsOneWidget);
+  });
+
+  testWidgets('supabase training sends review result to repository', (
+    tester,
+  ) async {
+    final flashcardRepository = _RecordingFlashcardRepository(
+      loadedCards: const [_cloudTrainingCard],
+    );
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+        subjectRepository: _RecordingSubjectRepository(
+          loadedSubjects: const [subject],
+        ),
+        materialRepository: _RecordingMaterialRepository(),
+        favoriteRepository: _RecordingFavoriteRepository(),
+        flashcardRepository: flashcardRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.flashcards, arguments: subject);
+
+    await tester.tap(find.text('Start training'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show answer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('I knew it'));
+    await tester.pumpAndSettle();
+
+    expect(flashcardRepository.reviewedUsers, [_supabaseUser]);
+    expect(flashcardRepository.reviewedCardIds, ['cloud-training-card']);
+    expect(flashcardRepository.reviewResults, [FlashcardReviewResult.known]);
+  });
+
+  testWidgets('training review failure shows safe error', (tester) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        flashcardRepository: _RecordingFlashcardRepository(throwOnReview: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.flashcardTraining,
+      arguments: FlashcardTrainingArgs(
+        subject: MockData.subjects.first,
+        cards: const [_trainingCardOne],
+      ),
+    );
+
+    await tester.tap(find.text('Show answer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('I knew it'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not save review progress.'), findsOneWidget);
+    expect(find.text('Training back 1'), findsOneWidget);
+    expect(find.text('I knew it'), findsOneWidget);
+  });
+
+  testWidgets('supabase training with no flashcards shows empty state', (
+    tester,
+  ) async {
+    const subject = Subject(
+      id: 'cloud-biology',
+      name: 'Cloud Biology',
+      description: 'Synced from Supabase',
+      colorValue: 0xFF16A34A,
+    );
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.flashcardTraining,
+      arguments: const FlashcardTrainingArgs(subject: subject, cards: []),
+    );
+
+    expect(find.text('Generate flashcards first.'), findsOneWidget);
   });
 
   testWidgets('bottom navigation opens core routes', (tester) async {
@@ -1638,6 +1825,36 @@ const _supabaseUser = AuthUser(
   displayName: 'Supabase Student',
 );
 
+const _trainingCardOne = Flashcard(
+  id: 'bio-card-1',
+  subjectId: 'biology',
+  materialId: 'bio-lecture-1',
+  front: 'Training front 1',
+  back: 'Training back 1',
+  topic: 'Training topic',
+  isFavorite: false,
+);
+
+const _trainingCardTwo = Flashcard(
+  id: 'bio-card-2',
+  subjectId: 'biology',
+  materialId: 'bio-lecture-1',
+  front: 'Training front 2',
+  back: 'Training back 2',
+  topic: 'Training topic',
+  isFavorite: false,
+);
+
+const _cloudTrainingCard = Flashcard(
+  id: 'cloud-training-card',
+  subjectId: 'cloud-biology',
+  materialId: 'cloud-material',
+  front: 'Cloud training front',
+  back: 'Cloud training back',
+  topic: 'Cloud topic',
+  isFavorite: false,
+);
+
 Future<void> _enterDashboard(WidgetTester tester) async {
   await tester.pumpWidget(const StudyBuddyApp());
   await tester.pumpAndSettle();
@@ -1924,16 +2141,21 @@ class _RecordingFlashcardRepository implements FlashcardRepository {
     this.generatedCards = const [],
     this.pendingCards,
     this.throwOnGenerate = false,
+    this.throwOnReview = false,
   });
 
   final List<Flashcard> loadedCards;
   final List<Flashcard> generatedCards;
   final Future<List<Flashcard>>? pendingCards;
   final bool throwOnGenerate;
+  final bool throwOnReview;
   final List<AuthUser> loadedUsers = [];
   final List<AuthUser> generatedUsers = [];
   final List<String> generatedMaterialIds = [];
   final List<int> generatedCounts = [];
+  final List<AuthUser> reviewedUsers = [];
+  final List<String> reviewedCardIds = [];
+  final List<FlashcardReviewResult> reviewResults = [];
 
   @override
   Future<List<Flashcard>> loadFlashcards(AuthUser user) async {
@@ -1960,6 +2182,35 @@ class _RecordingFlashcardRepository implements FlashcardRepository {
       return pending;
     }
     return List<Flashcard>.of(generatedCards);
+  }
+
+  @override
+  Future<Flashcard> updateReviewResult({
+    required AuthUser user,
+    required Flashcard card,
+    required FlashcardReviewResult result,
+    required DateTime reviewedAt,
+  }) async {
+    reviewedUsers.add(user);
+    reviewedCardIds.add(card.id);
+    reviewResults.add(result);
+    if (throwOnReview) {
+      throw const FlashcardRepositoryException(
+        'Could not save review progress.',
+      );
+    }
+    return card.copyWith(
+      correctCount: result == FlashcardReviewResult.known
+          ? card.correctCount + 1
+          : card.correctCount,
+      incorrectCount: result == FlashcardReviewResult.missed
+          ? card.incorrectCount + 1
+          : card.incorrectCount,
+      lastReviewedAt: reviewedAt,
+      nextReviewAt: reviewedAt.add(
+        Duration(days: result == FlashcardReviewResult.known ? 3 : 1),
+      ),
+    );
   }
 }
 

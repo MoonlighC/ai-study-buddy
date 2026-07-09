@@ -8,6 +8,10 @@ class Flashcard {
     required this.isFavorite,
     this.materialId,
     this.difficulty = FlashcardDifficulty.medium,
+    this.correctCount = 0,
+    this.incorrectCount = 0,
+    this.lastReviewedAt,
+    this.nextReviewAt,
   });
 
   final String id;
@@ -18,6 +22,10 @@ class Flashcard {
   final String topic;
   final FlashcardDifficulty difficulty;
   final bool isFavorite;
+  final int correctCount;
+  final int incorrectCount;
+  final DateTime? lastReviewedAt;
+  final DateTime? nextReviewAt;
 
   Flashcard copyWith({
     String? id,
@@ -28,6 +36,10 @@ class Flashcard {
     String? topic,
     FlashcardDifficulty? difficulty,
     bool? isFavorite,
+    int? correctCount,
+    int? incorrectCount,
+    DateTime? lastReviewedAt,
+    DateTime? nextReviewAt,
   }) {
     return Flashcard(
       id: id ?? this.id,
@@ -38,6 +50,10 @@ class Flashcard {
       topic: topic ?? this.topic,
       difficulty: difficulty ?? this.difficulty,
       isFavorite: isFavorite ?? this.isFavorite,
+      correctCount: correctCount ?? this.correctCount,
+      incorrectCount: incorrectCount ?? this.incorrectCount,
+      lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
+      nextReviewAt: nextReviewAt ?? this.nextReviewAt,
     );
   }
 }

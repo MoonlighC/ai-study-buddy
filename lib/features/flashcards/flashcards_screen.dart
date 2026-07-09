@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_config.dart';
 import '../../app/app_state.dart';
+import '../../app/routes.dart';
 import '../../core/models/flashcard.dart';
 import '../../core/models/subject.dart';
+import 'flashcard_training_screen.dart';
 
 class FlashcardsScreen extends StatefulWidget {
   const FlashcardsScreen({required this.subject, super.key});
@@ -84,6 +86,21 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                 ),
               ),
             ),
+          if (cards.isNotEmpty) ...[
+            FilledButton.icon(
+              onPressed: () => Navigator.pushNamed(
+                context,
+                AppRoutes.flashcardTraining,
+                arguments: FlashcardTrainingArgs(
+                  subject: widget.subject,
+                  cards: cards.take(selectedSessionSize).toList(),
+                ),
+              ),
+              icon: const Icon(Icons.school_outlined),
+              label: const Text('Start training'),
+            ),
+            const SizedBox(height: 16),
+          ],
           for (final card in cards)
             Card(
               child: ListTile(
