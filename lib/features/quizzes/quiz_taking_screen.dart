@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_state.dart';
 import '../../core/models/material.dart';
 import '../../core/models/quiz.dart';
+import '../../core/models/quiz_attempt.dart';
 import '../../core/models/quiz_question.dart';
 import '../../core/models/subject.dart';
 import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/section_card.dart';
+import '../auth/auth_controller.dart';
 
 class QuizTakingArgs {
   const QuizTakingArgs({
@@ -32,9 +35,12 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
   final Map<String, String> _answers = {};
   int _index = 0;
   bool _isComplete = false;
+  bool _isCompleting = false;
+  DateTime _startedAt = DateTime.now().toUtc();
 
   @override
   Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
     final questions = widget.args.quiz.questions;
     if (questions.isEmpty) {
       return Scaffold(
@@ -69,10 +75,11 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
             _ResultView(
               questions: questions,
               answers: _answers,
-              onReview: () => setState(() {
-                _index = 0;
-                _isComplete = false;
-              }),
+              attempt: state.latestQuizCompletion,
+              isSaving: state.isSavingQuizAttempt || _isCompleting,
+              warningMessage: state.quizAttemptSyncErrorMessage,
+              onReviewMaterial: () => Navigator.pop(context),
+              onRetry: _retry,
             )
           else
             _QuestionView(
@@ -84,17 +91,51 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
                   setState(() => _answers[questions[_index].id] = answer),
               onNext: _answers[questions[_index].id] == null
                   ? null
-                  : () => setState(() {
+                  : () {
                       if (_index == questions.length - 1) {
-                        _isComplete = true;
-                      } else {
-                        _index += 1;
+                        _completeQuiz();
+                        return;
                       }
-                    }),
+                      setState(() => _index += 1);
+                    },
             ),
         ],
       ),
     );
+  }
+
+  Future<void> _completeQuiz() async {
+    if (_isCompleting) return;
+    setState(() {
+      _isComplete = true;
+      _isCompleting = true;
+    });
+    final saved = await AppStateScope.read(context).completeQuizFor(
+      AuthScope.read(context).user,
+      quiz: widget.args.quiz,
+      selectedAnswers: _answers,
+      startedAt: _startedAt,
+    );
+    if (!mounted) return;
+    setState(() => _isCompleting = false);
+    if (!saved) {
+      final message =
+          AppStateScope.read(context).quizAttemptSyncErrorMessage ??
+          'Could not save this quiz attempt.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  void _retry() {
+    setState(() {
+      _answers.clear();
+      _index = 0;
+      _isComplete = false;
+      _isCompleting = false;
+      _startedAt = DateTime.now().toUtc();
+    });
   }
 }
 
@@ -179,19 +220,33 @@ class _ResultView extends StatelessWidget {
   const _ResultView({
     required this.questions,
     required this.answers,
-    required this.onReview,
+    required this.attempt,
+    required this.isSaving,
+    required this.warningMessage,
+    required this.onReviewMaterial,
+    required this.onRetry,
   });
 
   final List<QuizQuestion> questions;
   final Map<String, String> answers;
-  final VoidCallback onReview;
+  final QuizAttempt? attempt;
+  final bool isSaving;
+  final String? warningMessage;
+  final VoidCallback onReviewMaterial;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final correctCount = questions
-        .where((question) => answers[question.id] == question.correctAnswer)
-        .length;
-    final percent = ((correctCount / questions.length) * 100).round();
+    final result = attempt;
+    final correctCount =
+        result?.correctQuestions ??
+        questions
+            .where((question) => answers[question.id] == question.correctAnswer)
+            .length;
+    final percent =
+        result?.score.round() ??
+        ((correctCount / questions.length) * 100).round();
+    final weakTopics = result?.weakTopicsSnapshot ?? _weakTopics();
 
     return SectionCard(
       icon: Icons.emoji_events_outlined,
@@ -200,19 +255,67 @@ class _ResultView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '$correctCount / ${questions.length} correct',
+            'Score: $percent%',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 4),
-          Text('Score: $percent%'),
+          Text('$correctCount / ${questions.length} correct'),
+          const SizedBox(height: 16),
+          Text('Missed topics', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          if (weakTopics.isEmpty)
+            const Text('No missed topics. Great work!')
+          else
+            for (final topic in weakTopics)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  topic.missCount > 1
+                      ? '${topic.topic} (${topic.missCount} misses)'
+                      : topic.topic,
+                ),
+              ),
+          if (isSaving) ...[
+            const SizedBox(height: 8),
+            const LinearProgressIndicator(),
+            const SizedBox(height: 4),
+            const Text('Saving quiz attempt…'),
+          ],
+          if (!isSaving && warningMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              warningMessage!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: onReview,
+            onPressed: onReviewMaterial,
+            icon: const Icon(Icons.menu_book_outlined),
+            label: const Text('Review material'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: isSaving ? null : onRetry,
             icon: const Icon(Icons.replay_outlined),
-            label: const Text('Review answers'),
+            label: const Text('Retry quiz'),
           ),
         ],
       ),
     );
+  }
+
+  List<QuizWeakTopicSnapshot> _weakTopics() {
+    final counts = <String, int>{};
+    for (final question in questions) {
+      if (answers[question.id] == question.correctAnswer) continue;
+      final topic = question.topic.trim();
+      if (topic.isEmpty) continue;
+      counts.update(topic, (count) => count + 1, ifAbsent: () => 1);
+    }
+    return [
+      for (final entry in counts.entries)
+        QuizWeakTopicSnapshot(topic: entry.key, missCount: entry.value),
+    ];
   }
 }

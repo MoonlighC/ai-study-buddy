@@ -2,6 +2,7 @@ import 'package:ai_study_buddy/app/app_config.dart';
 import 'package:ai_study_buddy/app/app_state.dart';
 import 'package:ai_study_buddy/core/models/material.dart';
 import 'package:ai_study_buddy/core/models/quiz.dart';
+import 'package:ai_study_buddy/core/models/quiz_attempt.dart';
 import 'package:ai_study_buddy/core/models/quiz_question.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
@@ -149,6 +150,145 @@ void main() {
       expect(state.latestQuizForMaterial('bio-lecture-1'), isNull);
     });
   });
+
+  group('AppState quiz attempts', () {
+    test(
+      'completion saves score answers and deduplicated weak topics',
+      () async {
+        final repository = _FakeQuizRepository();
+        final state = AppState(
+          config: _supabaseConfig(),
+          quizRepository: repository,
+        );
+
+        final saved = await state.completeQuizFor(
+          user,
+          quiz: _attemptQuiz,
+          selectedAnswers: const {
+            'attempt-question-1': 'Wrong',
+            'attempt-question-2': 'Wrong',
+            'attempt-question-3': 'Correct',
+          },
+          startedAt: DateTime.utc(2026, 7, 10, 10),
+          completedAt: DateTime.utc(2026, 7, 10, 10, 5),
+        );
+
+        expect(saved, isTrue);
+        expect(repository.attemptUsers, [user]);
+        final attempt = repository.savedAttempts.single;
+        expect(attempt.score, closeTo(33.333, 0.001));
+        expect(attempt.correctQuestions, 1);
+        expect(attempt.totalQuestions, 3);
+        expect(attempt.answers, hasLength(3));
+        expect(attempt.answers.first.questionId, 'attempt-question-1');
+        expect(attempt.answers.first.selectedAnswer, 'Wrong');
+        expect(attempt.answers.first.correctAnswer, 'Correct');
+        expect(attempt.answers.first.isCorrect, isFalse);
+        expect(attempt.answers.first.topic, 'Shared topic');
+        expect(attempt.weakTopicsSnapshot, hasLength(1));
+        expect(attempt.weakTopicsSnapshot.single.topic, 'Shared topic');
+        expect(attempt.weakTopicsSnapshot.single.missCount, 2);
+        expect(state.latestQuizAttempt?.id, 'saved-attempt-1');
+      },
+    );
+
+    test('correct-only completion has no weak topics', () async {
+      final repository = _FakeQuizRepository();
+      final state = AppState(quizRepository: repository);
+
+      final saved = await state.completeQuizFor(
+        null,
+        quiz: _generatedQuiz,
+        selectedAnswers: const {'generated-question-1': 'Correct'},
+        startedAt: DateTime.utc(2026, 7, 10, 10),
+      );
+
+      expect(saved, isTrue);
+      expect(repository.savedAttempts.single.weakTopicsSnapshot, isEmpty);
+    });
+
+    test('unauthenticated supabase completion fails safely', () async {
+      final repository = _FakeQuizRepository();
+      final state = AppState(
+        config: _supabaseConfig(),
+        quizRepository: repository,
+      );
+
+      final saved = await state.completeQuizFor(
+        null,
+        quiz: _generatedQuiz,
+        selectedAnswers: const {'generated-question-1': 'Correct'},
+        startedAt: DateTime.utc(2026, 7, 10, 10),
+      );
+
+      expect(saved, isFalse);
+      expect(repository.savedAttempts, isEmpty);
+      expect(
+        state.quizAttemptSyncErrorMessage,
+        'Could not save this quiz attempt.',
+      );
+    });
+
+    test('save failure retains completion and exposes safe warning', () async {
+      final state = AppState(
+        quizRepository: _FakeQuizRepository(throwOnSave: true),
+      );
+
+      final saved = await state.completeQuizFor(
+        null,
+        quiz: _generatedQuiz,
+        selectedAnswers: const {'generated-question-1': 'Wrong A'},
+        startedAt: DateTime.utc(2026, 7, 10, 10),
+      );
+
+      expect(saved, isFalse);
+      expect(state.latestQuizCompletion?.score, 0);
+      expect(
+        state.latestQuizCompletion?.weakTopicsSnapshot.single.topic,
+        'Generated topic',
+      );
+      expect(state.latestQuizAttempt, isNull);
+      expect(
+        state.quizAttemptSyncErrorMessage,
+        'Could not save this quiz attempt.',
+      );
+    });
+
+    test('mock repository reloads saved attempts', () async {
+      final repository = MockQuizRepository();
+      final state = AppState(quizRepository: repository);
+      await state.completeQuizFor(
+        null,
+        quiz: _generatedQuiz,
+        selectedAnswers: const {'generated-question-1': 'Correct'},
+        startedAt: DateTime.utc(2026, 7, 10, 10),
+      );
+      final reloaded = AppState(quizRepository: repository);
+
+      await reloaded.loadQuizAttemptsFor(null);
+
+      expect(reloaded.latestQuizAttempt?.score, 100);
+    });
+
+    test(
+      'loaded attempts are exposed and cleared on supabase sign-out',
+      () async {
+        final repository = _FakeQuizRepository(
+          loadedAttempts: [_loadedAttempt],
+        );
+        final state = AppState(
+          config: _supabaseConfig(),
+          quizRepository: repository,
+        );
+
+        await state.loadQuizAttemptsFor(user);
+        expect(state.latestQuizAttempt?.id, 'loaded-attempt');
+
+        state.clearSyncedWorkspaceForSignOut();
+        expect(state.quizAttempts, isEmpty);
+      },
+    );
+  });
 }
 
 const _material = StudyMaterial(
@@ -203,6 +343,58 @@ const _existingQuiz = Quiz(
   ],
 );
 
+const _attemptQuiz = Quiz(
+  id: 'attempt-quiz',
+  subjectId: 'subject-1',
+  materialId: 'material-1',
+  title: 'Attempt quiz',
+  questions: [
+    QuizQuestion(
+      id: 'attempt-question-1',
+      subjectId: 'subject-1',
+      question: 'Question one',
+      options: ['Correct', 'Wrong'],
+      correctAnswer: 'Correct',
+      explanation: 'Explanation one',
+      topic: ' Shared topic ',
+      difficulty: StudyDifficulty.easy,
+    ),
+    QuizQuestion(
+      id: 'attempt-question-2',
+      subjectId: 'subject-1',
+      question: 'Question two',
+      options: ['Correct', 'Wrong'],
+      correctAnswer: 'Correct',
+      explanation: 'Explanation two',
+      topic: 'Shared topic',
+      difficulty: StudyDifficulty.medium,
+    ),
+    QuizQuestion(
+      id: 'attempt-question-3',
+      subjectId: 'subject-1',
+      question: 'Question three',
+      options: ['Correct', 'Wrong'],
+      correctAnswer: 'Correct',
+      explanation: 'Explanation three',
+      topic: '',
+      difficulty: StudyDifficulty.medium,
+    ),
+  ],
+);
+
+final _loadedAttempt = QuizAttempt(
+  id: 'loaded-attempt',
+  quizId: 'generated-quiz',
+  subjectId: 'subject-1',
+  score: 100,
+  totalQuestions: 1,
+  correctQuestions: 1,
+  startedAt: DateTime.utc(2026, 7, 10, 10),
+  completedAt: DateTime.utc(2026, 7, 10, 10),
+  answers: [],
+  weakTopicsSnapshot: [],
+);
+
 AppConfig _supabaseConfig() {
   return AppConfig.fromValues(
     backendModeValue: 'supabase',
@@ -214,22 +406,35 @@ AppConfig _supabaseConfig() {
 class _FakeQuizRepository implements QuizRepository {
   _FakeQuizRepository({
     List<Quiz> loadedQuizzes = const [],
+    List<QuizAttempt> loadedAttempts = const [],
     this._generatedQuiz,
     this.throwOnGenerate = false,
-  }) : _quizzes = List<Quiz>.of(loadedQuizzes);
+    this.throwOnSave = false,
+  }) : _quizzes = List<Quiz>.of(loadedQuizzes),
+       _attempts = List<QuizAttempt>.of(loadedAttempts);
 
   final List<Quiz> _quizzes;
+  final List<QuizAttempt> _attempts;
   final Quiz? _generatedQuiz;
   final bool throwOnGenerate;
+  final bool throwOnSave;
   final List<AuthUser> loadedUsers = [];
   final List<AuthUser> generatedUsers = [];
   final List<String> generatedMaterialIds = [];
   final List<int> generatedCounts = [];
+  final List<AuthUser> attemptUsers = [];
+  final List<QuizAttempt> savedAttempts = [];
 
   @override
   Future<List<Quiz>> loadQuizzes(AuthUser user) async {
     loadedUsers.add(user);
     return List<Quiz>.of(_quizzes);
+  }
+
+  @override
+  Future<List<QuizAttempt>> loadQuizAttempts(AuthUser user) async {
+    attemptUsers.add(user);
+    return List<QuizAttempt>.of(_attempts);
   }
 
   @override
@@ -251,6 +456,21 @@ class _FakeQuizRepository implements QuizRepository {
       ..removeWhere((item) => item.materialId == materialId)
       ..insert(0, quiz);
     return quiz;
+  }
+
+  @override
+  Future<QuizAttempt> saveQuizAttempt({
+    required AuthUser user,
+    required QuizAttempt attempt,
+  }) async {
+    attemptUsers.add(user);
+    savedAttempts.add(attempt);
+    if (throwOnSave) {
+      throw const QuizRepositoryException('Could not save this quiz attempt.');
+    }
+    final saved = attempt.copyWith(id: 'saved-attempt-${_attempts.length + 1}');
+    _attempts.insert(0, saved);
+    return saved;
   }
 
   Quiz _generatedQuizFor(String materialId) {

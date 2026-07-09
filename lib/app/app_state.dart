@@ -4,6 +4,7 @@ import 'app_config.dart';
 import '../core/models/flashcard.dart';
 import '../core/models/material.dart';
 import '../core/models/quiz.dart';
+import '../core/models/quiz_attempt.dart';
 import '../core/models/quiz_question.dart';
 import '../core/models/study_session.dart';
 import '../core/models/study_time_block.dart';
@@ -103,6 +104,8 @@ class AppState extends ChangeNotifier {
   List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
   List<Quiz> _quizzes = [];
+  List<QuizAttempt> _quizAttempts = [];
+  QuizAttempt? _latestQuizCompletion;
   final Set<String> _favoriteMaterialIds = {};
   final List<StudySession> _studySessions = [];
   int _materialCounter = 0;
@@ -133,6 +136,9 @@ class AppState extends ChangeNotifier {
   bool _isGeneratingQuiz = false;
   String? _quizSyncErrorMessage;
   String? _quizGenerationErrorMessage;
+  bool _isLoadingQuizAttempts = false;
+  bool _isSavingQuizAttempt = false;
+  String? _quizAttemptSyncErrorMessage;
 
   List<Subject> get subjects => List.unmodifiable(_subjects);
 
@@ -189,6 +195,18 @@ class AppState extends ChangeNotifier {
 
   String? get quizGenerationErrorMessage => _quizGenerationErrorMessage;
 
+  List<QuizAttempt> get quizAttempts => List.unmodifiable(_quizAttempts);
+
+  QuizAttempt? get latestQuizAttempt => _quizAttempts.firstOrNull;
+
+  QuizAttempt? get latestQuizCompletion => _latestQuizCompletion;
+
+  bool get isLoadingQuizAttempts => _isLoadingQuizAttempts;
+
+  bool get isSavingQuizAttempt => _isSavingQuizAttempt;
+
+  String? get quizAttemptSyncErrorMessage => _quizAttemptSyncErrorMessage;
+
   AppLanguagePreference get languagePreference => _languagePreference;
 
   int get defaultFlashcardSessionSize => _defaultFlashcardSessionSize;
@@ -238,6 +256,7 @@ class AppState extends ChangeNotifier {
     await loadMaterialFavoritesFor(user);
     await loadFlashcardsFor(user);
     await loadQuizzesFor(user);
+    await loadQuizAttemptsFor(user);
   }
 
   Future<void> loadMaterialsFor(AuthUser? user) async {
@@ -491,6 +510,41 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<void> loadQuizAttemptsFor(AuthUser? user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      _quizAttempts = await quizRepository.loadQuizAttempts(
+        user ??
+            const AuthUser(
+              id: 'mock-user',
+              email: 'alex.student@example.test',
+              displayName: 'Alex Student',
+            ),
+      );
+      _quizAttemptSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    if (user == null) {
+      _quizAttempts = [];
+      _quizAttemptSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingQuizAttempts = true;
+    _quizAttemptSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      _quizAttempts = await quizRepository.loadQuizAttempts(user);
+    } catch (error) {
+      _quizAttemptSyncErrorMessage = _quizAttemptMessageFor(error);
+    } finally {
+      _isLoadingQuizAttempts = false;
+      notifyListeners();
+    }
+  }
+
   void clearSyncedSubjectsForSignOut() {
     if (config.effectiveBackendMode != AppBackendMode.supabase) {
       return;
@@ -506,6 +560,7 @@ class AppState extends ChangeNotifier {
     _flashcardReviewErrorMessage = null;
     _quizSyncErrorMessage = null;
     _quizGenerationErrorMessage = null;
+    _quizAttemptSyncErrorMessage = null;
     _isLoadingSubjects = false;
     _isCreatingSubject = false;
     _isLoadingMaterials = false;
@@ -518,9 +573,13 @@ class AppState extends ChangeNotifier {
     _isSavingFlashcardReview = false;
     _isLoadingQuizzes = false;
     _isGeneratingQuiz = false;
+    _isLoadingQuizAttempts = false;
+    _isSavingQuizAttempt = false;
     _favoriteMaterialIds.clear();
     _flashcards = [];
     _quizzes = [];
+    _quizAttempts = [];
+    _latestQuizCompletion = null;
     notifyListeners();
   }
 
@@ -997,7 +1056,7 @@ class AppState extends ChangeNotifier {
               options: question.options,
               correctAnswer: question.correctAnswer,
               explanation: question.explanation,
-              topic: question.topic,
+              topic: question.topic.trim(),
               difficulty: question.difficulty,
             ),
         ],
@@ -1015,6 +1074,92 @@ class AppState extends ChangeNotifier {
       return false;
     } finally {
       _isGeneratingQuiz = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> completeQuizFor(
+    AuthUser? user, {
+    required Quiz quiz,
+    required Map<String, String> selectedAnswers,
+    required DateTime startedAt,
+    DateTime? completedAt,
+  }) async {
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    final finishedAt = (completedAt ?? DateTime.now()).toUtc();
+    final answerRows = [
+      for (final question in quiz.questions)
+        QuizAttemptAnswer(
+          questionId: question.id,
+          question: question.question,
+          selectedAnswer: selectedAnswers[question.id] ?? '',
+          correctAnswer: question.correctAnswer,
+          isCorrect: selectedAnswers[question.id] == question.correctAnswer,
+          topic: question.topic.trim(),
+        ),
+    ];
+    final correctQuestions = answerRows
+        .where((answer) => answer.isCorrect)
+        .length;
+    final totalQuestions = answerRows.length;
+    final weakTopicCounts = <String, int>{};
+    for (final answer in answerRows.where((answer) => !answer.isCorrect)) {
+      final topic = answer.topic.trim();
+      if (topic.isEmpty) continue;
+      weakTopicCounts.update(topic, (count) => count + 1, ifAbsent: () => 1);
+    }
+    final attempt = QuizAttempt(
+      id: '',
+      quizId: quiz.id,
+      subjectId: quiz.subjectId,
+      score: totalQuestions == 0
+          ? 0
+          : (correctQuestions / totalQuestions) * 100,
+      totalQuestions: totalQuestions,
+      correctQuestions: correctQuestions,
+      startedAt: startedAt.toUtc(),
+      completedAt: finishedAt,
+      answers: answerRows,
+      weakTopicsSnapshot: [
+        for (final entry in weakTopicCounts.entries)
+          QuizWeakTopicSnapshot(topic: entry.key, missCount: entry.value),
+      ],
+    );
+    _latestQuizCompletion = attempt;
+
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _quizAttemptSyncErrorMessage = 'Could not save this quiz attempt.';
+      notifyListeners();
+      return false;
+    }
+
+    _isSavingQuizAttempt = true;
+    _quizAttemptSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      final savedAttempt = await quizRepository.saveQuizAttempt(
+        user: effectiveUser,
+        attempt: attempt,
+      );
+      _latestQuizCompletion = savedAttempt;
+      _quizAttempts = [
+        savedAttempt,
+        for (final existing in _quizAttempts)
+          if (existing.id != savedAttempt.id) existing,
+      ];
+      return true;
+    } catch (error) {
+      _quizAttemptSyncErrorMessage = _quizAttemptMessageFor(error);
+      return false;
+    } finally {
+      _isSavingQuizAttempt = false;
       notifyListeners();
     }
   }
@@ -1233,6 +1378,13 @@ class AppState extends ChangeNotifier {
       return error.message;
     }
     return 'Could not generate quiz. Try again.';
+  }
+
+  String _quizAttemptMessageFor(Object error) {
+    if (error is QuizRepositoryException) {
+      return error.message;
+    }
+    return 'Could not save this quiz attempt.';
   }
 
   String _summaryFor(

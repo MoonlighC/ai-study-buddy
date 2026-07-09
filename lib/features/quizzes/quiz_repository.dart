@@ -1,16 +1,24 @@
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../core/models/quiz.dart';
+import '../../core/models/quiz_attempt.dart';
 import '../../core/models/quiz_question.dart';
 import '../../features/auth/auth_models.dart';
 
 abstract class QuizRepository {
   Future<List<Quiz>> loadQuizzes(AuthUser user);
 
+  Future<List<QuizAttempt>> loadQuizAttempts(AuthUser user);
+
   Future<Quiz> generateQuiz({
     required AuthUser user,
     required String materialId,
     required int count,
+  });
+
+  Future<QuizAttempt> saveQuizAttempt({
+    required AuthUser user,
+    required QuizAttempt attempt,
   });
 }
 
@@ -23,14 +31,23 @@ class QuizRepositoryException implements Exception {
 const quizTooShortMessage = 'Add more lecture text before generating a quiz.';
 
 class MockQuizRepository implements QuizRepository {
-  MockQuizRepository({List<Quiz> initialQuizzes = const []})
-    : _quizzes = List<Quiz>.of(initialQuizzes);
+  MockQuizRepository({
+    List<Quiz> initialQuizzes = const [],
+    List<QuizAttempt> initialAttempts = const [],
+  }) : _quizzes = List<Quiz>.of(initialQuizzes),
+       _attempts = List<QuizAttempt>.of(initialAttempts);
 
   final List<Quiz> _quizzes;
+  final List<QuizAttempt> _attempts;
 
   @override
   Future<List<Quiz>> loadQuizzes(AuthUser user) async {
     return List<Quiz>.of(_quizzes);
+  }
+
+  @override
+  Future<List<QuizAttempt>> loadQuizAttempts(AuthUser user) async {
+    return List<QuizAttempt>.of(_attempts);
   }
 
   @override
@@ -71,6 +88,20 @@ class MockQuizRepository implements QuizRepository {
       ..removeWhere((item) => item.materialId == materialId)
       ..insert(0, quiz);
     return quiz;
+  }
+
+  @override
+  Future<QuizAttempt> saveQuizAttempt({
+    required AuthUser user,
+    required QuizAttempt attempt,
+  }) async {
+    final saved = attempt.copyWith(
+      id: attempt.id.isEmpty
+          ? 'mock-attempt-${_attempts.length + 1}'
+          : attempt.id,
+    );
+    _attempts.insert(0, saved);
+    return saved;
   }
 }
 
@@ -127,6 +158,23 @@ class SupabaseQuizRepository implements QuizRepository {
   }
 
   @override
+  Future<List<QuizAttempt>> loadQuizAttempts(AuthUser user) async {
+    try {
+      final rows = await _client
+          .from('quiz_attempts')
+          .select(
+            'id,quiz_id,subject_id,score,total_questions,correct_questions,started_at,completed_at,answers,weak_topics_snapshot',
+          )
+          .eq('user_id', user.id)
+          .filter('deleted_at', 'is', null)
+          .order('completed_at', ascending: false);
+      return [for (final row in rows) _mapAttempt(row)];
+    } catch (_) {
+      throw const QuizRepositoryException('Could not sync quiz attempts.');
+    }
+  }
+
+  @override
   Future<Quiz> generateQuiz({
     required AuthUser user,
     required String materialId,
@@ -176,6 +224,80 @@ class SupabaseQuizRepository implements QuizRepository {
         'Could not generate quiz. Try again.',
       );
     }
+  }
+
+  @override
+  Future<QuizAttempt> saveQuizAttempt({
+    required AuthUser user,
+    required QuizAttempt attempt,
+  }) async {
+    try {
+      final row = await _client
+          .from('quiz_attempts')
+          .insert({
+            'user_id': user.id,
+            'quiz_id': attempt.quizId,
+            'subject_id': attempt.subjectId,
+            'score': attempt.score,
+            'total_questions': attempt.totalQuestions,
+            'correct_questions': attempt.correctQuestions,
+            'started_at': attempt.startedAt.toUtc().toIso8601String(),
+            'completed_at': attempt.completedAt.toUtc().toIso8601String(),
+            'answers': [for (final answer in attempt.answers) answer.toJson()],
+            'weak_topics_snapshot': [
+              for (final topic in attempt.weakTopicsSnapshot) topic.toJson(),
+            ],
+          })
+          .select(
+            'id,quiz_id,subject_id,score,total_questions,correct_questions,started_at,completed_at,answers,weak_topics_snapshot',
+          )
+          .single();
+      return _mapAttempt(row);
+    } catch (_) {
+      throw const QuizRepositoryException('Could not save this quiz attempt.');
+    }
+  }
+
+  QuizAttempt _mapAttempt(Map<String, dynamic> row) {
+    final answers = row['answers'];
+    final weakTopics = row['weak_topics_snapshot'];
+    return QuizAttempt(
+      id: _stringValue(row, 'id') ?? '',
+      quizId: _stringValue(row, 'quiz_id') ?? '',
+      subjectId: _stringValue(row, 'subject_id') ?? '',
+      score: _doubleValue(row['score']),
+      totalQuestions: _intValue(row['total_questions']),
+      correctQuestions: _intValue(row['correct_questions']),
+      startedAt: _dateTimeValue(row['started_at']),
+      completedAt: _dateTimeValue(row['completed_at']),
+      answers: answers is List
+          ? [
+              for (final answer in answers.whereType<Map<String, dynamic>>())
+                QuizAttemptAnswer.fromJson(answer),
+            ]
+          : const [],
+      weakTopicsSnapshot: weakTopics is List
+          ? [
+              for (final topic in weakTopics.whereType<Map<String, dynamic>>())
+                QuizWeakTopicSnapshot.fromJson(topic),
+            ]
+          : const [],
+    );
+  }
+
+  double _doubleValue(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  int _intValue(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  DateTime _dateTimeValue(Object? value) {
+    return DateTime.tryParse(value?.toString() ?? '')?.toUtc() ??
+        DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   }
 
   Quiz _mapQuiz(Map<String, dynamic> row, List<QuizQuestion> questions) {
@@ -240,11 +362,24 @@ class EmptyQuizRepository implements QuizRepository {
   }
 
   @override
+  Future<List<QuizAttempt>> loadQuizAttempts(AuthUser user) async {
+    return const [];
+  }
+
+  @override
   Future<Quiz> generateQuiz({
     required AuthUser user,
     required String materialId,
     required int count,
   }) async {
     throw const QuizRepositoryException('Quiz generation is not configured.');
+  }
+
+  @override
+  Future<QuizAttempt> saveQuizAttempt({
+    required AuthUser user,
+    required QuizAttempt attempt,
+  }) async {
+    throw const QuizRepositoryException('Could not save this quiz attempt.');
   }
 }

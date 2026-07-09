@@ -6,6 +6,7 @@ import 'package:ai_study_buddy/app/routes.dart';
 import 'package:ai_study_buddy/core/models/flashcard.dart';
 import 'package:ai_study_buddy/core/models/material.dart';
 import 'package:ai_study_buddy/core/models/quiz.dart';
+import 'package:ai_study_buddy/core/models/quiz_attempt.dart';
 import 'package:ai_study_buddy/core/models/quiz_question.dart';
 import 'package:ai_study_buddy/core/models/subject.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
@@ -16,6 +17,7 @@ import 'package:ai_study_buddy/features/flashcards/flashcard_training_screen.dar
 import 'package:ai_study_buddy/features/generation/summary_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/quizzes/quiz_repository.dart';
+import 'package:ai_study_buddy/features/quizzes/quiz_taking_screen.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
 import 'package:flutter/material.dart';
@@ -485,6 +487,101 @@ void main() {
 
     expect(find.text('1 / 1 correct'), findsOneWidget);
     expect(find.text('Score: 100%'), findsOneWidget);
+    expect(find.text('No missed topics. Great work!'), findsOneWidget);
+    expect(quizRepository.savedAttempts, hasLength(1));
+    expect(quizRepository.savedAttempts.single.correctQuestions, 1);
+
+    await tester.tap(find.text('Retry quiz'));
+    await tester.pumpAndSettle();
+    expect(find.text('What does this material explain?'), findsOneWidget);
+    expect(find.text('The core idea - correct'), findsNothing);
+  });
+
+  testWidgets('missed quiz topic is shown and save failure is non-blocking', (
+    tester,
+  ) async {
+    final quizRepository = _RecordingQuizRepository(throwOnSave: true);
+    await tester.pumpWidget(StudyBuddyApp(quizRepository: quizRepository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.quizTaking,
+      arguments: QuizTakingArgs(
+        subject: MockData.subjects.first,
+        material: MockData.materials.first,
+        quiz: _widgetQuiz,
+      ),
+    );
+
+    await tester.tap(find.text('An unrelated upload'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show score'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Score: 0%'), findsOneWidget);
+    expect(find.text('0 / 1 correct'), findsOneWidget);
+    expect(find.text('Core idea'), findsOneWidget);
+    expect(find.text('Could not save this quiz attempt.'), findsWidgets);
+    expect(find.text('Review material'), findsOneWidget);
+    expect(find.text('Retry quiz'), findsOneWidget);
+  });
+
+  testWidgets('review material returns from completed quiz', (tester) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(quizRepository: _RecordingQuizRepository()),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+    await _pushRoute(
+      tester,
+      AppRoutes.quizTaking,
+      arguments: QuizTakingArgs(
+        subject: MockData.subjects.first,
+        material: MockData.materials.first,
+        quiz: _widgetQuiz,
+      ),
+    );
+    await tester.tap(find.text('The core idea'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show score'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Review material'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pasted text'), findsOneWidget);
+  });
+
+  testWidgets('progress shows latest quiz and weak topic', (tester) async {
+    final repository = _RecordingQuizRepository(attempts: [_progressAttempt]);
+    await tester.pumpWidget(StudyBuddyApp(quizRepository: repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.progress);
+
+    expect(find.text('Score: 50%'), findsOneWidget);
+    expect(find.text('1 / 2 correct'), findsOneWidget);
+    await _scrollTo(tester, find.text('Cell division'));
+    expect(find.text('Cell division'), findsOneWidget);
+    expect(find.text('Missed once in the latest quiz'), findsOneWidget);
+  });
+
+  testWidgets('progress shows safe empty quiz state', (tester) async {
+    await _enterDashboard(tester);
+    await _pushRoute(tester, AppRoutes.progress);
+
+    expect(find.text('Complete a quiz to see results here.'), findsOneWidget);
+    await _scrollTo(tester, find.text('No quiz weak topics yet'));
+    expect(find.text('No quiz weak topics yet'), findsOneWidget);
   });
 
   testWidgets('flashcards screen shows Start training when cards exist', (
@@ -2196,6 +2293,21 @@ const _widgetQuiz = Quiz(
   ],
 );
 
+final _progressAttempt = QuizAttempt(
+  id: 'progress-attempt',
+  quizId: 'progress-quiz',
+  subjectId: 'biology',
+  score: 50,
+  totalQuestions: 2,
+  correctQuestions: 1,
+  startedAt: DateTime.utc(2026, 7, 10, 10),
+  completedAt: DateTime.utc(2026, 7, 10, 10, 5),
+  answers: const [],
+  weakTopicsSnapshot: const [
+    QuizWeakTopicSnapshot(topic: 'Cell division', missCount: 1),
+  ],
+);
+
 const _trainingCardOne = Flashcard(
   id: 'bio-card-1',
   subjectId: 'biology',
@@ -2684,19 +2796,32 @@ class _RecordingFlashcardRepository implements FlashcardRepository {
 }
 
 class _RecordingQuizRepository implements QuizRepository {
-  _RecordingQuizRepository({this.generatedQuiz, this.throwOnGenerate = false});
+  _RecordingQuizRepository({
+    this.generatedQuiz,
+    this.throwOnGenerate = false,
+    this.throwOnSave = false,
+    List<QuizAttempt> attempts = const [],
+  }) : _attempts = List<QuizAttempt>.of(attempts);
 
   final Quiz? generatedQuiz;
   final bool throwOnGenerate;
+  final bool throwOnSave;
+  final List<QuizAttempt> _attempts;
   final List<AuthUser> loadedUsers = [];
   final List<AuthUser> generatedUsers = [];
   final List<String> generatedMaterialIds = [];
   final List<int> generatedCounts = [];
+  final List<QuizAttempt> savedAttempts = [];
 
   @override
   Future<List<Quiz>> loadQuizzes(AuthUser user) async {
     loadedUsers.add(user);
     return const [];
+  }
+
+  @override
+  Future<List<QuizAttempt>> loadQuizAttempts(AuthUser user) async {
+    return List<QuizAttempt>.of(_attempts);
   }
 
   @override
@@ -2714,6 +2839,22 @@ class _RecordingQuizRepository implements QuizRepository {
       );
     }
     return generatedQuiz ?? _widgetQuiz;
+  }
+
+  @override
+  Future<QuizAttempt> saveQuizAttempt({
+    required AuthUser user,
+    required QuizAttempt attempt,
+  }) async {
+    savedAttempts.add(attempt);
+    if (throwOnSave) {
+      throw const QuizRepositoryException('Could not save this quiz attempt.');
+    }
+    final saved = attempt.copyWith(
+      id: 'widget-attempt-${_attempts.length + 1}',
+    );
+    _attempts.insert(0, saved);
+    return saved;
   }
 }
 
