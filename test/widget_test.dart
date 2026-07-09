@@ -415,6 +415,102 @@ void main() {
     expect(find.text('Start training'), findsOneWidget);
   });
 
+  testWidgets('flashcards screen hides and toggles browse answers', (
+    tester,
+  ) async {
+    await _enterDashboard(tester);
+    await _pushRoute(
+      tester,
+      AppRoutes.flashcards,
+      arguments: MockData.subjects.first,
+    );
+
+    expect(find.text('What is photosynthesis?'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'The process plants use to convert light energy into glucose.',
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(find.byTooltip('Show answer').first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining(
+        'The process plants use to convert light energy into glucose.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Hide answer').first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining(
+        'The process plants use to convert light energy into glucose.',
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('weak filter shows only weak cards', (tester) async {
+    await _pumpFlashcardsHarness(tester, [
+      _weakReviewCard,
+      _knownReviewCard,
+      _dueReviewCard,
+    ]);
+
+    await tester.tap(find.text('Weak'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Weak front'), findsOneWidget);
+    expect(find.text('Known front'), findsNothing);
+    expect(find.text('Due front'), findsNothing);
+  });
+
+  testWidgets('due filter shows only due cards', (tester) async {
+    await _pumpFlashcardsHarness(tester, [
+      _weakReviewCard,
+      _knownReviewCard,
+      _dueReviewCard,
+      _futureReviewCard,
+    ]);
+
+    await tester.tap(find.text('Due'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Due front'), findsOneWidget);
+    expect(find.text('Future front'), findsNothing);
+    expect(find.text('Weak front'), findsNothing);
+  });
+
+  testWidgets('Train weak cards starts training with weak cards only', (
+    tester,
+  ) async {
+    await _pumpFlashcardsHarness(tester, [_weakReviewCard, _knownReviewCard]);
+
+    await tester.tap(find.text('Train weak cards'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Weak front'), findsOneWidget);
+    expect(find.text('Known front'), findsNothing);
+  });
+
+  testWidgets('Review due cards starts training with due cards only', (
+    tester,
+  ) async {
+    await _pumpFlashcardsHarness(tester, [_dueReviewCard, _futureReviewCard]);
+
+    await tester.tap(find.text('Review due cards'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Due front'), findsOneWidget);
+    expect(find.text('Future front'), findsNothing);
+  });
+
   testWidgets('training shows front first and Show answer reveals back', (
     tester,
   ) async {
@@ -492,6 +588,36 @@ void main() {
 
     expect(find.text('1 / 2'), findsOneWidget);
     expect(find.text('Training front 1'), findsOneWidget);
+  });
+
+  testWidgets('completion can review missed cards again', (tester) async {
+    await _enterDashboard(tester);
+    await _pushRoute(
+      tester,
+      AppRoutes.flashcardTraining,
+      arguments: FlashcardTrainingArgs(
+        subject: MockData.subjects.first,
+        cards: const [_trainingCardOne, _trainingCardTwo],
+      ),
+    );
+
+    await tester.tap(find.text('Show answer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('I knew it'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show answer'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('I missed it'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review missed again'), findsOneWidget);
+
+    await tester.tap(find.text('Review missed again'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Training front 2'), findsOneWidget);
+    expect(find.text('Training front 1'), findsNothing);
   });
 
   testWidgets('supabase training sends review result to repository', (
@@ -1854,6 +1980,76 @@ const _cloudTrainingCard = Flashcard(
   topic: 'Cloud topic',
   isFavorite: false,
 );
+
+const _reviewSubject = Subject(
+  id: 'review-subject',
+  name: 'Review Biology',
+  description: 'Review cards',
+  colorValue: 0xFF16A34A,
+);
+
+const _weakReviewCard = Flashcard(
+  id: 'weak-review-card',
+  subjectId: 'review-subject',
+  front: 'Weak front',
+  back: 'Weak back',
+  topic: 'Weak topic',
+  isFavorite: false,
+  correctCount: 1,
+  incorrectCount: 3,
+);
+
+const _knownReviewCard = Flashcard(
+  id: 'known-review-card',
+  subjectId: 'review-subject',
+  front: 'Known front',
+  back: 'Known back',
+  topic: 'Known topic',
+  isFavorite: false,
+  correctCount: 3,
+  incorrectCount: 1,
+);
+
+final _dueReviewCard = Flashcard(
+  id: 'due-review-card',
+  subjectId: 'review-subject',
+  front: 'Due front',
+  back: 'Due back',
+  topic: 'Due topic',
+  isFavorite: false,
+  nextReviewAt: DateTime.utc(2020),
+);
+
+final _futureReviewCard = Flashcard(
+  id: 'future-review-card',
+  subjectId: 'review-subject',
+  front: 'Future front',
+  back: 'Future back',
+  topic: 'Future topic',
+  isFavorite: false,
+  nextReviewAt: DateTime.utc(2099),
+);
+
+Future<void> _pumpFlashcardsHarness(
+  WidgetTester tester,
+  List<Flashcard> cards,
+) async {
+  await tester.pumpWidget(
+    StudyBuddyApp(
+      config: _supabaseConfig(),
+      authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+      profileRepository: _RecordingProfileRepository(),
+      subjectRepository: _RecordingSubjectRepository(
+        loadedSubjects: const [_reviewSubject],
+      ),
+      materialRepository: _RecordingMaterialRepository(),
+      favoriteRepository: _RecordingFavoriteRepository(),
+      flashcardRepository: _RecordingFlashcardRepository(loadedCards: cards),
+    ),
+  );
+  await tester.pumpAndSettle();
+  await _pushRoute(tester, AppRoutes.flashcards, arguments: _reviewSubject);
+}
 
 Future<void> _enterDashboard(WidgetTester tester) async {
   await tester.pumpWidget(const StudyBuddyApp());

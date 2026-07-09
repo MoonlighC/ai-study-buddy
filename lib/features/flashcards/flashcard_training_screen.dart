@@ -30,17 +30,23 @@ class FlashcardTrainingScreen extends StatefulWidget {
 }
 
 class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
+  late List<Flashcard> _sessionCards;
+  final List<Flashcard> _missedCards = [];
   int _currentIndex = 0;
   int _knownCount = 0;
   int _missedCount = 0;
   bool _isShowingAnswer = false;
   bool _isComplete = false;
 
-  List<Flashcard> get _cards => widget.args.cards;
+  @override
+  void initState() {
+    super.initState();
+    _sessionCards = List<Flashcard>.of(widget.args.cards);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final cards = _cards;
+    final cards = _sessionCards;
     if (cards.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: const Text('Flashcard training')),
@@ -53,7 +59,9 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
         reviewedCount: cards.length,
         knownCount: _knownCount,
         missedCount: _missedCount,
+        canReviewMissedAgain: _missedCards.isNotEmpty,
         onReviewAgain: _reviewAgain,
+        onReviewMissedAgain: _reviewMissedAgain,
         onReturn: () => Navigator.pop(context),
       );
     }
@@ -133,8 +141,9 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
         _knownCount += 1;
       } else {
         _missedCount += 1;
+        _missedCards.add(card);
       }
-      if (_currentIndex == _cards.length - 1) {
+      if (_currentIndex == _sessionCards.length - 1) {
         _isComplete = true;
       } else {
         _currentIndex += 1;
@@ -145,9 +154,23 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
 
   void _reviewAgain() {
     setState(() {
+      _sessionCards = List<Flashcard>.of(widget.args.cards);
       _currentIndex = 0;
       _knownCount = 0;
       _missedCount = 0;
+      _missedCards.clear();
+      _isShowingAnswer = false;
+      _isComplete = false;
+    });
+  }
+
+  void _reviewMissedAgain() {
+    setState(() {
+      _sessionCards = List<Flashcard>.of(_missedCards);
+      _currentIndex = 0;
+      _knownCount = 0;
+      _missedCount = 0;
+      _missedCards.clear();
       _isShowingAnswer = false;
       _isComplete = false;
     });
@@ -189,14 +212,18 @@ class _CompletionView extends StatelessWidget {
     required this.reviewedCount,
     required this.knownCount,
     required this.missedCount,
+    required this.canReviewMissedAgain,
     required this.onReviewAgain,
+    required this.onReviewMissedAgain,
     required this.onReturn,
   });
 
   final int reviewedCount;
   final int knownCount;
   final int missedCount;
+  final bool canReviewMissedAgain;
   final VoidCallback onReviewAgain;
+  final VoidCallback onReviewMissedAgain;
   final VoidCallback onReturn;
 
   @override
@@ -233,7 +260,15 @@ class _CompletionView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
+          if (canReviewMissedAgain) ...[
+            FilledButton.icon(
+              onPressed: onReviewMissedAgain,
+              icon: const Icon(Icons.refresh_outlined),
+              label: const Text('Review missed again'),
+            ),
+            const SizedBox(height: 8),
+          ],
+          OutlinedButton.icon(
             onPressed: onReviewAgain,
             icon: const Icon(Icons.replay_outlined),
             label: const Text('Review again'),
