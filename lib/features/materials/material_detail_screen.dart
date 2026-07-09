@@ -11,6 +11,8 @@ import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
 import '../auth/auth_controller.dart';
 import '../flashcards/flashcard_training_screen.dart';
+import '../quizzes/quiz_repository.dart';
+import '../quizzes/quiz_taking_screen.dart';
 
 class MaterialDetailScreen extends StatelessWidget {
   const MaterialDetailScreen({required this.material, super.key});
@@ -69,6 +71,11 @@ class MaterialDetailScreen extends StatelessWidget {
             title: 'Flashcards',
             child: _FlashcardsSection(material: freshMaterial),
           ),
+          SectionCard(
+            icon: Icons.quiz_outlined,
+            title: 'Quiz',
+            child: _QuizSection(material: freshMaterial),
+          ),
           FilledButton.icon(
             onPressed: () {
               AppStateScope.read(context).createStudySession(
@@ -104,6 +111,94 @@ class MaterialDetailScreen extends StatelessWidget {
     final message =
         AppStateScope.read(context).favoriteSyncErrorMessage ??
         'Could not update favorite.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _QuizSection extends StatelessWidget {
+  const _QuizSection({required this.material});
+
+  final StudyMaterial material;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
+    final quiz = state.latestQuizForMaterial(material.id);
+    final hasQuiz = quiz != null && quiz.questions.isNotEmpty;
+    final canGenerate = material.kind == MaterialKind.pastedText;
+    final hasEnoughText = state.canGenerateQuizForMaterial(material);
+    final isSupabaseMode =
+        state.config.effectiveBackendMode == AppBackendMode.supabase;
+    final buttonLabel = isSupabaseMode ? 'Generate quiz' : 'Generate mock quiz';
+    final subject = state.subjectFor(material.subjectId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (hasQuiz)
+          Text('${quiz.questionCount} questions ready.')
+        else
+          const Text('No quiz yet.'),
+        if (canGenerate && !hasEnoughText) ...[
+          const SizedBox(height: 8),
+          Text(
+            quizTooShortMessage,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (state.quizGenerationErrorMessage != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            state.quizGenerationErrorMessage!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        const SizedBox(height: 12),
+        if (hasQuiz)
+          FilledButton.icon(
+            onPressed: () => Navigator.pushNamed(
+              context,
+              AppRoutes.quizTaking,
+              arguments: QuizTakingArgs(
+                subject: subject,
+                material: material,
+                quiz: quiz,
+              ),
+            ),
+            icon: const Icon(Icons.quiz_outlined),
+            label: const Text('Take quiz'),
+          )
+        else if (canGenerate)
+          FilledButton.icon(
+            onPressed: state.isGeneratingQuiz || !hasEnoughText
+                ? null
+                : () => _generateQuiz(context, material.id),
+            icon: state.isGeneratingQuiz
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome_outlined),
+            label: Text(
+              state.isGeneratingQuiz ? 'Generating quiz' : buttonLabel,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _generateQuiz(BuildContext context, String materialId) async {
+    final generated = await AppStateScope.read(
+      context,
+    ).generateQuizFor(AuthScope.read(context).user, materialId);
+    if (!context.mounted || generated) {
+      return;
+    }
+    final message =
+        AppStateScope.read(context).quizGenerationErrorMessage ??
+        'Could not generate quiz. Try again.';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));

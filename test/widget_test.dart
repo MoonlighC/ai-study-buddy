@@ -5,6 +5,8 @@ import 'package:ai_study_buddy/app/app_config.dart';
 import 'package:ai_study_buddy/app/routes.dart';
 import 'package:ai_study_buddy/core/models/flashcard.dart';
 import 'package:ai_study_buddy/core/models/material.dart';
+import 'package:ai_study_buddy/core/models/quiz.dart';
+import 'package:ai_study_buddy/core/models/quiz_question.dart';
 import 'package:ai_study_buddy/core/models/subject.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
@@ -13,6 +15,7 @@ import 'package:ai_study_buddy/features/flashcards/flashcard_repository.dart';
 import 'package:ai_study_buddy/features/flashcards/flashcard_training_screen.dart';
 import 'package:ai_study_buddy/features/generation/summary_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
+import 'package:ai_study_buddy/features/quizzes/quiz_repository.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
 import 'package:flutter/material.dart';
@@ -400,6 +403,88 @@ void main() {
       find.text('Could not generate flashcards. Try again.'),
       findsWidgets,
     );
+  });
+
+  testWidgets('material detail generates and renders mock quiz', (
+    tester,
+  ) async {
+    final quizRepository = _RecordingQuizRepository(generatedQuiz: _widgetQuiz);
+    await tester.pumpWidget(StudyBuddyApp(quizRepository: quizRepository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+
+    await _scrollTo(tester, find.text('Generate mock quiz'));
+    await tester.tap(find.text('Generate mock quiz'));
+    await tester.pumpAndSettle();
+
+    expect(quizRepository.generatedMaterialIds, ['bio-lecture-1']);
+    expect(find.text('1 questions ready.'), findsOneWidget);
+    expect(find.text('Take quiz'), findsOneWidget);
+  });
+
+  testWidgets('material detail quiz failure shows safe error', (tester) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        quizRepository: _RecordingQuizRepository(throwOnGenerate: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+
+    await _scrollTo(tester, find.text('Generate mock quiz'));
+    await tester.tap(find.text('Generate mock quiz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not generate quiz. Try again.'), findsWidgets);
+  });
+
+  testWidgets('take quiz opens generated questions and shows score', (
+    tester,
+  ) async {
+    final quizRepository = _RecordingQuizRepository(generatedQuiz: _widgetQuiz);
+    await tester.pumpWidget(StudyBuddyApp(quizRepository: quizRepository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.materialDetail,
+      arguments: MockData.materials.first,
+    );
+
+    await _scrollTo(tester, find.text('Generate mock quiz'));
+    await tester.tap(find.text('Generate mock quiz'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Take quiz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Widget quiz'), findsOneWidget);
+    expect(find.text('What does this material explain?'), findsOneWidget);
+
+    await tester.tap(find.text('The core idea'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('The core idea - correct'), findsOneWidget);
+    expect(find.text('Correct'), findsOneWidget);
+    expect(find.text('The material supports the core idea.'), findsOneWidget);
+
+    await tester.tap(find.text('Show score'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 1 correct'), findsOneWidget);
+    expect(find.text('Score: 100%'), findsOneWidget);
   });
 
   testWidgets('flashcards screen shows Start training when cards exist', (
@@ -2085,6 +2170,32 @@ const _supabaseUser = AuthUser(
   displayName: 'Supabase Student',
 );
 
+const _widgetQuiz = Quiz(
+  id: 'widget-quiz',
+  subjectId: 'biology',
+  materialId: 'bio-lecture-1',
+  title: 'Widget quiz',
+  questions: [
+    QuizQuestion(
+      id: 'widget-question-1',
+      quizId: 'widget-quiz',
+      subjectId: 'biology',
+      materialId: 'bio-lecture-1',
+      question: 'What does this material explain?',
+      options: [
+        'The core idea',
+        'An unrelated upload',
+        'A service key',
+        'A password reset',
+      ],
+      correctAnswer: 'The core idea',
+      explanation: 'The material supports the core idea.',
+      topic: 'Core idea',
+      difficulty: StudyDifficulty.easy,
+    ),
+  ],
+);
+
 const _trainingCardOne = Flashcard(
   id: 'bio-card-1',
   subjectId: 'biology',
@@ -2569,6 +2680,40 @@ class _RecordingFlashcardRepository implements FlashcardRepository {
         Duration(days: result == FlashcardReviewResult.known ? 3 : 1),
       ),
     );
+  }
+}
+
+class _RecordingQuizRepository implements QuizRepository {
+  _RecordingQuizRepository({this.generatedQuiz, this.throwOnGenerate = false});
+
+  final Quiz? generatedQuiz;
+  final bool throwOnGenerate;
+  final List<AuthUser> loadedUsers = [];
+  final List<AuthUser> generatedUsers = [];
+  final List<String> generatedMaterialIds = [];
+  final List<int> generatedCounts = [];
+
+  @override
+  Future<List<Quiz>> loadQuizzes(AuthUser user) async {
+    loadedUsers.add(user);
+    return const [];
+  }
+
+  @override
+  Future<Quiz> generateQuiz({
+    required AuthUser user,
+    required String materialId,
+    required int count,
+  }) async {
+    generatedUsers.add(user);
+    generatedMaterialIds.add(materialId);
+    generatedCounts.add(count);
+    if (throwOnGenerate) {
+      throw const QuizRepositoryException(
+        'Could not generate quiz. Try again.',
+      );
+    }
+    return generatedQuiz ?? _widgetQuiz;
   }
 }
 

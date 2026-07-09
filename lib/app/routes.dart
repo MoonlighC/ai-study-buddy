@@ -13,6 +13,7 @@ import '../features/generation/generated_outputs_screen.dart';
 import '../features/materials/add_material_screen.dart';
 import '../features/materials/material_detail_screen.dart';
 import '../features/progress/progress_screen.dart';
+import '../features/quizzes/quiz_taking_screen.dart';
 import '../features/search/search_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/study_modes/after_lecture_screen.dart';
@@ -36,6 +37,7 @@ class AppRoutes {
   static const generatedOutputs = '/generation/outputs';
   static const flashcards = '/flashcards';
   static const flashcardTraining = '/flashcards/training';
+  static const quizTaking = '/quizzes/take';
   static const favorites = '/favorites';
   static const afterLecture = '/study/after-lecture';
   static const examPrep = '/study/exam-prep';
@@ -72,6 +74,9 @@ class AppRoutes {
         routeSettings.arguments is FlashcardTrainingArgs
         ? routeSettings.arguments! as FlashcardTrainingArgs
         : const FlashcardTrainingArgs(subject: _fallbackSubject, cards: []);
+    final quizTakingArgs = routeSettings.arguments is QuizTakingArgs
+        ? routeSettings.arguments! as QuizTakingArgs
+        : null;
 
     final widget = switch (routeSettings.name) {
       authGate => const AuthGateScreen(),
@@ -85,6 +90,10 @@ class AppRoutes {
       generatedOutputs => GeneratedOutputsScreen(subject: subject),
       flashcards => FlashcardsScreen(subject: subject),
       flashcardTraining => FlashcardTrainingScreen(args: flashcardTrainingArgs),
+      quizTaking =>
+        quizTakingArgs == null
+            ? const LoginScreen()
+            : QuizTakingScreen(args: quizTakingArgs),
       favorites => const FavoritesScreen(),
       afterLecture => const AfterLectureScreen(),
       examPrep => const ExamPrepScreen(),

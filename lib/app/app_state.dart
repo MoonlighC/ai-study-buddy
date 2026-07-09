@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_config.dart';
 import '../core/models/flashcard.dart';
 import '../core/models/material.dart';
+import '../core/models/quiz.dart';
 import '../core/models/quiz_question.dart';
 import '../core/models/study_session.dart';
 import '../core/models/study_time_block.dart';
@@ -13,6 +14,7 @@ import '../features/favorites/favorite_repository.dart';
 import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
+import '../features/quizzes/quiz_repository.dart';
 import '../features/subjects/subject_repository.dart';
 import '../mock/mock_ai_service.dart';
 import '../mock/mock_data.dart';
@@ -25,6 +27,7 @@ class AppState extends ChangeNotifier {
     FavoriteRepository? favoriteRepository,
     FlashcardRepository? flashcardRepository,
     SummaryRepository? summaryRepository,
+    QuizRepository? quizRepository,
   }) : config = config ?? AppConfig.fromValues(),
        subjectRepository =
            subjectRepository ??
@@ -56,6 +59,12 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptySummaryRepository()
                : const MockSummaryRepository()),
+       quizRepository =
+           quizRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyQuizRepository()
+               : MockQuizRepository()),
        _subjects =
            (config ?? AppConfig.fromValues()).effectiveBackendMode ==
                AppBackendMode.supabase
@@ -89,9 +98,11 @@ class AppState extends ChangeNotifier {
   final FavoriteRepository favoriteRepository;
   final FlashcardRepository flashcardRepository;
   final SummaryRepository summaryRepository;
+  final QuizRepository quizRepository;
   List<Subject> _subjects;
   List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
+  List<Quiz> _quizzes = [];
   final Set<String> _favoriteMaterialIds = {};
   final List<StudySession> _studySessions = [];
   int _materialCounter = 0;
@@ -118,6 +129,10 @@ class AppState extends ChangeNotifier {
   String? _flashcardReviewErrorMessage;
   bool _isGeneratingSummary = false;
   String? _summaryGenerationErrorMessage;
+  bool _isLoadingQuizzes = false;
+  bool _isGeneratingQuiz = false;
+  String? _quizSyncErrorMessage;
+  String? _quizGenerationErrorMessage;
 
   List<Subject> get subjects => List.unmodifiable(_subjects);
 
@@ -163,6 +178,16 @@ class AppState extends ChangeNotifier {
   bool get isGeneratingSummary => _isGeneratingSummary;
 
   String? get summaryGenerationErrorMessage => _summaryGenerationErrorMessage;
+
+  List<Quiz> get quizzes => List.unmodifiable(_quizzes);
+
+  bool get isLoadingQuizzes => _isLoadingQuizzes;
+
+  bool get isGeneratingQuiz => _isGeneratingQuiz;
+
+  String? get quizSyncErrorMessage => _quizSyncErrorMessage;
+
+  String? get quizGenerationErrorMessage => _quizGenerationErrorMessage;
 
   AppLanguagePreference get languagePreference => _languagePreference;
 
@@ -212,6 +237,7 @@ class AppState extends ChangeNotifier {
     await loadMaterialsFor(user);
     await loadMaterialFavoritesFor(user);
     await loadFlashcardsFor(user);
+    await loadQuizzesFor(user);
   }
 
   Future<void> loadMaterialsFor(AuthUser? user) async {
@@ -430,6 +456,41 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<void> loadQuizzesFor(AuthUser? user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      _quizzes = await quizRepository.loadQuizzes(
+        user ??
+            const AuthUser(
+              id: 'mock-user',
+              email: 'alex.student@example.test',
+              displayName: 'Alex Student',
+            ),
+      );
+      _quizSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    if (user == null) {
+      _quizzes = [];
+      _quizSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingQuizzes = true;
+    _quizSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      _quizzes = await quizRepository.loadQuizzes(user);
+    } catch (error) {
+      _quizSyncErrorMessage = _quizMessageFor(error);
+    } finally {
+      _isLoadingQuizzes = false;
+      notifyListeners();
+    }
+  }
+
   void clearSyncedSubjectsForSignOut() {
     if (config.effectiveBackendMode != AppBackendMode.supabase) {
       return;
@@ -443,6 +504,8 @@ class AppState extends ChangeNotifier {
     _flashcardSyncErrorMessage = null;
     _flashcardGenerationErrorMessage = null;
     _flashcardReviewErrorMessage = null;
+    _quizSyncErrorMessage = null;
+    _quizGenerationErrorMessage = null;
     _isLoadingSubjects = false;
     _isCreatingSubject = false;
     _isLoadingMaterials = false;
@@ -453,8 +516,11 @@ class AppState extends ChangeNotifier {
     _isLoadingFlashcards = false;
     _isGeneratingFlashcards = false;
     _isSavingFlashcardReview = false;
+    _isLoadingQuizzes = false;
+    _isGeneratingQuiz = false;
     _favoriteMaterialIds.clear();
     _flashcards = [];
+    _quizzes = [];
     notifyListeners();
   }
 
@@ -525,6 +591,19 @@ class AppState extends ChangeNotifier {
         .toList();
   }
 
+  List<Quiz> quizzesForMaterial(String materialId) {
+    return _quizzes.where((quiz) => quiz.materialId == materialId).toList();
+  }
+
+  Quiz? latestQuizForMaterial(String materialId) {
+    for (final quiz in _quizzes) {
+      if (quiz.materialId == materialId) {
+        return quiz;
+      }
+    }
+    return null;
+  }
+
   List<Flashcard> get favoriteFlashcards {
     if (config.effectiveBackendMode == AppBackendMode.supabase) {
       return const [];
@@ -542,6 +621,11 @@ class AppState extends ChangeNotifier {
   }
 
   bool canGenerateFlashcardsForMaterial(StudyMaterial material) {
+    return material.kind == MaterialKind.pastedText &&
+        material.content.trim().length >= summaryMinimumContentCharacters;
+  }
+
+  bool canGenerateQuizForMaterial(StudyMaterial material) {
     return material.kind == MaterialKind.pastedText &&
         material.content.trim().length >= summaryMinimumContentCharacters;
   }
@@ -851,6 +935,90 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> generateQuizFor(
+    AuthUser? user,
+    String materialId, {
+    int count = 5,
+  }) async {
+    final material = materialById(materialId);
+    if (material == null) {
+      _quizGenerationErrorMessage = 'Material unavailable.';
+      notifyListeners();
+      return false;
+    }
+    if (material.kind != MaterialKind.pastedText) {
+      _quizGenerationErrorMessage = 'Could not generate quiz. Try again.';
+      notifyListeners();
+      return false;
+    }
+    if (!canGenerateQuizForMaterial(material)) {
+      _quizGenerationErrorMessage = quizTooShortMessage;
+      notifyListeners();
+      return false;
+    }
+
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _quizGenerationErrorMessage = 'Could not generate quiz. Try again.';
+      notifyListeners();
+      return false;
+    }
+
+    final requestedCount = count.clamp(1, 20).toInt();
+    _isGeneratingQuiz = true;
+    _quizGenerationErrorMessage = null;
+    notifyListeners();
+    try {
+      final generatedQuiz = await quizRepository.generateQuiz(
+        user: effectiveUser,
+        materialId: material.id,
+        count: requestedCount,
+      );
+      final normalizedQuiz = Quiz(
+        id: generatedQuiz.id,
+        subjectId: material.subjectId,
+        materialId: material.id,
+        title: generatedQuiz.title,
+        questions: [
+          for (final question in generatedQuiz.questions)
+            QuizQuestion(
+              id: question.id,
+              quizId: question.quizId ?? generatedQuiz.id,
+              subjectId: material.subjectId,
+              materialId: material.id,
+              question: question.question,
+              options: question.options,
+              correctAnswer: question.correctAnswer,
+              explanation: question.explanation,
+              topic: question.topic,
+              difficulty: question.difficulty,
+            ),
+        ],
+      );
+      _quizzes = [
+        normalizedQuiz,
+        for (final quiz in _quizzes)
+          if (quiz.id != normalizedQuiz.id &&
+              quiz.materialId != normalizedQuiz.materialId)
+            quiz,
+      ];
+      return true;
+    } catch (error) {
+      _quizGenerationErrorMessage = _quizGenerateMessageFor(error);
+      return false;
+    } finally {
+      _isGeneratingQuiz = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> reviewFlashcardFor(
     AuthUser? user,
     String cardId,
@@ -1051,6 +1219,20 @@ class AppState extends ChangeNotifier {
       return error.message;
     }
     return 'Could not save review progress.';
+  }
+
+  String _quizMessageFor(Object error) {
+    if (error is QuizRepositoryException) {
+      return error.message;
+    }
+    return 'Could not sync quizzes.';
+  }
+
+  String _quizGenerateMessageFor(Object error) {
+    if (error is QuizRepositoryException) {
+      return error.message;
+    }
+    return 'Could not generate quiz. Try again.';
   }
 
   String _summaryFor(

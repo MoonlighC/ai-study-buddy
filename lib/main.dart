@@ -8,6 +8,7 @@ import 'features/favorites/supabase_favorite_repository.dart';
 import 'features/flashcards/flashcard_repository.dart';
 import 'features/generation/summary_repository.dart';
 import 'features/materials/supabase_material_repository.dart';
+import 'features/quizzes/quiz_repository.dart';
 import 'features/subjects/supabase_subject_repository.dart';
 
 Future<void> main() async {
@@ -38,6 +39,9 @@ Future<void> main() async {
       summaryRepository: supabaseClient == null
           ? null
           : SupabaseSummaryRepository(supabaseClient),
+      quizRepository: supabaseClient == null
+          ? null
+          : SupabaseQuizRepository(supabaseClient),
     ),
   );
 }

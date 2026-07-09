@@ -53,3 +53,21 @@ supabase functions deploy generate-flashcards
 ```
 
 After signing in, create a pasted-text material, open the material detail screen, and use `Generate flashcards`.
+
+## Phase 8D: Generate Quiz Edge Function
+
+The `generate-quiz` Edge Function creates multiple-choice quiz questions for synced pasted-text materials. It requires an authenticated Supabase user and reuses the existing `OPENAI_API_KEY` function secret.
+
+Set the function secret with a placeholder value replaced locally:
+
+```powershell
+supabase secrets set OPENAI_API_KEY=<your-openai-api-key>
+```
+
+Deploy the function:
+
+```powershell
+supabase functions deploy generate-quiz
+```
+
+After signing in, create a pasted-text material, open the material detail screen, and use `Generate quiz`.

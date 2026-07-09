@@ -10,6 +10,7 @@ import '../features/favorites/favorite_repository.dart';
 import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
+import '../features/quizzes/quiz_repository.dart';
 import '../features/subjects/subject_repository.dart';
 
 class StudyBuddyApp extends StatefulWidget {
@@ -22,6 +23,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.favoriteRepository,
     this.flashcardRepository,
     this.summaryRepository,
+    this.quizRepository,
     super.key,
   });
 
@@ -33,6 +35,7 @@ class StudyBuddyApp extends StatefulWidget {
   final FavoriteRepository? favoriteRepository;
   final FlashcardRepository? flashcardRepository;
   final SummaryRepository? summaryRepository;
+  final QuizRepository? quizRepository;
 
   @override
   State<StudyBuddyApp> createState() => _StudyBuddyAppState();
@@ -47,6 +50,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
     favoriteRepository: widget.favoriteRepository,
     flashcardRepository: widget.flashcardRepository,
     summaryRepository: widget.summaryRepository,
+    quizRepository: widget.quizRepository,
   );
   late final AuthController authController = AuthController(
     authRepository: widget.authRepository ?? MockAuthRepository(),
