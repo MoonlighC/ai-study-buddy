@@ -488,6 +488,7 @@ void main() {
     expect(find.text('1 / 1 correct'), findsOneWidget);
     expect(find.text('Score: 100%'), findsOneWidget);
     expect(find.text('No missed topics. Great work!'), findsOneWidget);
+    expect(find.text('Review missed questions'), findsNothing);
     expect(quizRepository.savedAttempts, hasLength(1));
     expect(quizRepository.savedAttempts.single.correctQuestions, 1);
 
@@ -495,6 +496,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('What does this material explain?'), findsOneWidget);
     expect(find.text('The core idea - correct'), findsNothing);
+
+    await tester.tap(find.text('The core idea'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show score'));
+    await tester.pumpAndSettle();
+    expect(quizRepository.savedAttempts, hasLength(2));
   });
 
   testWidgets('missed quiz topic is shown and save failure is non-blocking', (
@@ -526,6 +533,148 @@ void main() {
     expect(find.text('Could not save this quiz attempt.'), findsWidgets);
     expect(find.text('Review material'), findsOneWidget);
     expect(find.text('Retry quiz'), findsOneWidget);
+    expect(find.text('Review missed questions'), findsOneWidget);
+
+    final originalAttempt = quizRepository.savedAttempts.single;
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Review missed questions'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Missed question review'), findsOneWidget);
+    expect(find.text('What does this material explain?'), findsOneWidget);
+    await tester.tap(find.text('The core idea'));
+    await tester.pumpAndSettle();
+    expect(find.text('Correct'), findsOneWidget);
+    expect(find.text('The material supports the core idea.'), findsOneWidget);
+    await _scrollTo(tester, find.text('Finish review'));
+    await tester.tap(find.text('Finish review'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Score: 0%'), findsOneWidget);
+    expect(quizRepository.savedAttempts, hasLength(1));
+    expect(quizRepository.savedAttempts.single, same(originalAttempt));
+  });
+
+  testWidgets(
+    'randomized attempt saves displayed order and reviews only misses',
+    (tester) async {
+      final repository = _RecordingQuizRepository();
+      await tester.pumpWidget(StudyBuddyApp(quizRepository: repository));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue with email'));
+      await tester.pumpAndSettle();
+      await _pushRoute(
+        tester,
+        AppRoutes.quizTaking,
+        arguments: QuizTakingArgs(
+          subject: MockData.subjects.first,
+          material: MockData.materials.first,
+          quiz: _multiQuestionWidgetQuiz,
+          randomSeed: 23,
+        ),
+      );
+
+      final displayedQuestionIds = <String>[];
+      final missedQuestionTexts = <String>[];
+      for (var index = 0; index < 3; index += 1) {
+        final question = _visibleQuestion(tester, _multiQuestionWidgetQuiz);
+        displayedQuestionIds.add(question.id);
+        final answer = question.id == 'multi-question-2'
+            ? question.correctAnswer
+            : question.options.firstWhere(
+                (option) => option != question.correctAnswer,
+              );
+        if (answer != question.correctAnswer) {
+          missedQuestionTexts.add(question.question);
+        }
+        await tester.tap(find.text(answer));
+        await tester.pumpAndSettle();
+        if (answer != question.correctAnswer) {
+          expect(
+            find.text('Correct answer: ${question.correctAnswer}'),
+            findsOneWidget,
+          );
+        }
+        await tester.tap(find.text(index == 2 ? 'Show score' : 'Next'));
+        await tester.pumpAndSettle();
+      }
+
+      expect(
+        repository.savedAttempts.single.answers.map(
+          (answer) => answer.questionId,
+        ),
+        displayedQuestionIds,
+      );
+      expect(find.text('Review missed questions'), findsOneWidget);
+      await tester.tap(find.text('Review missed questions'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Question two'), findsNothing);
+      for (var index = 0; index < missedQuestionTexts.length; index += 1) {
+        expect(find.text(missedQuestionTexts[index]), findsOneWidget);
+        final question = _multiQuestionWidgetQuiz.questions.firstWhere(
+          (item) => item.question == missedQuestionTexts[index],
+        );
+        await tester.tap(find.text(question.correctAnswer));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.text(
+            index == missedQuestionTexts.length - 1 ? 'Finish review' : 'Next',
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      expect(repository.savedAttempts, hasLength(1));
+      expect(find.text('Result'), findsOneWidget);
+    },
+  );
+
+  testWidgets('attempt order survives rebuild and retry reinitializes it', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      StudyBuddyApp(quizRepository: _RecordingQuizRepository()),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.quizTaking,
+      arguments: QuizTakingArgs(
+        subject: MockData.subjects.first,
+        material: MockData.materials.first,
+        quiz: _multiQuestionWidgetQuiz,
+        randomSeed: 41,
+      ),
+    );
+
+    final firstQuestion = _visibleQuestion(tester, _multiQuestionWidgetQuiz);
+    final firstSignature = [firstQuestion.id, ..._visibleOptionLabels(tester)];
+    await tester.binding.setSurfaceSize(const Size(780, 650));
+    await tester.pumpAndSettle();
+
+    expect([
+      _visibleQuestion(tester, _multiQuestionWidgetQuiz).id,
+      ..._visibleOptionLabels(tester),
+    ], firstSignature);
+
+    for (var index = 0; index < 3; index += 1) {
+      final question = _visibleQuestion(tester, _multiQuestionWidgetQuiz);
+      await tester.tap(find.text(question.correctAnswer));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(index == 2 ? 'Show score' : 'Next'));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.text('Retry quiz'));
+    await tester.pumpAndSettle();
+
+    final retryQuestion = _visibleQuestion(tester, _multiQuestionWidgetQuiz);
+    final retrySignature = [retryQuestion.id, ..._visibleOptionLabels(tester)];
+    expect(retrySignature, isNot(firstSignature));
   });
 
   testWidgets('review material returns from completed quiz', (tester) async {
@@ -2292,6 +2441,63 @@ const _widgetQuiz = Quiz(
     ),
   ],
 );
+
+const _multiQuestionWidgetQuiz = Quiz(
+  id: 'multi-widget-quiz',
+  subjectId: 'biology',
+  materialId: 'bio-lecture-1',
+  title: 'Multi-question widget quiz',
+  questions: [
+    QuizQuestion(
+      id: 'multi-question-1',
+      subjectId: 'biology',
+      question: 'Question one',
+      options: ['Correct one', 'Wrong one'],
+      correctAnswer: 'Correct one',
+      explanation: 'Explanation one.',
+      topic: 'Topic one',
+      difficulty: StudyDifficulty.easy,
+    ),
+    QuizQuestion(
+      id: 'multi-question-2',
+      subjectId: 'biology',
+      question: 'Question two',
+      options: ['Correct two', 'Wrong two'],
+      correctAnswer: 'Correct two',
+      explanation: 'Explanation two.',
+      topic: 'Topic two',
+      difficulty: StudyDifficulty.medium,
+    ),
+    QuizQuestion(
+      id: 'multi-question-3',
+      subjectId: 'biology',
+      question: 'Question three',
+      options: ['Correct three', 'Wrong three'],
+      correctAnswer: 'Correct three',
+      explanation: 'Explanation three.',
+      topic: 'Topic three',
+      difficulty: StudyDifficulty.exam,
+    ),
+  ],
+);
+
+QuizQuestion _visibleQuestion(WidgetTester tester, Quiz quiz) {
+  return quiz.questions.singleWhere(
+    (question) => find.text(question.question).evaluate().isNotEmpty,
+  );
+}
+
+List<String> _visibleOptionLabels(WidgetTester tester) {
+  return tester
+      .widgetList<Text>(
+        find.descendant(
+          of: find.byType(OutlinedButton),
+          matching: find.byType(Text),
+        ),
+      )
+      .map((text) => text.data!)
+      .toList();
+}
 
 final _progressAttempt = QuizAttempt(
   id: 'progress-attempt',

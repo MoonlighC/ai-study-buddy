@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
@@ -9,17 +11,20 @@ import '../../core/models/subject.dart';
 import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/section_card.dart';
 import '../auth/auth_controller.dart';
+import 'quiz_attempt_presentation.dart';
 
 class QuizTakingArgs {
   const QuizTakingArgs({
     required this.subject,
     required this.material,
     required this.quiz,
+    this.randomSeed,
   });
 
   final Subject subject;
   final StudyMaterial material;
   final Quiz quiz;
+  final int? randomSeed;
 }
 
 class QuizTakingScreen extends StatefulWidget {
@@ -33,15 +38,26 @@ class QuizTakingScreen extends StatefulWidget {
 
 class _QuizTakingScreenState extends State<QuizTakingScreen> {
   final Map<String, String> _answers = {};
+  final Map<String, String> _reviewAnswers = {};
+  late final Random _random;
+  late QuizAttemptPresentation _attempt;
   int _index = 0;
-  bool _isComplete = false;
+  int _reviewIndex = 0;
+  _QuizMode _mode = _QuizMode.taking;
   bool _isCompleting = false;
-  DateTime _startedAt = DateTime.now().toUtc();
+  late DateTime _startedAt;
+
+  @override
+  void initState() {
+    super.initState();
+    _random = Random(widget.args.randomSeed);
+    _initializeAttempt();
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
-    final questions = widget.args.quiz.questions;
+    final questions = _attempt.quiz.questions;
     if (questions.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: const Text('Quiz')),
@@ -71,7 +87,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
-          if (_isComplete)
+          if (_mode == _QuizMode.result)
             _ResultView(
               questions: questions,
               answers: _answers,
@@ -80,8 +96,31 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
               warningMessage: state.quizAttemptSyncErrorMessage,
               onReviewMaterial: () => Navigator.pop(context),
               onRetry: _retry,
+              onReviewMissed: _missedQuestions.isEmpty
+                  ? null
+                  : _startMissedReview,
             )
-          else
+          else if (_mode == _QuizMode.missedReview) ...[
+            Text(
+              'Missed question review',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            _QuestionView(
+              question: _missedQuestions[_reviewIndex],
+              questionNumber: _reviewIndex + 1,
+              totalQuestions: _missedQuestions.length,
+              selectedAnswer: _reviewAnswers[_missedQuestions[_reviewIndex].id],
+              onAnswer: (answer) => setState(
+                () =>
+                    _reviewAnswers[_missedQuestions[_reviewIndex].id] = answer,
+              ),
+              onNext: _reviewAnswers[_missedQuestions[_reviewIndex].id] == null
+                  ? null
+                  : _advanceMissedReview,
+              finalActionLabel: 'Finish review',
+            ),
+          ] else
             _QuestionView(
               question: questions[_index],
               questionNumber: _index + 1,
@@ -107,12 +146,12 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
   Future<void> _completeQuiz() async {
     if (_isCompleting) return;
     setState(() {
-      _isComplete = true;
+      _mode = _QuizMode.result;
       _isCompleting = true;
     });
     final saved = await AppStateScope.read(context).completeQuizFor(
       AuthScope.read(context).user,
-      quiz: widget.args.quiz,
+      quiz: _attempt.quiz,
       selectedAnswers: _answers,
       startedAt: _startedAt,
     );
@@ -130,14 +169,44 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
 
   void _retry() {
     setState(() {
-      _answers.clear();
-      _index = 0;
-      _isComplete = false;
-      _isCompleting = false;
-      _startedAt = DateTime.now().toUtc();
+      _initializeAttempt();
     });
   }
+
+  List<QuizQuestion> get _missedQuestions => [
+    for (final question in _attempt.quiz.questions)
+      if (_answers[question.id] != question.correctAnswer) question,
+  ];
+
+  void _initializeAttempt() {
+    _attempt = QuizAttemptPresentation.randomized(widget.args.quiz, _random);
+    _answers.clear();
+    _reviewAnswers.clear();
+    _index = 0;
+    _reviewIndex = 0;
+    _mode = _QuizMode.taking;
+    _isCompleting = false;
+    _startedAt = DateTime.now().toUtc();
+  }
+
+  void _startMissedReview() {
+    setState(() {
+      _reviewAnswers.clear();
+      _reviewIndex = 0;
+      _mode = _QuizMode.missedReview;
+    });
+  }
+
+  void _advanceMissedReview() {
+    if (_reviewIndex == _missedQuestions.length - 1) {
+      setState(() => _mode = _QuizMode.result);
+      return;
+    }
+    setState(() => _reviewIndex += 1);
+  }
 }
+
+enum _QuizMode { taking, result, missedReview }
 
 class _QuestionView extends StatelessWidget {
   const _QuestionView({
@@ -147,6 +216,7 @@ class _QuestionView extends StatelessWidget {
     required this.selectedAnswer,
     required this.onAnswer,
     required this.onNext,
+    this.finalActionLabel = 'Show score',
   });
 
   final QuizQuestion question;
@@ -155,6 +225,7 @@ class _QuestionView extends StatelessWidget {
   final String? selectedAnswer;
   final ValueChanged<String> onAnswer;
   final VoidCallback? onNext;
+  final String finalActionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -186,15 +257,27 @@ class _QuestionView extends StatelessWidget {
             ),
           if (hasAnswer) ...[
             const SizedBox(height: 4),
-            Text(isCorrect ? 'Correct' : 'Incorrect'),
-            const SizedBox(height: 4),
-            Text(question.explanation),
+            Semantics(
+              liveRegion: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(isCorrect ? 'Correct' : 'Incorrect'),
+                  if (!isCorrect) ...[
+                    const SizedBox(height: 4),
+                    Text('Correct answer: ${question.correctAnswer}'),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(question.explanation),
+                ],
+              ),
+            ),
           ],
           const SizedBox(height: 12),
           FilledButton(
             onPressed: onNext,
             child: Text(
-              questionNumber == totalQuestions ? 'Show score' : 'Next',
+              questionNumber == totalQuestions ? finalActionLabel : 'Next',
             ),
           ),
         ],
@@ -225,6 +308,7 @@ class _ResultView extends StatelessWidget {
     required this.warningMessage,
     required this.onReviewMaterial,
     required this.onRetry,
+    required this.onReviewMissed,
   });
 
   final List<QuizQuestion> questions;
@@ -234,6 +318,7 @@ class _ResultView extends StatelessWidget {
   final String? warningMessage;
   final VoidCallback onReviewMaterial;
   final VoidCallback onRetry;
+  final VoidCallback? onReviewMissed;
 
   @override
   Widget build(BuildContext context) {
@@ -289,6 +374,14 @@ class _ResultView extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
+          if (onReviewMissed != null) ...[
+            FilledButton.icon(
+              onPressed: onReviewMissed,
+              icon: const Icon(Icons.rate_review_outlined),
+              label: const Text('Review missed questions'),
+            ),
+            const SizedBox(height: 8),
+          ],
           FilledButton.icon(
             onPressed: onReviewMaterial,
             icon: const Icon(Icons.menu_book_outlined),

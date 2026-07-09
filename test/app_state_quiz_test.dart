@@ -207,6 +207,42 @@ void main() {
       expect(repository.savedAttempts.single.weakTopicsSnapshot, isEmpty);
     });
 
+    test(
+      'completion scores strings and preserves presented question order',
+      () async {
+        final repository = _FakeQuizRepository();
+        final state = AppState(quizRepository: repository);
+        final presentedQuiz = Quiz(
+          id: _attemptQuiz.id,
+          subjectId: _attemptQuiz.subjectId,
+          materialId: _attemptQuiz.materialId,
+          title: _attemptQuiz.title,
+          questions: _attemptQuiz.questions.reversed.toList(),
+        );
+
+        await state.completeQuizFor(
+          null,
+          quiz: presentedQuiz,
+          selectedAnswers: const {
+            'attempt-question-1': 'Correct',
+            'attempt-question-2': 'Wrong',
+            'attempt-question-3': 'Wrong',
+          },
+          startedAt: DateTime.utc(2026, 7, 10, 10),
+        );
+
+        final attempt = repository.savedAttempts.single;
+        expect(attempt.answers.map((answer) => answer.questionId), [
+          'attempt-question-3',
+          'attempt-question-2',
+          'attempt-question-1',
+        ]);
+        expect(attempt.answers.last.selectedAnswer, 'Correct');
+        expect(attempt.answers.last.isCorrect, isTrue);
+        expect(attempt.correctQuestions, 1);
+      },
+    );
+
     test('unauthenticated supabase completion fails safely', () async {
       final repository = _FakeQuizRepository();
       final state = AppState(
