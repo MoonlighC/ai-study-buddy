@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
+import '../flashcards/flashcards_screen.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
 
@@ -49,7 +50,7 @@ class GeneratedOutputsScreen extends StatelessWidget {
                   onPressed: () => Navigator.pushNamed(
                     context,
                     AppRoutes.flashcards,
-                    arguments: subject,
+                    arguments: FlashcardsRouteArgs(subject: subject),
                   ),
                   icon: const Icon(Icons.play_arrow_outlined),
                   label: const Text('Open flashcards'),

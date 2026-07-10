@@ -30,12 +30,17 @@ void main() {
   });
 
   test('AI functions accept only manual text or ready uploaded PDF', () async {
-    for (final path in [
-      'supabase/functions/generate-summary/index.ts',
-      'supabase/functions/generate-flashcards/index.ts',
-      'supabase/functions/generate-quiz/index.ts',
+    for (final paths in [
+      ['supabase/functions/generate-summary/index.ts'],
+      [
+        'supabase/functions/generate-flashcards/index.ts',
+        'supabase/functions/generate-flashcards/handler.ts',
+      ],
+      ['supabase/functions/generate-quiz/index.ts'],
     ]) {
-      final source = await File(path).readAsString();
+      final source = (await Future.wait(
+        paths.map((path) => File(path).readAsString()),
+      )).join('\n');
       expect(source, contains('material.kind === "pasted_text"'));
       expect(source, contains('material.source_kind === "manual"'));
       expect(source, contains('material.kind === "pdf"'));
@@ -51,6 +56,22 @@ void main() {
     expect(summary, contains('updatedMaterials.length !== 1'));
     expect(summary, isNot(contains('processing_status: "processing"')));
     expect(summary, isNot(contains('processing_status: "failed"')));
+    expect(summary, isNot(contains('.update({ content_text')));
+  });
+
+  test('PDF summaries use expanded source-aware instructions', () async {
+    final source = await File(
+      'supabase/functions/generate-summary/summary_prompt.ts',
+    ).readAsString();
+
+    expect(source, contains('conciseSummaryOutputTokens = 220'));
+    expect(source, contains('pdfStudySummaryOutputTokens = 1_400'));
+    expect(source, contains('4 to 6 sentences'));
+    expect(source, contains('roughly 400 to 700 words'));
+    expect(source, contains('Important formulas or relationships'));
+    expect(source, contains('Do not reconstruct unreadable formulas'));
+    expect(source, contains('Preserve the language of the material'));
+    expect(source, contains('supplied portion of the PDF text'));
   });
 
   test('quiz attempt RPC is the only authenticated mutation path', () async {

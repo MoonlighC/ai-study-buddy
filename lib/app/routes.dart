@@ -69,6 +69,9 @@ class AppRoutes {
     final subject = routeSettings.arguments is Subject
         ? routeSettings.arguments! as Subject
         : _fallbackSubject;
+    final flashcardsArgs = routeSettings.arguments is FlashcardsRouteArgs
+        ? routeSettings.arguments! as FlashcardsRouteArgs
+        : FlashcardsRouteArgs(subject: subject);
     final material = routeSettings.arguments is StudyMaterial
         ? routeSettings.arguments! as StudyMaterial
         : _fallbackMaterial;
@@ -94,7 +97,7 @@ class AppRoutes {
       materialDetail => MaterialDetailScreen(material: material),
       uploadMaterial => UploadMaterialScreen(args: uploadMaterialArgs),
       generatedOutputs => GeneratedOutputsScreen(subject: subject),
-      flashcards => FlashcardsScreen(subject: subject),
+      flashcards => FlashcardsScreen(args: flashcardsArgs),
       flashcardTraining => FlashcardTrainingScreen(args: flashcardTrainingArgs),
       quizTaking =>
         quizTakingArgs == null

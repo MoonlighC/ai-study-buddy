@@ -1,6 +1,7 @@
 import {
   capUtf16,
   createExtractPdfTextHandler,
+  extractionVersion,
   ExtractPdfDependencies,
   MaterialRow,
   noSelectableTextMessage,
@@ -90,6 +91,48 @@ Deno.test("normalization and UTF-16 cap are deterministic", () => {
   const capped = capUtf16(`1234😀x`, 5);
   assertEquals(capped.text, "1234");
   assertEquals(capped.truncated, true);
+});
+
+Deno.test("pdf-text-v2 removes only confident repeated edge lines", () => {
+  assertEquals(extractionVersion, "pdf-text-v2");
+  const normalized = normalizePdfPages([
+    "Course header\nFirst body\nShared footer",
+    "Course header\nSecond body\nShared footer",
+    "Course header\nThird body\nShared footer",
+    "Different header\nFourth body\nShared footer",
+  ]);
+  assertEquals(
+    normalized,
+    "First body\n\nSecond body\n\nThird body\n\nDifferent header\nFourth body",
+  );
+});
+
+Deno.test("cleanup preserves repeated body text and low-confidence edges", () => {
+  const normalized = normalizePdfPages([
+    "Occasional header\nRepeated body\nFormula x = 2",
+    "Different header\nRepeated body\nFormula y = 3",
+    "Occasional header\nRepeated body\nFormula z = 4",
+  ]);
+  assertEquals(
+    normalized,
+    "Occasional header\nRepeated body\nFormula x = 2\n\n" +
+      "Different header\nRepeated body\nFormula y = 3\n\n" +
+      "Occasional header\nRepeated body\nFormula z = 4",
+  );
+});
+
+Deno.test("cleanup removes clear edge page numbers but preserves numeric content", () => {
+  const normalized = normalizePdfPages([
+    "Page 1\nValue 42\nFormula 1 + 1 = 2",
+    "2 / 3\nValue 2\nFormula 2 + 2 = 4",
+    "Value 3\nFormula 3 + 3 = 6\nPage 3",
+  ]);
+  assertEquals(
+    normalized,
+    "Value 42\nFormula 1 + 1 = 2\n\n" +
+      "Value 2\nFormula 2 + 2 = 4\n\n" +
+      "Value 3\nFormula 3 + 3 = 6",
+  );
 });
 
 function request(body: Record<string, unknown>) {

@@ -7,10 +7,24 @@ import '../../core/models/flashcard.dart';
 import '../../core/models/subject.dart';
 import 'flashcard_training_screen.dart';
 
-class FlashcardsScreen extends StatefulWidget {
-  const FlashcardsScreen({required this.subject, super.key});
+class FlashcardsRouteArgs {
+  const FlashcardsRouteArgs({
+    required this.subject,
+    this.materialId,
+    this.materialTitle,
+  });
 
   final Subject subject;
+  final String? materialId;
+  final String? materialTitle;
+
+  bool get isMaterialScoped => materialId != null;
+}
+
+class FlashcardsScreen extends StatefulWidget {
+  const FlashcardsScreen({required this.args, super.key});
+
+  final FlashcardsRouteArgs args;
 
   @override
   State<FlashcardsScreen> createState() => _FlashcardsScreenState();
@@ -24,7 +38,10 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
-    final allCards = state.flashcardsFor(widget.subject.id);
+    final materialId = widget.args.materialId;
+    final allCards = materialId == null
+        ? state.flashcardsFor(widget.args.subject.id)
+        : state.flashcardsForMaterial(materialId);
     final now = DateTime.now().toUtc();
     final weakCards = allCards.where(_isWeak).toList();
     final dueCards = allCards.where((card) => _isDue(card, now)).toList();
@@ -47,15 +64,19 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
 
+    final title = widget.args.isMaterialScoped
+        ? 'Flashcards — ${widget.args.materialTitle ?? 'Material'}'
+        : 'All flashcards — ${widget.args.subject.name}';
+    final helper = widget.args.isMaterialScoped
+        ? '${_cardsLabel(allCards.length)} from this material'
+        : _subjectScopeHelper(allCards);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Flashcards')),
+      appBar: AppBar(title: Text(title)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(
-            widget.subject.name,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          Text(helper, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 12),
           const Text('Study session size'),
           const SizedBox(height: 8),
@@ -206,7 +227,10 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
       context,
       AppRoutes.flashcardTraining,
       arguments: FlashcardTrainingArgs(
-        subject: widget.subject,
+        subject: widget.args.subject,
+        material: widget.args.materialId == null
+            ? null
+            : AppStateScope.read(context).materialById(widget.args.materialId!),
         cards: cards.take(selectedSessionSize).toList(),
       ),
     );
@@ -278,6 +302,24 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
 
   String _cardsLabel(int count) {
     return count == 1 ? '1 card' : '$count cards';
+  }
+
+  String _subjectScopeHelper(List<Flashcard> cards) {
+    final materialIds = cards
+        .map((card) => card.materialId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final hasLegacyCards = cards.any(
+      (card) => card.materialId == null || card.materialId!.isEmpty,
+    );
+    if (materialIds.isEmpty || hasLegacyCards) {
+      return '${_cardsLabel(cards.length)} across this subject';
+    }
+    final materialsLabel = materialIds.length == 1
+        ? '1 material'
+        : '${materialIds.length} materials';
+    return '${_cardsLabel(cards.length)} from $materialsLabel';
   }
 }
 

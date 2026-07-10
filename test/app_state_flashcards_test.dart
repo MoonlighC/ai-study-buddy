@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:ai_study_buddy/app/app_config.dart';
 import 'package:ai_study_buddy/app/app_state.dart';
 import 'package:ai_study_buddy/core/models/flashcard.dart';
@@ -35,9 +37,10 @@ void main() {
       final generated = await state.generateFlashcardsFor(
         null,
         'bio-lecture-1',
+        requestedNewCount: 5,
       );
 
-      expect(generated, isTrue);
+      expect(generated, isNotNull);
       expect(state.flashcardsForMaterial('bio-lecture-1'), hasLength(1));
       expect(
         state.flashcardsForMaterial('bio-lecture-1').single.subjectId,
@@ -61,9 +64,13 @@ void main() {
         );
         await state.loadMaterialsFor(user);
 
-        final generated = await state.generateFlashcardsFor(user, 'material-1');
+        final generated = await state.generateFlashcardsFor(
+          user,
+          'material-1',
+          requestedNewCount: 5,
+        );
 
-        expect(generated, isTrue);
+        expect(generated, isNotNull);
         expect(flashcardRepository.generatedUsers, [user]);
         expect(flashcardRepository.generatedMaterialIds, ['material-1']);
         expect(flashcardRepository.generatedCounts, [5]);
@@ -84,9 +91,13 @@ void main() {
       );
       await state.loadMaterialsFor(user);
 
-      final generated = await state.generateFlashcardsFor(null, 'material-1');
+      final generated = await state.generateFlashcardsFor(
+        null,
+        'material-1',
+        requestedNewCount: 5,
+      );
 
-      expect(generated, isFalse);
+      expect(generated, isNull);
       expect(flashcardRepository.generatedMaterialIds, isEmpty);
       expect(
         state.flashcardGenerationErrorMessage,
@@ -108,9 +119,13 @@ void main() {
       await state.loadMaterialsFor(user);
       await state.loadFlashcardsFor(user);
 
-      final generated = await state.generateFlashcardsFor(user, 'material-1');
+      final generated = await state.generateFlashcardsFor(
+        user,
+        'material-1',
+        requestedNewCount: 5,
+      );
 
-      expect(generated, isFalse);
+      expect(generated, isNull);
       expect(state.flashcardsForMaterial('material-1').single.id, 'existing-1');
       expect(
         state.flashcardGenerationErrorMessage,
@@ -130,7 +145,11 @@ void main() {
         flashcardRepository: flashcardRepository,
       );
       await state.loadMaterialsFor(user);
-      await state.generateFlashcardsFor(user, 'material-1');
+      await state.generateFlashcardsFor(
+        user,
+        'material-1',
+        requestedNewCount: 5,
+      );
 
       final reloadedState = AppState(
         config: _supabaseConfig(),
@@ -147,6 +166,81 @@ void main() {
         reloadedState.flashcardsForMaterial('material-1').single.front,
         'Generated front',
       );
+    });
+
+    test(
+      'invalid requested new counts are rejected without repository call',
+      () async {
+        final repository = _FakeFlashcardRepository();
+        final state = AppState(flashcardRepository: repository);
+
+        expect(
+          await state.generateFlashcardsFor(
+            null,
+            'bio-lecture-1',
+            requestedNewCount: 0,
+          ),
+          isNull,
+        );
+        expect(
+          await state.generateFlashcardsFor(
+            null,
+            'bio-lecture-1',
+            requestedNewCount: 31,
+          ),
+          isNull,
+        );
+        expect(repository.generatedCounts, isEmpty);
+      },
+    );
+
+    test('concurrent generation invokes repository once', () async {
+      final completer = Completer<FlashcardGenerationResult>();
+      final repository = _FakeFlashcardRepository(
+        pendingGeneration: completer.future,
+      );
+      final state = AppState(flashcardRepository: repository);
+
+      final first = state.generateFlashcardsFor(
+        null,
+        'bio-lecture-1',
+        requestedNewCount: 5,
+      );
+      final duplicate = await state.generateFlashcardsFor(
+        null,
+        'bio-lecture-1',
+        requestedNewCount: 5,
+      );
+
+      expect(duplicate, isNull);
+      expect(repository.generatedCounts, [5]);
+      completer.complete(
+        const FlashcardGenerationResult(
+          requestedCount: 5,
+          createdCount: 0,
+          newFlashcards: [],
+        ),
+      );
+      expect(await first, isNotNull);
+    });
+
+    test('mock generation creates non-colliding cards across calls', () async {
+      final state = AppState();
+
+      await state.generateFlashcardsFor(
+        null,
+        'bio-lecture-1',
+        requestedNewCount: 1,
+      );
+      await state.generateFlashcardsFor(
+        null,
+        'bio-lecture-1',
+        requestedNewCount: 1,
+      );
+
+      final cards = state.flashcardsForMaterial('bio-lecture-1');
+      expect(cards, hasLength(2));
+      expect(cards.map((card) => card.id).toSet(), hasLength(2));
     });
 
     test('supabase mode starts without mock flashcards', () {
@@ -273,6 +367,7 @@ class _FakeFlashcardRepository implements FlashcardRepository {
     List<Flashcard> generatedCards = const [],
     this.throwOnGenerate = false,
     this.throwOnReview = false,
+    this.pendingGeneration,
   }) : _cards = List<Flashcard>.of(loadedCards),
        _generatedCards = List<Flashcard>.of(generatedCards);
 
@@ -280,6 +375,7 @@ class _FakeFlashcardRepository implements FlashcardRepository {
   final List<Flashcard> _generatedCards;
   final bool throwOnGenerate;
   final bool throwOnReview;
+  final Future<FlashcardGenerationResult>? pendingGeneration;
   final List<AuthUser> loadedUsers = [];
   final List<AuthUser> generatedUsers = [];
   final List<String> generatedMaterialIds = [];
@@ -295,23 +391,27 @@ class _FakeFlashcardRepository implements FlashcardRepository {
   }
 
   @override
-  Future<List<Flashcard>> generateFlashcards({
+  Future<FlashcardGenerationResult> generateFlashcards({
     required AuthUser user,
     required String materialId,
-    required int count,
+    required int requestedNewCount,
   }) async {
     generatedUsers.add(user);
     generatedMaterialIds.add(materialId);
-    generatedCounts.add(count);
+    generatedCounts.add(requestedNewCount);
     if (throwOnGenerate) {
       throw const FlashcardRepositoryException(
         'Could not generate flashcards. Try again.',
       );
     }
-    _cards
-      ..removeWhere((card) => card.materialId == materialId)
-      ..addAll(_generatedCards);
-    return List<Flashcard>.of(_generatedCards);
+    final pending = pendingGeneration;
+    if (pending != null) return pending;
+    _cards.addAll(_generatedCards);
+    return FlashcardGenerationResult(
+      requestedCount: requestedNewCount,
+      createdCount: _generatedCards.length,
+      newFlashcards: List<Flashcard>.of(_generatedCards),
+    );
   }
 
   @override

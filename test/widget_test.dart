@@ -327,22 +327,23 @@ void main() {
     await _scrollTo(tester, find.text('Flashcards'));
 
     expect(find.text('Flashcards'), findsOneWidget);
-    expect(find.text('Generate mock flashcards'), findsOneWidget);
+    expect(find.text('Generate flashcards'), findsOneWidget);
 
-    await _scrollTo(tester, find.text('Generate mock flashcards'));
-    await _scrollTo(tester, find.text('Generate mock flashcards'));
-    await tester.tap(find.text('Generate mock flashcards'));
+    await _scrollTo(tester, find.text('Generate flashcards'));
+    await tester.tap(find.text('Generate flashcards'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
     await tester.pumpAndSettle();
 
     expect(flashcardRepository.generatedMaterialIds, ['bio-lecture-1']);
-    expect(find.text('1 flashcards ready.'), findsOneWidget);
-    expect(find.text('Review flashcards'), findsOneWidget);
+    expect(find.text('1 flashcard ready.'), findsOneWidget);
+    expect(find.text('Review these flashcards'), findsOneWidget);
   });
 
   testWidgets('material detail shows loading while flashcards generate', (
     tester,
   ) async {
-    final completer = Completer<List<Flashcard>>();
+    final completer = Completer<FlashcardGenerationResult>();
     final flashcardRepository = _RecordingFlashcardRepository(
       pendingCards: completer.future,
     );
@@ -358,26 +359,34 @@ void main() {
       arguments: MockData.materials.first,
     );
 
-    await _scrollTo(tester, find.text('Generate mock flashcards'));
-    await tester.tap(find.text('Generate mock flashcards'));
+    await _scrollTo(tester, find.text('Generate flashcards'));
+    await tester.tap(find.text('Generate flashcards'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
     await tester.pump();
 
     expect(find.text('Generating flashcards'), findsOneWidget);
 
-    completer.complete(const [
-      Flashcard(
-        id: 'generated-card-1',
-        subjectId: 'biology',
-        materialId: 'bio-lecture-1',
-        front: 'Generated card front',
-        back: 'Generated card back',
-        topic: 'Generated topic',
-        isFavorite: false,
+    completer.complete(
+      const FlashcardGenerationResult(
+        requestedCount: 5,
+        createdCount: 1,
+        newFlashcards: [
+          Flashcard(
+            id: 'generated-card-1',
+            subjectId: 'biology',
+            materialId: 'bio-lecture-1',
+            front: 'Generated card front',
+            back: 'Generated card back',
+            topic: 'Generated topic',
+            isFavorite: false,
+          ),
+        ],
       ),
-    ]);
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('1 flashcards ready.'), findsOneWidget);
+    expect(find.text('1 flashcard ready.'), findsOneWidget);
   });
 
   testWidgets('material detail flashcard failure shows safe error', (
@@ -399,8 +408,10 @@ void main() {
       arguments: MockData.materials.first,
     );
 
-    await _scrollTo(tester, find.text('Generate mock flashcards'));
-    await tester.tap(find.text('Generate mock flashcards'));
+    await _scrollTo(tester, find.text('Generate flashcards'));
+    await tester.tap(find.text('Generate flashcards'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
     await tester.pumpAndSettle();
 
     expect(
@@ -3006,7 +3017,7 @@ class _RecordingFlashcardRepository implements FlashcardRepository {
 
   final List<Flashcard> loadedCards;
   final List<Flashcard> generatedCards;
-  final Future<List<Flashcard>>? pendingCards;
+  final Future<FlashcardGenerationResult>? pendingCards;
   final bool throwOnGenerate;
   final bool throwOnReview;
   final List<AuthUser> loadedUsers = [];
@@ -3024,14 +3035,14 @@ class _RecordingFlashcardRepository implements FlashcardRepository {
   }
 
   @override
-  Future<List<Flashcard>> generateFlashcards({
+  Future<FlashcardGenerationResult> generateFlashcards({
     required AuthUser user,
     required String materialId,
-    required int count,
+    required int requestedNewCount,
   }) async {
     generatedUsers.add(user);
     generatedMaterialIds.add(materialId);
-    generatedCounts.add(count);
+    generatedCounts.add(requestedNewCount);
     if (throwOnGenerate) {
       throw const FlashcardRepositoryException(
         'Could not generate flashcards. Try again.',
@@ -3041,7 +3052,11 @@ class _RecordingFlashcardRepository implements FlashcardRepository {
     if (pending != null) {
       return pending;
     }
-    return List<Flashcard>.of(generatedCards);
+    return FlashcardGenerationResult(
+      requestedCount: requestedNewCount,
+      createdCount: generatedCards.length,
+      newFlashcards: List<Flashcard>.of(generatedCards),
+    );
   }
 
   @override

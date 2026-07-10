@@ -11,6 +11,8 @@ import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
 import '../auth/auth_controller.dart';
 import '../flashcards/flashcard_training_screen.dart';
+import '../flashcards/flashcard_generation_dialog.dart';
+import '../flashcards/flashcards_screen.dart';
 import '../quizzes/quiz_repository.dart';
 import '../quizzes/quiz_taking_screen.dart';
 import 'material_upload.dart';
@@ -77,34 +79,34 @@ class MaterialDetailScreen extends StatelessWidget {
                     'Size: ${freshMaterial.fileSizeBytes == null ? 'Unknown' : formatFileSize(freshMaterial.fileSizeBytes!)}',
                   ),
                   Text('MIME: ${freshMaterial.mimeType ?? 'Unknown'}'),
-                  Text(
-                    'Status: ${freshMaterial.processingStatus == MaterialProcessingStatus.pending ? 'Uploaded · Waiting for processing' : freshMaterial.processingStatus.name}',
-                  ),
+                  Text('Status: ${_materialStatus(freshMaterial)}'),
                 ],
               ),
             ),
             if (freshMaterial.kind == MaterialKind.pdf)
               _PdfExtractionSection(material: freshMaterial),
           ],
-          if (!isUpload || isReadyPdf) ...[
+          if (!isUpload)
             SectionCard(
               icon: Icons.article_outlined,
-              title: isReadyPdf ? 'Extracted text' : 'Pasted text',
-              child: isReadyPdf
-                  ? _ExtractedTextPreview(material: freshMaterial)
-                  : Text(freshMaterial.content),
+              title: 'Pasted text',
+              child: Text(freshMaterial.content),
             ),
+          if (!isUpload || isReadyPdf) ...[
             SectionCard(
+              key: const Key('summary-section'),
               icon: Icons.auto_awesome_outlined,
               title: 'Summary',
               child: _SummarySection(material: freshMaterial),
             ),
             SectionCard(
+              key: const Key('flashcards-section'),
               icon: Icons.style_outlined,
               title: 'Flashcards',
               child: _FlashcardsSection(material: freshMaterial),
             ),
             SectionCard(
+              key: const Key('quiz-section'),
               icon: Icons.quiz_outlined,
               title: 'Quiz',
               child: _QuizSection(material: freshMaterial),
@@ -148,6 +150,20 @@ class MaterialDetailScreen extends StatelessWidget {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _materialStatus(StudyMaterial material) {
+    if (material.kind == MaterialKind.pdf &&
+        material.processingStatus == MaterialProcessingStatus.ready &&
+        material.hasContentText) {
+      final pageCount = material.pdfExtraction?.pageCount;
+      return pageCount == null
+          ? 'Text extracted'
+          : 'Text extracted · $pageCount ${pageCount == 1 ? 'page' : 'pages'}';
+    }
+    return material.processingStatus == MaterialProcessingStatus.pending
+        ? 'Uploaded · Waiting for processing'
+        : material.processingStatus.name;
   }
 }
 
@@ -210,35 +226,6 @@ class _PdfExtractionSection extends StatelessWidget {
     await AppStateScope.read(
       context,
     ).extractPdfTextFor(AuthScope.read(context).user, materialId);
-  }
-}
-
-class _ExtractedTextPreview extends StatelessWidget {
-  const _ExtractedTextPreview({required this.material});
-  final StudyMaterial material;
-
-  @override
-  Widget build(BuildContext context) {
-    const previewLimit = 2000;
-    final text = material.content;
-    final preview = text.length <= previewLimit
-        ? text
-        : text.substring(0, previewLimit);
-    final metadata = material.pdfExtraction;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (metadata?.pageCount != null) Text('Pages: ${metadata!.pageCount}'),
-        if (metadata?.characterCount != null)
-          Text('Characters: ${metadata!.characterCount}'),
-        if (metadata?.truncated == true)
-          const Text('Text was truncated to the safe storage limit.'),
-        if (text.length > previewLimit)
-          const Text('Previewing the first 2,000 characters.'),
-        const SizedBox(height: 8),
-        Text(preview),
-      ],
-    );
   }
 }
 
@@ -342,18 +329,17 @@ class _FlashcardsSection extends StatelessWidget {
     final hasCards = cards.isNotEmpty;
     final canGenerate = state.isAiSourceReadyForMaterial(material);
     final hasEnoughText = state.canGenerateFlashcardsForMaterial(material);
-    final isSupabaseMode =
-        state.config.effectiveBackendMode == AppBackendMode.supabase;
-    final buttonLabel = isSupabaseMode
-        ? 'Generate flashcards'
-        : 'Generate mock flashcards';
     final subject = state.subjectFor(material.subjectId);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (hasCards)
-          Text('${cards.length} flashcards ready.')
+          Text(
+            cards.length == 1
+                ? '1 flashcard ready.'
+                : '${cards.length} flashcards ready.',
+          )
         else
           const Text('No flashcards yet.'),
         if (canGenerate && !hasEnoughText) ...[
@@ -371,7 +357,7 @@ class _FlashcardsSection extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 12),
-        if (hasCards)
+        if (hasCards) ...[
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -393,18 +379,28 @@ class _FlashcardsSection extends StatelessWidget {
                 onPressed: () => Navigator.pushNamed(
                   context,
                   AppRoutes.flashcards,
-                  arguments: subject,
+                  arguments: FlashcardsRouteArgs(
+                    subject: subject,
+                    materialId: material.id,
+                    materialTitle: material.title,
+                  ),
                 ),
                 icon: const Icon(Icons.style_outlined),
-                label: const Text('Review flashcards'),
+                label: const Text('Review these flashcards'),
               ),
             ],
-          )
-        else if (canGenerate)
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (canGenerate)
           FilledButton.icon(
             onPressed: state.isGeneratingFlashcards || !hasEnoughText
                 ? null
-                : () => _generateFlashcards(context, material.id),
+                : () => _chooseAndGenerateFlashcards(
+                    context,
+                    material.id,
+                    cards.length,
+                  ),
             icon: state.isGeneratingFlashcards
                 ? const SizedBox.square(
                     dimension: 18,
@@ -414,21 +410,42 @@ class _FlashcardsSection extends StatelessWidget {
             label: Text(
               state.isGeneratingFlashcards
                   ? 'Generating flashcards'
-                  : buttonLabel,
+                  : 'Generate flashcards',
             ),
           ),
       ],
     );
   }
 
-  Future<void> _generateFlashcards(
+  Future<void> _chooseAndGenerateFlashcards(
     BuildContext context,
     String materialId,
+    int currentCardCount,
   ) async {
-    final generated = await AppStateScope.read(
+    final requestedNewCount = await showFlashcardGenerationDialog(
       context,
-    ).generateFlashcardsFor(AuthScope.read(context).user, materialId);
-    if (!context.mounted || generated) {
+      currentCardCount: currentCardCount,
+    );
+    if (!context.mounted || requestedNewCount == null) {
+      return;
+    }
+    final result = await AppStateScope.read(context).generateFlashcardsFor(
+      AuthScope.read(context).user,
+      materialId,
+      requestedNewCount: requestedNewCount,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    if (result != null) {
+      final message = switch (result.createdCount) {
+        0 => 'No new unique flashcards were generated.',
+        1 => '1 new flashcard generated.',
+        final count => '$count new flashcards generated.',
+      };
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
     final message =
@@ -440,13 +457,21 @@ class _FlashcardsSection extends StatelessWidget {
   }
 }
 
-class _SummarySection extends StatelessWidget {
+class _SummarySection extends StatefulWidget {
   const _SummarySection({required this.material});
 
   final StudyMaterial material;
 
   @override
+  State<_SummarySection> createState() => _SummarySectionState();
+}
+
+class _SummarySectionState extends State<_SummarySection> {
+  bool _isExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final material = widget.material;
     final state = AppStateScope.watch(context);
     final summary = material.summary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
@@ -463,7 +488,27 @@ class _SummarySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (hasSummary) Text(summary) else const Text('No summary yet.'),
+        if (hasSummary) ...[
+          Text(
+            summary,
+            maxLines: _shouldCollapse(summary) && !_isExpanded ? 14 : null,
+            overflow: _shouldCollapse(summary) && !_isExpanded
+                ? TextOverflow.ellipsis
+                : null,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(height: 1.45),
+          ),
+          if (_shouldCollapse(summary))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => setState(() => _isExpanded = !_isExpanded),
+                child: Text(_isExpanded ? 'Show less' : 'Show more'),
+              ),
+            ),
+        ] else
+          const Text('No summary yet.'),
         if (canGenerate && !hasEnoughText) ...[
           const SizedBox(height: 8),
           Text(
@@ -497,6 +542,11 @@ class _SummarySection extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  bool _shouldCollapse(String summary) {
+    return widget.material.kind == MaterialKind.pdf &&
+        (summary.length > 900 || '\n'.allMatches(summary).length >= 14);
   }
 
   Future<void> _generateSummary(BuildContext context, String materialId) async {

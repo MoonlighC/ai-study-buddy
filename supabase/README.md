@@ -14,7 +14,7 @@ Future Edge Functions will be the only place that can call OpenAI. Flutter shoul
 
 ## Phase 8A: Generate Summary Edge Function
 
-The `generate-summary` Edge Function summarizes synced pasted-text materials. It requires an authenticated Supabase user and reads `OPENAI_API_KEY` only from Supabase function secrets.
+The `generate-summary` Edge Function summarizes eligible synced materials. Manual pasted text keeps a concise summary; ready uploaded PDFs receive a longer structured study summary. The function currently summarizes at most the first 12,000 stored characters, so PDF summaries cover only that capped input. It requires an authenticated Supabase user and reads `OPENAI_API_KEY` only from Supabase function secrets.
 
 Set the function secret with a placeholder value replaced locally:
 
@@ -210,7 +210,7 @@ summary writes use the Supabase-provided server-only service-role environment
 credential. No new custom secret is required and no such credential belongs in
 Flutter.
 
-Manually verify a selectable-text PDF becomes `ready`, displays its preview and
-can use summary/flashcard/quiz generation. Verify an image-only/scanned PDF
+Manually verify a selectable-text PDF becomes `ready`, shows safe extraction
+status without exposing raw extracted text, and can use summary/flashcard/quiz generation. Verify an image-only/scanned PDF
 becomes `failed` with: “No selectable text was found. Scanned PDFs will be
 supported in the OCR phase.” Images must remain metadata-only and ineligible.

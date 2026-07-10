@@ -7,10 +7,10 @@ import '../../mock/mock_data.dart';
 abstract class FlashcardRepository {
   Future<List<Flashcard>> loadFlashcards(AuthUser user);
 
-  Future<List<Flashcard>> generateFlashcards({
+  Future<FlashcardGenerationResult> generateFlashcards({
     required AuthUser user,
     required String materialId,
-    required int count,
+    required int requestedNewCount,
   });
 
   Future<Flashcard> updateReviewResult({
@@ -19,6 +19,18 @@ abstract class FlashcardRepository {
     required FlashcardReviewResult result,
     required DateTime reviewedAt,
   });
+}
+
+class FlashcardGenerationResult {
+  const FlashcardGenerationResult({
+    required this.requestedCount,
+    required this.createdCount,
+    required this.newFlashcards,
+  });
+
+  final int requestedCount;
+  final int createdCount;
+  final List<Flashcard> newFlashcards;
 }
 
 enum FlashcardReviewResult { missed, known }
@@ -33,7 +45,7 @@ const flashcardsTooShortMessage =
     'Add more lecture text before generating flashcards.';
 
 class MockFlashcardRepository implements FlashcardRepository {
-  const MockFlashcardRepository();
+  final Map<String, int> _generatedCardCounts = {};
 
   @override
   Future<List<Flashcard>> loadFlashcards(AuthUser user) async {
@@ -41,26 +53,34 @@ class MockFlashcardRepository implements FlashcardRepository {
   }
 
   @override
-  Future<List<Flashcard>> generateFlashcards({
+  Future<FlashcardGenerationResult> generateFlashcards({
     required AuthUser user,
     required String materialId,
-    required int count,
+    required int requestedNewCount,
   }) async {
-    final safeCount = count.clamp(1, 20).toInt();
-    return [
-      for (var index = 0; index < safeCount; index += 1)
+    _validateRequestedCount(requestedNewCount);
+    final existingGeneratedCount = _generatedCardCounts[materialId] ?? 0;
+    final cards = [
+      for (var index = 0; index < requestedNewCount; index += 1)
         Flashcard(
-          id: 'mock-generated-$materialId-${index + 1}',
+          id: 'mock-generated-$materialId-${existingGeneratedCount + index + 1}',
           subjectId: 'biology',
           materialId: materialId,
-          front: 'Mock generated question ${index + 1}',
+          front:
+              'Mock generated question ${existingGeneratedCount + index + 1}',
           back:
-              'Mock generated answer ${index + 1} from the selected material.',
+              'Mock generated answer ${existingGeneratedCount + index + 1} from the selected material.',
           topic: 'Generated practice',
           difficulty: FlashcardDifficulty.medium,
           isFavorite: false,
         ),
     ];
+    _generatedCardCounts[materialId] = existingGeneratedCount + cards.length;
+    return FlashcardGenerationResult(
+      requestedCount: requestedNewCount,
+      createdCount: cards.length,
+      newFlashcards: cards,
+    );
   }
 
   @override
@@ -98,32 +118,58 @@ class SupabaseFlashcardRepository implements FlashcardRepository {
   }
 
   @override
-  Future<List<Flashcard>> generateFlashcards({
+  Future<FlashcardGenerationResult> generateFlashcards({
     required AuthUser user,
     required String materialId,
-    required int count,
+    required int requestedNewCount,
   }) async {
+    _validateRequestedCount(requestedNewCount);
     try {
       final response = await _client.functions.invoke(
         'generate-flashcards',
-        body: <String, Object>{'material_id': materialId, 'count': count},
+        body: <String, Object>{
+          'material_id': materialId,
+          'count': requestedNewCount,
+        },
       );
       final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw const FlashcardRepositoryException(
+          'Could not generate flashcards. Try again.',
+        );
+      }
       final error = data['error'];
       if (error == flashcardsTooShortMessage) {
         throw const FlashcardRepositoryException(flashcardsTooShortMessage);
       }
       final cards = data['flashcards'];
-      if (cards is! List) {
+      final requestedCount = data['requested_count'];
+      final createdCount = data['created_count'];
+      if (cards is! List ||
+          requestedCount is! int ||
+          createdCount is! int ||
+          requestedCount != requestedNewCount ||
+          createdCount < 0 ||
+          createdCount > requestedCount) {
         throw const FlashcardRepositoryException(
           'Could not generate flashcards. Try again.',
         );
       }
-      return cards
+      final mappedCards = cards
           .whereType<Map<String, dynamic>>()
           .map(_mapFlashcard)
           .where((card) => card.front.trim().isNotEmpty)
           .toList();
+      if (mappedCards.length != createdCount) {
+        throw const FlashcardRepositoryException(
+          'Could not generate flashcards. Try again.',
+        );
+      }
+      return FlashcardGenerationResult(
+        requestedCount: requestedCount,
+        createdCount: createdCount,
+        newFlashcards: mappedCards,
+      );
     } on FlashcardRepositoryException {
       rethrow;
     } catch (_) {
@@ -228,10 +274,10 @@ class EmptyFlashcardRepository implements FlashcardRepository {
   }
 
   @override
-  Future<List<Flashcard>> generateFlashcards({
+  Future<FlashcardGenerationResult> generateFlashcards({
     required AuthUser user,
     required String materialId,
-    required int count,
+    required int requestedNewCount,
   }) async {
     throw const FlashcardRepositoryException(
       'Flashcard generation is not configured.',
@@ -246,6 +292,14 @@ class EmptyFlashcardRepository implements FlashcardRepository {
     required DateTime reviewedAt,
   }) async {
     throw const FlashcardRepositoryException('Could not save review progress.');
+  }
+}
+
+void _validateRequestedCount(int requestedNewCount) {
+  if (requestedNewCount < 1 || requestedNewCount > 30) {
+    throw const FlashcardRepositoryException(
+      'Choose between 1 and 30 new flashcards.',
+    );
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../flashcards/flashcards_screen.dart';
 import '../../shared/widgets/app_bottom_nav.dart';
 import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/app_top_actions.dart';
@@ -109,7 +110,7 @@ class _SearchScreenState extends State<SearchScreen> {
         Navigator.pushNamed(
           context,
           AppRoutes.flashcards,
-          arguments: result.subject,
+          arguments: FlashcardsRouteArgs(subject: result.subject),
         );
     }
   }

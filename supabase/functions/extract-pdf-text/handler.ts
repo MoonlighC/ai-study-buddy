@@ -1,6 +1,6 @@
 export const maxPdfBytes = 10 * 1024 * 1024;
 export const maxStoredCharacters = 100_000;
-export const extractionVersion = "pdf-text-v1";
+export const extractionVersion = "pdf-text-v2";
 export const noSelectableTextMessage =
   "No selectable text was found. Scanned PDFs will be supported in the OCR phase.";
 
@@ -153,18 +153,84 @@ async function knownFailure(
 }
 
 export function normalizePdfPages(pages: string[]): string {
-  return pages.map((page) => page
-    .normalize("NFC")
-    .replace(/\r\n?/g, "\n")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
-    .replace(/[\t\p{Zs}]+/gu, " ")
-    .split("\n")
-    .map((line) => line.trim())
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim())
+  const normalizedPages = pages.map((page, index) => {
+    const lines = page
+      .normalize("NFC")
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+      .replace(/[\t\p{Zs}]+/gu, " ")
+      .split("\n")
+      .map((line) => line.trim());
+    return removeIsolatedPageNumber(lines, index + 1, pages.length);
+  });
+
+  removeRepeatedEdgeLine(normalizedPages, "first");
+  removeRepeatedEdgeLine(normalizedPages, "last");
+
+  return normalizedPages
+    .map((lines) => lines.join("\n").replace(/\n{3,}/g, "\n\n").trim())
     .filter(Boolean)
     .join("\n\n");
+}
+
+function removeIsolatedPageNumber(
+  lines: string[],
+  pageNumber: number,
+  pageCount: number,
+): string[] {
+  const result = [...lines];
+  const nonEmptyIndexes = result
+    .map((line, index) => line ? index : -1)
+    .filter((index) => index >= 0);
+  if (nonEmptyIndexes.length <= 1) return result;
+
+  for (const edgeIndex of [nonEmptyIndexes[0], nonEmptyIndexes.at(-1)!]) {
+    if (isPageNumberLine(result[edgeIndex], pageNumber, pageCount)) {
+      result[edgeIndex] = "";
+    }
+  }
+  return result;
+}
+
+function isPageNumberLine(line: string, pageNumber: number, pageCount: number) {
+  const escapedPage = String(pageNumber);
+  const escapedCount = String(pageCount);
+  return new RegExp(
+    `^(?:page\\s+)?${escapedPage}(?:\\s*(?:/|of)\\s*${escapedCount})?$`,
+    "i",
+  ).test(line);
+}
+
+function removeRepeatedEdgeLine(
+  pages: string[][],
+  edge: "first" | "last",
+) {
+  const eligible = pages
+    .map((lines) => {
+      const nonEmpty = lines.filter(Boolean);
+      if (nonEmpty.length <= 1) return null;
+      return edge === "first" ? nonEmpty[0] : nonEmpty.at(-1)!;
+    })
+    .filter((line): line is string => line !== null);
+  if (eligible.length < 4) return;
+
+  const counts = new Map<string, number>();
+  for (const line of eligible) counts.set(line, (counts.get(line) ?? 0) + 1);
+  const repeated = [...counts.entries()]
+    .filter(([line, count]) => line.length <= 160 && count >= 3 &&
+      count / eligible.length >= 0.75)
+    .map(([line]) => line);
+  if (repeated.length !== 1) return;
+
+  const target = repeated[0];
+  for (const lines of pages) {
+    const indexes = lines
+      .map((line, index) => line ? index : -1)
+      .filter((index) => index >= 0);
+    if (indexes.length <= 1) continue;
+    const targetIndex = edge === "first" ? indexes[0] : indexes.at(-1)!;
+    if (lines[targetIndex] === target) lines[targetIndex] = "";
+  }
 }
 
 export function capUtf16(value: string, limit: number) {

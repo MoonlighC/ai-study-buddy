@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../flashcards/flashcards_screen.dart';
 import '../../core/models/study_session.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
@@ -159,7 +160,7 @@ class StudySessionResultScreen extends StatelessWidget {
             onPressed: () => Navigator.pushNamed(
               context,
               AppRoutes.flashcards,
-              arguments: subject,
+              arguments: FlashcardsRouteArgs(subject: subject),
             ),
             icon: const Icon(Icons.style_outlined),
             label: const Text('Generate more flashcards'),

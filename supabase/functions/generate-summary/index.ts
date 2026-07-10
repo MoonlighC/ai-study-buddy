@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
+import { buildSummaryRequestBody } from "./summary_prompt.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -101,10 +103,15 @@ serve(async (request) => {
 
   try {
     // TODO: Enforce daily_usage_limits server-side before making this request.
+    const isReadyPdf = material.kind === "pdf" &&
+      material.source_kind === "upload" &&
+      material.processing_status === "ready";
+    // Phase 9B.1 intentionally summarizes only the current capped input.
     const summary = await generateSummary(
       openAiApiKey,
       model,
       contentText.slice(0, maxInputChars),
+      isReadyPdf,
     );
     logStage("summary_parsed", { material_id: materialId });
     const { data: updatedMaterials, error: updateError } = await trustedClient
@@ -138,6 +145,7 @@ async function generateSummary(
   apiKey: string,
   model: string,
   inputText: string,
+  isReadyPdf: boolean,
 ): Promise<string> {
   logStage("openai_request_started", { model });
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -146,13 +154,7 @@ async function generateSummary(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model,
-      instructions:
-        "Create a concise, study-focused summary for a student. Summarize only the provided material. Do not ask the user to provide material. Do not invent facts or use outside knowledge. Use 4 to 6 sentences. Do not add flashcards, quiz questions, or unrelated advice.",
-      input: inputText,
-      max_output_tokens: 220,
-    }),
+    body: JSON.stringify(buildSummaryRequestBody(model, inputText, isReadyPdf)),
   });
   let data: unknown;
   try {

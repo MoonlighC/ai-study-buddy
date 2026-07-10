@@ -79,7 +79,7 @@ class AppState extends ChangeNotifier {
            ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
                    AppBackendMode.supabase
                ? const EmptyFlashcardRepository()
-               : const MockFlashcardRepository()),
+               : MockFlashcardRepository()),
        summaryRepository =
            summaryRepository ??
            ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
@@ -1180,27 +1180,36 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<bool> generateFlashcardsFor(
+  Future<FlashcardGenerationResult?> generateFlashcardsFor(
     AuthUser? user,
     String materialId, {
-    int? count,
+    required int requestedNewCount,
   }) async {
+    if (_isGeneratingFlashcards) {
+      return null;
+    }
+    if (requestedNewCount < 1 || requestedNewCount > 30) {
+      _flashcardGenerationErrorMessage =
+          'Choose between 1 and 30 new flashcards.';
+      notifyListeners();
+      return null;
+    }
     final material = materialById(materialId);
     if (material == null) {
       _flashcardGenerationErrorMessage = 'Material unavailable.';
       notifyListeners();
-      return false;
+      return null;
     }
     if (!isAiSourceReadyForMaterial(material)) {
       _flashcardGenerationErrorMessage =
           'Could not generate flashcards. Try again.';
       notifyListeners();
-      return false;
+      return null;
     }
     if (!canGenerateFlashcardsForMaterial(material)) {
       _flashcardGenerationErrorMessage = flashcardsTooShortMessage;
       notifyListeners();
-      return false;
+      return null;
     }
 
     final effectiveUser =
@@ -1215,35 +1224,45 @@ class AppState extends ChangeNotifier {
       _flashcardGenerationErrorMessage =
           'Could not generate flashcards. Try again.';
       notifyListeners();
-      return false;
+      return null;
     }
 
-    final requestedCount = (count ?? _defaultFlashcardSessionSize)
-        .clamp(1, 20)
-        .toInt();
     _isGeneratingFlashcards = true;
     _flashcardGenerationErrorMessage = null;
     notifyListeners();
     try {
-      final generatedCards = await flashcardRepository.generateFlashcards(
+      final generation = await flashcardRepository.generateFlashcards(
         user: effectiveUser,
         materialId: material.id,
-        count: requestedCount,
+        requestedNewCount: requestedNewCount,
       );
-      final normalizedCards = [
-        for (final card in generatedCards)
-          card.copyWith(subjectId: material.subjectId, materialId: material.id),
+      if (generation.requestedCount != requestedNewCount ||
+          generation.createdCount != generation.newFlashcards.length ||
+          generation.createdCount < 0 ||
+          generation.createdCount > requestedNewCount) {
+        throw const FlashcardRepositoryException(
+          'Could not generate flashcards. Try again.',
+        );
+      }
+      final existingIds = _flashcards.map((card) => card.id).toSet();
+      final newIds = <String>{};
+      final newCards = [
+        for (final card in generation.newFlashcards)
+          if (!existingIds.contains(card.id) && newIds.add(card.id))
+            card.copyWith(
+              subjectId: material.subjectId,
+              materialId: material.id,
+            ),
       ];
-      final generatedIds = normalizedCards.map((card) => card.id).toSet();
-      _flashcards = [
-        ...normalizedCards,
-        for (final card in _flashcards)
-          if (!generatedIds.contains(card.id)) card,
-      ];
-      return true;
+      _flashcards = [..._flashcards, ...newCards];
+      return FlashcardGenerationResult(
+        requestedCount: generation.requestedCount,
+        createdCount: newCards.length,
+        newFlashcards: newCards,
+      );
     } catch (error) {
       _flashcardGenerationErrorMessage = _flashcardGenerateMessageFor(error);
-      return false;
+      return null;
     } finally {
       _isGeneratingFlashcards = false;
       notifyListeners();
