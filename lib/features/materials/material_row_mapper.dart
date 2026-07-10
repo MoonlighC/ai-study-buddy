@@ -35,6 +35,7 @@ StudyMaterial mapMaterialRow(Map<String, dynamic> row) {
     },
     pdfExtraction: _pdfExtraction(row['metadata']),
     imageOcr: _imageOcr(row['metadata']),
+    scannedPdfOcr: _scannedPdfOcr(row['metadata']),
   );
 }
 
@@ -68,6 +69,17 @@ ImageOcrMetadata? _imageOcr(Object? rawMetadata) {
   );
 }
 
+ScannedPdfOcrMetadata? _scannedPdfOcr(Object? rawMetadata) {
+  if (rawMetadata is! Map) return null;
+  final metadata = Map<String, dynamic>.from(rawMetadata);
+  final success = metadata['scanned_pdf_ocr'] is Map ? Map<String, dynamic>.from(metadata['scanned_pdf_ocr'] as Map) : const <String, dynamic>{};
+  final error = metadata['scanned_pdf_ocr_error'] is Map ? Map<String, dynamic>.from(metadata['scanned_pdf_ocr_error'] as Map) : const <String, dynamic>{};
+  if (success.isEmpty && error.isEmpty) return null;
+  return ScannedPdfOcrMetadata(extractedAt: DateTime.tryParse(_string(success['extracted_at']) ?? ''), processedPages: _ints(success['processed_pages']), totalPages: _int(success['total_pages']), failedPages: _ints(success['failed_pages']), partial: success['partial'] == true, truncated: success['truncated'] == true, characterCount: _int(success['character_count']), detectedLanguages: (success['detected_languages'] is List ? success['detected_languages'] as List : const []).whereType<String>().toList(growable: false), handwritingDetected: success['handwriting_detected'] == true, warningCodes: (success['warning_codes'] is List ? success['warning_codes'] as List : const []).whereType<String>().toList(growable: false), extractionVersion: _string(success['extraction_version']), provider: _string(success['provider']), model: _string(success['model']), failureCode: _string(error['code']), failureMessage: _string(error['message']));
+}
+
+List<int> _ints(Object? value) => value is List ? value.whereType<num>().map((value) => value.toInt()).toList(growable: false) : const [];
+
 PdfExtractionMetadata? _pdfExtraction(Object? rawMetadata) {
   if (rawMetadata is! Map) return null;
   final metadata = Map<String, dynamic>.from(rawMetadata);
@@ -88,6 +100,9 @@ PdfExtractionMetadata? _pdfExtraction(Object? rawMetadata) {
     extractionVersion: _string(success['extraction_version']),
     failureCode: _string(error['code']),
     failureMessage: _string(error['message']),
+    classification: _string(success['classification']),
+    usefulPages: _ints(success['useful_pages']),
+    ocrCandidatePages: _ints(success['ocr_candidate_pages']),
   );
 }
 

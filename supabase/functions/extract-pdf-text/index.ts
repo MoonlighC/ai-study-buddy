@@ -99,8 +99,9 @@ serve(async (request) => {
         .maybeSingle();
       return error || !data ? null : data as MaterialRow;
     },
-    async fail({ material, token, code, message }) {
+    async fail({ material, token, code, message, metadata: extraction }) {
       const metadata = withoutKeys(material.metadata, ["pdf_extraction_claim"]);
+      if (extraction) metadata.pdf_extraction = extraction;
       metadata.pdf_extraction_error = { code, message };
       const { data, error } = await trustedClient.from("materials")
         .update({ processing_status: "failed", metadata })

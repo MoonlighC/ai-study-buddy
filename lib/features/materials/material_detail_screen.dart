@@ -166,6 +166,13 @@ class MaterialDetailScreen extends StatelessWidget {
     if (material.kind == MaterialKind.pdf &&
         material.processingStatus == MaterialProcessingStatus.ready &&
         material.hasContentText) {
+      if (material.scannedPdfOcr?.extractedAt != null) {
+        final ocr = material.scannedPdfOcr!;
+        final total = ocr.totalPages;
+        return total == null
+            ? 'Text extracted with OCR'
+            : 'Text extracted with OCR · ${ocr.processedPages.length}/$total pages${ocr.partial ? ' · Partial' : ''}';
+      }
       final pageCount = material.pdfExtraction?.pageCount;
       return pageCount == null
           ? 'Text extracted'
@@ -276,6 +283,56 @@ class _PdfExtractionSection extends StatelessWidget {
         material.hasContentText;
     if (ready) return const SizedBox.shrink();
     final failed = material.processingStatus == MaterialProcessingStatus.failed;
+    if (state.isScannedPdfOcrAvailable(material)) {
+      final pageCount = material.pdfExtraction?.pageCount ?? 0;
+      final candidateCount =
+          material.pdfExtraction?.ocrCandidatePages.length ?? 0;
+      final scanning = state.isScanningPdf(material.id);
+      final mixed =
+          material.pdfExtraction?.classification == 'mixed_ocr_available';
+      return SectionCard(
+        icon: Icons.document_scanner_outlined,
+        title: mixed
+            ? 'Some pages need OCR'
+            : 'No usable selectable text was found',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (scanning)
+              const Text('Reading scanned PDF pages…')
+            else if (pageCount > 10)
+              const Text(
+                'This version can scan PDFs up to 10 pages. Split the PDF and upload a smaller file.',
+              )
+            else
+              Text(
+                mixed
+                    ? '$candidateCount of $pageCount pages require OCR.'
+                    : 'This PDF requires OCR before its study tools are available.',
+              ),
+            if (state.scannedPdfOcrErrorFor(material.id) case final error?) ...[
+              const SizedBox(height: 8),
+              Text(error),
+            ],
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: scanning || pageCount > 10
+                  ? null
+                  : () => _confirmOcr(context),
+              icon: scanning
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.document_scanner_outlined),
+              label: Text(
+                scanning ? 'Reading scanned PDF pages…' : 'Scan PDF with OCR',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     final error =
         state.pdfExtractionErrorFor(material.id) ??
         material.pdfExtraction?.failureMessage;
@@ -320,6 +377,37 @@ class _PdfExtractionSection extends StatelessWidget {
     await AppStateScope.read(
       context,
     ).extractPdfTextFor(AuthScope.read(context).user, materialId);
+  }
+
+  Future<void> _confirmOcr(BuildContext context) async {
+    final pageCount = material.pdfExtraction?.pageCount ?? 0;
+    final candidateCount =
+        material.pdfExtraction?.ocrCandidatePages.length ?? 0;
+    final start = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Scan PDF with OCR?'),
+        content: Text(
+          'This PDF has $pageCount pages. $candidateCount pages require OCR.\n\n'
+          'This version supports up to 10 total pages. AI OCR can take longer and uses paid processing.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Start OCR'),
+          ),
+        ],
+      ),
+    );
+    if (start == true && context.mounted) {
+      await AppStateScope.read(
+        context,
+      ).scanPdfWithOcrFor(AuthScope.read(context).user, material.id);
+    }
   }
 }
 

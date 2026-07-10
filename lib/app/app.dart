@@ -14,6 +14,7 @@ import '../features/materials/material_file_picker.dart';
 import '../features/materials/material_upload_repository.dart';
 import '../features/materials/pdf_text_extraction_repository.dart';
 import '../features/materials/image_text_extraction_repository.dart';
+import '../features/materials/scanned_pdf_ocr_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -28,6 +29,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.materialUploadRepository,
     this.pdfTextExtractionRepository,
     this.imageTextExtractionRepository,
+    this.scannedPdfOcrRepository,
     this.materialFilePicker,
     this.materialIdGenerator,
     this.favoriteRepository,
@@ -46,6 +48,7 @@ class StudyBuddyApp extends StatefulWidget {
   final MaterialUploadRepository? materialUploadRepository;
   final PdfTextExtractionRepository? pdfTextExtractionRepository;
   final ImageTextExtractionRepository? imageTextExtractionRepository;
+  final ScannedPdfOcrRepository? scannedPdfOcrRepository;
   final MaterialFilePicker? materialFilePicker;
   final String Function()? materialIdGenerator;
   final FavoriteRepository? favoriteRepository;
@@ -67,6 +70,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
     materialUploadRepository: widget.materialUploadRepository,
     pdfTextExtractionRepository: widget.pdfTextExtractionRepository,
     imageTextExtractionRepository: widget.imageTextExtractionRepository,
+    scannedPdfOcrRepository: widget.scannedPdfOcrRepository,
     materialFilePicker: widget.materialFilePicker,
     materialIdGenerator: widget.materialIdGenerator,
     favoriteRepository: widget.favoriteRepository,

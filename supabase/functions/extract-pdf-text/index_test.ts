@@ -6,6 +6,7 @@ import {
   MaterialRow,
   noSelectableTextMessage,
   normalizePdfPages,
+  classifyPdfPages,
 } from "./handler.ts";
 
 const userId = "11111111-1111-4111-8111-111111111111";
@@ -21,13 +22,15 @@ Deno.test("requires authentication and exact request shape", async () => {
 });
 
 Deno.test("claims, validates, normalizes and completes extraction", async () => {
-  const fixture = createFixture({ pages: ["  First\t page\r\n\r\n\r\nText ", "Second page"] });
+  const first = `First page\n\n${"Useful selectable study text ".repeat(4)}`.trim();
+  const second = `Second page\n${"More reliable selectable text ".repeat(4)}`.trim();
+  const fixture = createFixture({ pages: [first, second] });
   const response = await fixture.handler(request({ material_id: materialId }));
   const body = await response.json();
   assertEquals(response.status, 200);
   assertEquals(body.ok, true);
   assertEquals(body.material.processing_status, "ready");
-  assertEquals(body.material.content_text, "First page\n\nText\n\nSecond page");
+  assertEquals(body.material.content_text, `${first}\n\n${second}`);
   assertEquals(fixture.parseCalls(), 1);
 });
 
@@ -91,6 +94,14 @@ Deno.test("normalization and UTF-16 cap are deterministic", () => {
   const capped = capUtf16(`1234😀x`, 5);
   assertEquals(capped.text, "1234");
   assertEquals(capped.truncated, true);
+});
+
+Deno.test("zero text is an OCR candidate and mixed pages retain selectable text", () => {
+  const useful = "Reliable selectable study text with letters and numbers 123. ".repeat(2);
+  const classified = classifyPdfPages([useful, ""], 2);
+  assertEquals(classified.classification, "mixed_ocr_available");
+  assertEquals(classified.usefulPages, [1]);
+  assertEquals(classified.candidatePages, [2]);
 });
 
 Deno.test("pdf-text-v2 removes only confident repeated edge lines", () => {
@@ -171,16 +182,16 @@ function createFixture(options: {
     download: async () => options.bytes ?? pdfBytes,
     parse: async () => {
       parses += 1;
-      return { pages: options.pages ?? ["Selectable PDF text"], pageCount: 1 };
+      return { pages: options.pages ?? ["Selectable PDF study text with enough reliable letters and numbers for useful extraction. ".repeat(2)], pageCount: 1 };
     },
     succeed: async ({ material, token, text, metadata }) => {
       if (options.rejectFinalToken || material.metadata.pdf_extraction_claim !== token) return null;
       row = { ...material, content_text: text, processing_status: "ready", metadata: { pdf_extraction: metadata } };
       return row;
     },
-    fail: async ({ material, token, code, message }) => {
+    fail: async ({ material, token, code, message, metadata }) => {
       if (material.metadata.pdf_extraction_claim !== token) return null;
-      row = { ...material, processing_status: "failed", metadata: { pdf_extraction_error: { code, message } } };
+      row = { ...material, processing_status: "failed", metadata: { pdf_extraction: metadata, pdf_extraction_error: { code, message } } };
       return row;
     },
     token: () => "claim-token",

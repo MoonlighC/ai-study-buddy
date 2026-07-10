@@ -21,6 +21,7 @@ import '../features/materials/material_upload.dart';
 import '../features/materials/material_upload_repository.dart';
 import '../features/materials/pdf_text_extraction_repository.dart';
 import '../features/materials/image_text_extraction_repository.dart';
+import '../features/materials/scanned_pdf_ocr_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -35,6 +36,7 @@ class AppState extends ChangeNotifier {
     MaterialUploadRepository? materialUploadRepository,
     PdfTextExtractionRepository? pdfTextExtractionRepository,
     ImageTextExtractionRepository? imageTextExtractionRepository,
+    ScannedPdfOcrRepository? scannedPdfOcrRepository,
     MaterialFilePicker? materialFilePicker,
     String Function()? materialIdGenerator,
     FavoriteRepository? favoriteRepository,
@@ -75,6 +77,10 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyImageTextExtractionRepository()
                : const MockImageTextExtractionRepository()),
+       scannedPdfOcrRepository = scannedPdfOcrRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode == AppBackendMode.supabase
+               ? const EmptyScannedPdfOcrRepository()
+               : const MockScannedPdfOcrRepository()),
        materialIdGenerator = materialIdGenerator ?? newUuidV4,
        favoriteRepository =
            favoriteRepository ??
@@ -139,6 +145,7 @@ class AppState extends ChangeNotifier {
   final MaterialUploadRepository materialUploadRepository;
   final PdfTextExtractionRepository pdfTextExtractionRepository;
   final ImageTextExtractionRepository imageTextExtractionRepository;
+  final ScannedPdfOcrRepository scannedPdfOcrRepository;
   final MaterialFilePicker materialFilePicker;
   final String Function() materialIdGenerator;
   final FavoriteRepository favoriteRepository;
@@ -174,6 +181,8 @@ class AppState extends ChangeNotifier {
   String? _uploadError;
   final Set<String> _extractingPdfIds = {};
   final Map<String, String> _pdfExtractionErrors = {};
+  final Set<String> _scanningPdfIds = {};
+  final Map<String, String> _scannedPdfOcrErrors = {};
   final Set<String> _extractingImageIds = {};
   final Map<String, String> _imageExtractionErrors = {};
   bool _isLoadingMaterialFavorites = false;
@@ -226,6 +235,9 @@ class AppState extends ChangeNotifier {
 
   String? pdfExtractionErrorFor(String materialId) =>
       _pdfExtractionErrors[materialId];
+  bool isScanningPdf(String materialId) => _scanningPdfIds.contains(materialId);
+  String? scannedPdfOcrErrorFor(String materialId) => _scannedPdfOcrErrors[materialId];
+  bool isScannedPdfOcrAvailable(StudyMaterial material) => material.kind == MaterialKind.pdf && material.sourceKind == MaterialSourceKind.upload && material.processingStatus == MaterialProcessingStatus.failed && !material.hasContentText && const {'ocr_available','mixed_ocr_available'}.contains(material.pdfExtraction?.classification) && material.scannedPdfOcr?.extractedAt == null;
 
   bool isExtractingImage(String materialId) =>
       _extractingImageIds.contains(materialId);
@@ -619,6 +631,27 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> scanPdfWithOcrFor(AuthUser? user, String materialId) async {
+    if (_scanningPdfIds.contains(materialId)) return false;
+    final material = materialById(materialId);
+    if (material == null || !isScannedPdfOcrAvailable(material) ||
+        (material.pdfExtraction?.pageCount ?? 0) > 10) {
+      _scannedPdfOcrErrors[materialId] = 'This PDF cannot be scanned with OCR.';
+      notifyListeners(); return false;
+    }
+    final effectiveUser = user ?? const AuthUser(id: 'mock-user', email: 'alex.student@example.test', displayName: 'Alex Student');
+    if (config.effectiveBackendMode == AppBackendMode.supabase && user == null) {
+      _scannedPdfOcrErrors[materialId] = 'Log in to scan this PDF.'; notifyListeners(); return false;
+    }
+    _scanningPdfIds.add(materialId); _scannedPdfOcrErrors.remove(materialId); notifyListeners();
+    try {
+      final result = await scannedPdfOcrRepository.scan(user: effectiveUser, materialId: materialId);
+      final returned = config.effectiveBackendMode == AppBackendMode.supabase ? result.material : result.material.copyWith(subjectId: material.subjectId, title: material.title, createdLabel: material.createdLabel, storageBucket: material.storageBucket, storagePath: material.storagePath, mimeType: material.mimeType, fileSizeBytes: material.fileSizeBytes);
+      _replaceMaterial(returned); if (result.errorMessage != null) _scannedPdfOcrErrors[materialId] = result.errorMessage!; return result.succeeded;
+    } catch (error) { _scannedPdfOcrErrors[materialId] = error is ScannedPdfOcrException ? error.message : 'Could not scan this PDF. Try again.'; return false; }
+    finally { _scanningPdfIds.remove(materialId); notifyListeners(); }
+  }
+
   Future<bool> extractImageTextFor(AuthUser? user, String materialId) async {
     if (_extractingImageIds.contains(materialId)) return false;
     final material = materialById(materialId);
@@ -898,6 +931,8 @@ class AppState extends ChangeNotifier {
     _isLoadingCumulativeWeakTopics = false;
     _extractingPdfIds.clear();
     _pdfExtractionErrors.clear();
+    _scanningPdfIds.clear();
+    _scannedPdfOcrErrors.clear();
     _extractingImageIds.clear();
     _imageExtractionErrors.clear();
     _favoriteMaterialIds.clear();

@@ -15,6 +15,7 @@ class StudyMaterial {
     this.processingStatus = MaterialProcessingStatus.ready,
     this.pdfExtraction,
     this.imageOcr,
+    this.scannedPdfOcr,
   });
 
   final String id;
@@ -32,6 +33,7 @@ class StudyMaterial {
   final MaterialProcessingStatus processingStatus;
   final PdfExtractionMetadata? pdfExtraction;
   final ImageOcrMetadata? imageOcr;
+  final ScannedPdfOcrMetadata? scannedPdfOcr;
 
   bool get hasContentText => content.trim().isNotEmpty;
 
@@ -51,6 +53,7 @@ class StudyMaterial {
     MaterialProcessingStatus? processingStatus,
     PdfExtractionMetadata? pdfExtraction,
     ImageOcrMetadata? imageOcr,
+    ScannedPdfOcrMetadata? scannedPdfOcr,
   }) {
     return StudyMaterial(
       id: id ?? this.id,
@@ -68,6 +71,7 @@ class StudyMaterial {
       processingStatus: processingStatus ?? this.processingStatus,
       pdfExtraction: pdfExtraction ?? this.pdfExtraction,
       imageOcr: imageOcr ?? this.imageOcr,
+      scannedPdfOcr: scannedPdfOcr ?? this.scannedPdfOcr,
     );
   }
 }
@@ -115,6 +119,9 @@ class PdfExtractionMetadata {
     this.extractionVersion,
     this.failureCode,
     this.failureMessage,
+    this.classification,
+    this.usefulPages = const [],
+    this.ocrCandidatePages = const [],
   });
 
   final DateTime? extractedAt;
@@ -124,4 +131,15 @@ class PdfExtractionMetadata {
   final String? extractionVersion;
   final String? failureCode;
   final String? failureMessage;
+  final String? classification;
+  final List<int> usefulPages;
+  final List<int> ocrCandidatePages;
+}
+
+class ScannedPdfOcrMetadata {
+  const ScannedPdfOcrMetadata({this.extractedAt, this.processedPages = const [], this.totalPages, this.failedPages = const [], this.partial = false, this.truncated = false, this.characterCount, this.detectedLanguages = const [], this.handwritingDetected = false, this.warningCodes = const [], this.extractionVersion, this.provider, this.model, this.failureCode, this.failureMessage});
+  final DateTime? extractedAt; final List<int> processedPages; final int? totalPages; final List<int> failedPages;
+  final bool partial; final bool truncated; final int? characterCount; final List<String> detectedLanguages;
+  final bool handwritingDetected; final List<String> warningCodes; final String? extractionVersion;
+  final String? provider; final String? model; final String? failureCode; final String? failureMessage;
 }

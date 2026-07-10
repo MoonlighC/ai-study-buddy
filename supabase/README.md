@@ -234,3 +234,21 @@ a 6,000-token output limit and no retry. Actual cost depends on processed image
 dimensions and tokens. Before production, review the OpenAI project privacy and data
 control settings. Scanned PDFs, preprocessing, quotas, usage logging, and stuck-claim
 recovery remain deferred.
+
+## Phase 9C.2: Scanned and mixed PDF OCR
+
+Selectable extraction remains the first step. Scanned or mixed PDFs require explicit
+confirmation before `extract-scanned-pdf-text` makes one paid, high-detail OpenAI PDF
+request. The synchronous MVP accepts private uploaded PDFs from 1 through 10 MiB and
+1 through 10 total pages; larger documents must be split. Cost varies with page content.
+
+Configure `OPENAI_API_KEY` and optionally server-only `SCANNED_PDF_OCR_MODEL`, then:
+
+```powershell
+supabase functions deploy extract-pdf-text
+supabase functions deploy extract-scanned-pdf-text
+```
+
+No migration is required. Confirm staging completes under 120 seconds and review
+privacy/data controls. Stale claims remain deferred; use a queue/worker in a later
+phase if the runtime gate fails rather than raising synchronous limits.

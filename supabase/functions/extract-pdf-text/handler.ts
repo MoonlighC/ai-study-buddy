@@ -2,7 +2,9 @@ export const maxPdfBytes = 10 * 1024 * 1024;
 export const maxStoredCharacters = 100_000;
 export const extractionVersion = "pdf-text-v2";
 export const noSelectableTextMessage =
-  "No selectable text was found. Scanned PDFs will be supported in the OCR phase.";
+  "No usable selectable text was found. Scan this PDF with OCR.";
+export const minimumPageCharacters = 80;
+export const minimumPageLettersOrNumbers = 20;
 
 export type MaterialRow = Record<string, unknown> & {
   id: string;
@@ -37,6 +39,7 @@ export type ExtractPdfDependencies = {
     token: string;
     code: string;
     message: string;
+    metadata?: Record<string, unknown>;
   }): Promise<MaterialRow | null>;
   token(): string;
   now(): string;
@@ -119,18 +122,48 @@ export function createExtractPdfTextHandler(deps: ExtractPdfDependencies) {
 
     try {
       const parsed = await deps.parse(bytes);
-      const normalized = normalizePdfPages(parsed.pages);
-      if (!normalized) {
-        return knownFailure(deps, material, token, "no_selectable_text", noSelectableTextMessage);
-      }
-      const capped = capUtf16(normalized, maxStoredCharacters);
+      const classified = classifyPdfPages(parsed.pages, parsed.pageCount);
+      let selectableBudget = maxStoredCharacters;
+      const pageMetadata = classified.pages.map((page) => {
+        const text = page.useful && selectableBudget > 0
+          ? capUtf16(page.text, selectableBudget).text
+          : "";
+        selectableBudget -= text.length;
+        return { page_number: page.pageNumber, text };
+      });
+      const boundedCombined = capUtf16(classified.combined, maxStoredCharacters);
       const metadata = {
         extracted_at: deps.now(),
-        character_count: capped.text.length,
+        character_count: boundedCombined.text.length,
         page_count: parsed.pageCount,
-        truncated: capped.truncated,
+        classification: classified.classification,
+        useful_pages: classified.usefulPages,
+        ocr_candidate_pages: classified.candidatePages,
+        selectable_pages: pageMetadata,
+        truncated: boundedCombined.truncated,
         extraction_version: extractionVersion,
       };
+      if (classified.classification !== "selectable") {
+        const failed = await deps.fail({
+          material,
+          token,
+          code: classified.classification,
+          message: classified.classification === "mixed_ocr_available"
+            ? "Some pages need OCR before this PDF is ready."
+            : noSelectableTextMessage,
+          metadata,
+        });
+        if (!failed) return json({ error: "Could not save extraction status." }, 500);
+        return json({ ok: false, material: failed, error: {
+          code: classified.classification,
+          message: classified.classification === "mixed_ocr_available"
+            ? "Some pages need OCR before this PDF is ready."
+            : noSelectableTextMessage,
+        } });
+      }
+      const capped = capUtf16(classified.combined, maxStoredCharacters);
+      metadata.character_count = capped.text.length;
+      metadata.truncated = capped.truncated;
       const saved = await deps.succeed({ material, token, text: capped.text, metadata });
       if (!saved) return json({ error: "Could not save extracted text." }, 500);
       return json({ ok: true, idempotent: false, material: saved });
@@ -153,6 +186,36 @@ async function knownFailure(
 }
 
 export function normalizePdfPages(pages: string[]): string {
+  return normalizePdfPageList(pages).filter(Boolean).join("\n\n");
+}
+
+export function classifyPdfPages(pages: string[], pageCount: number) {
+  const normalized = normalizePdfPageList(pages);
+  while (normalized.length < pageCount) normalized.push("");
+  const result = normalized.slice(0, pageCount).map((text, index) => ({
+    pageNumber: index + 1,
+    text,
+    useful: isUsefulPageText(text),
+  }));
+  const usefulPages = result.filter((page) => page.useful).map((page) => page.pageNumber);
+  const candidatePages = result.filter((page) => !page.useful).map((page) => page.pageNumber);
+  return {
+    pages: result,
+    usefulPages,
+    candidatePages,
+    classification: usefulPages.length === pageCount
+      ? "selectable"
+      : usefulPages.length === 0 ? "ocr_available" : "mixed_ocr_available",
+    combined: result.filter((page) => page.useful).map((page) => page.text).join("\n\n"),
+  };
+}
+
+export function isUsefulPageText(text: string) {
+  return text.length >= minimumPageCharacters &&
+    (text.match(/[\p{L}\p{N}]/gu)?.length ?? 0) >= minimumPageLettersOrNumbers;
+}
+
+function normalizePdfPageList(pages: string[]): string[] {
   const normalizedPages = pages.map((page, index) => {
     const lines = page
       .normalize("NFC")
@@ -167,10 +230,9 @@ export function normalizePdfPages(pages: string[]): string {
   removeRepeatedEdgeLine(normalizedPages, "first");
   removeRepeatedEdgeLine(normalizedPages, "last");
 
-  return normalizedPages
-    .map((lines) => lines.join("\n").replace(/\n{3,}/g, "\n\n").trim())
-    .filter(Boolean)
-    .join("\n\n");
+  return normalizedPages.map((lines) =>
+    lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()
+  );
 }
 
 function removeIsolatedPageNumber(

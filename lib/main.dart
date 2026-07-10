@@ -11,6 +11,7 @@ import 'features/materials/supabase_material_repository.dart';
 import 'features/materials/supabase_material_upload_repository.dart';
 import 'features/materials/pdf_text_extraction_repository.dart';
 import 'features/materials/image_text_extraction_repository.dart';
+import 'features/materials/scanned_pdf_ocr_repository.dart';
 import 'features/quizzes/quiz_repository.dart';
 import 'features/progress/weak_topic_repository.dart';
 import 'features/subjects/supabase_subject_repository.dart';
@@ -48,6 +49,11 @@ Future<void> main() async {
           ? null
           : SupabaseImageTextExtractionRepository(
               SupabaseImageTextExtractionDataSource(supabaseClient),
+            ),
+      scannedPdfOcrRepository: supabaseClient == null
+          ? null
+          : SupabaseScannedPdfOcrRepository(
+              SupabaseScannedPdfOcrDataSource(supabaseClient),
             ),
       favoriteRepository: supabaseClient == null
           ? null
