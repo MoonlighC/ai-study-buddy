@@ -284,6 +284,8 @@ function isEligibleAiMaterial(material: MaterialRow, content: string) {
   if (!content) return false;
   return (material.kind === "pasted_text" && material.source_kind === "manual") ||
     (material.kind === "pdf" && material.source_kind === "upload" &&
+      material.processing_status === "ready") ||
+    (material.kind === "image" && material.source_kind === "upload" &&
       material.processing_status === "ready");
 }
 

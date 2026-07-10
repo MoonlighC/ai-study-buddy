@@ -103,7 +103,7 @@ serve(async (request) => {
 
   try {
     // TODO: Enforce daily_usage_limits server-side before making this request.
-    const isReadyPdf = material.kind === "pdf" &&
+    const isReadyUpload = (material.kind === "pdf" || material.kind === "image") &&
       material.source_kind === "upload" &&
       material.processing_status === "ready";
     // Phase 9B.1 intentionally summarizes only the current capped input.
@@ -111,7 +111,7 @@ serve(async (request) => {
       openAiApiKey,
       model,
       contentText.slice(0, maxInputChars),
-      isReadyPdf,
+      isReadyUpload,
     );
     logStage("summary_parsed", { material_id: materialId });
     const { data: updatedMaterials, error: updateError } = await trustedClient
@@ -145,7 +145,7 @@ async function generateSummary(
   apiKey: string,
   model: string,
   inputText: string,
-  isReadyPdf: boolean,
+  isReadyUpload: boolean,
 ): Promise<string> {
   logStage("openai_request_started", { model });
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -154,7 +154,7 @@ async function generateSummary(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(buildSummaryRequestBody(model, inputText, isReadyPdf)),
+    body: JSON.stringify(buildSummaryRequestBody(model, inputText, isReadyUpload)),
   });
   let data: unknown;
   try {
@@ -221,6 +221,8 @@ function isEligibleAiMaterial(material: Record<string, unknown>, content: string
   if (content.length === 0) return false;
   return (material.kind === "pasted_text" && material.source_kind === "manual") ||
     (material.kind === "pdf" && material.source_kind === "upload" &&
+      material.processing_status === "ready") ||
+    (material.kind === "image" && material.source_kind === "upload" &&
       material.processing_status === "ready");
 }
 

@@ -214,3 +214,23 @@ Manually verify a selectable-text PDF becomes `ready`, shows safe extraction
 status without exposing raw extracted text, and can use summary/flashcard/quiz generation. Verify an image-only/scanned PDF
 becomes `failed` with: “No selectable text was found. Scanned PDFs will be
 supported in the OCR phase.” Images must remain metadata-only and ineligible.
+# Phase 9C.1 image OCR rollout
+
+Image OCR is synchronous and server-only. Configure `OPENAI_API_KEY` and, optionally,
+`IMAGE_OCR_MODEL` (default `gpt-4.1-mini-2025-04-14`) as Edge Function secrets.
+Never expose these values to Flutter.
+
+Deploy in this order:
+
+1. `extract-image-text`
+2. `generate-summary`
+3. `generate-flashcards`
+4. `generate-quiz`
+
+No migration is required for Phase 9C.1. Test a typed note, screenshot, handwritten
+note, rotated photo, blurry/no-text image, cross-user denial, and successful downstream
+summary/flashcard/quiz generation. OCR uses one high-detail Responses API request with
+a 6,000-token output limit and no retry. Actual cost depends on processed image
+dimensions and tokens. Before production, review the OpenAI project privacy and data
+control settings. Scanned PDFs, preprocessing, quotas, usage logging, and stuck-claim
+recovery remain deferred.

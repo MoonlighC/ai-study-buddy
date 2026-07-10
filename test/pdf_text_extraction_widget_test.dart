@@ -129,7 +129,7 @@ void main() {
       storagePath: 'user/image-1/diagram.png',
       mimeType: 'image/png',
       fileSizeBytes: 100,
-      processingStatus: MaterialProcessingStatus.ready,
+      processingStatus: MaterialProcessingStatus.pending,
     );
     await _pumpDetail(tester, image);
 
@@ -137,6 +137,42 @@ void main() {
     expect(find.text('Extracted text'), findsNothing);
     expect(find.text('View extracted text'), findsNothing);
     expect(find.text('Summary'), findsNothing);
+    expect(find.text('Extract text from image'), findsOneWidget);
+  });
+
+  testWidgets('ready image hides OCR text and exposes AI actions', (
+    tester,
+  ) async {
+    const raw =
+        'INTERNAL OCR text with enough reliable study content for summaries, flashcards, quizzes, and study sessions.';
+    const image = StudyMaterial(
+      id: 'image-ready',
+      subjectId: 'biology',
+      title: 'notes.png',
+      kind: MaterialKind.image,
+      content: raw,
+      createdLabel: 'Today',
+      sourceKind: MaterialSourceKind.upload,
+      storageBucket: 'study-images',
+      storagePath: 'user/image-ready/notes.png',
+      mimeType: 'image/png',
+      fileSizeBytes: 100,
+      processingStatus: MaterialProcessingStatus.ready,
+      imageOcr: ImageOcrMetadata(
+        characterCount: 110,
+        extractionVersion: 'image-ocr-v1',
+      ),
+    );
+    await _pumpDetail(tester, image);
+    expect(find.text('Status: Text extracted'), findsOneWidget);
+    expect(find.textContaining('INTERNAL OCR'), findsNothing);
+    expect(find.text('Summary'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Create study session'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Create study session'), findsOneWidget);
   });
 
   testWidgets('long PDF summary can be expanded and collapsed', (tester) async {

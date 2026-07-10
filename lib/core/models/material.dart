@@ -14,6 +14,7 @@ class StudyMaterial {
     this.fileSizeBytes,
     this.processingStatus = MaterialProcessingStatus.ready,
     this.pdfExtraction,
+    this.imageOcr,
   });
 
   final String id;
@@ -30,6 +31,7 @@ class StudyMaterial {
   final int? fileSizeBytes;
   final MaterialProcessingStatus processingStatus;
   final PdfExtractionMetadata? pdfExtraction;
+  final ImageOcrMetadata? imageOcr;
 
   bool get hasContentText => content.trim().isNotEmpty;
 
@@ -48,6 +50,7 @@ class StudyMaterial {
     int? fileSizeBytes,
     MaterialProcessingStatus? processingStatus,
     PdfExtractionMetadata? pdfExtraction,
+    ImageOcrMetadata? imageOcr,
   }) {
     return StudyMaterial(
       id: id ?? this.id,
@@ -64,8 +67,37 @@ class StudyMaterial {
       fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
       processingStatus: processingStatus ?? this.processingStatus,
       pdfExtraction: pdfExtraction ?? this.pdfExtraction,
+      imageOcr: imageOcr ?? this.imageOcr,
     );
   }
+}
+
+class ImageOcrMetadata {
+  const ImageOcrMetadata({
+    this.extractedAt,
+    this.characterCount,
+    this.detectedLanguage,
+    this.handwritingDetected = false,
+    this.warningCodes = const [],
+    this.truncated = false,
+    this.extractionVersion,
+    this.provider,
+    this.model,
+    this.failureCode,
+    this.failureMessage,
+  });
+
+  final DateTime? extractedAt;
+  final int? characterCount;
+  final String? detectedLanguage;
+  final bool handwritingDetected;
+  final List<String> warningCodes;
+  final bool truncated;
+  final String? extractionVersion;
+  final String? provider;
+  final String? model;
+  final String? failureCode;
+  final String? failureMessage;
 }
 
 enum MaterialKind { pastedText, image, pdf }

@@ -473,6 +473,8 @@ function isEligibleAiMaterial(material: Record<string, unknown>, content: string
   if (content.length === 0) return false;
   return (material.kind === "pasted_text" && material.source_kind === "manual") ||
     (material.kind === "pdf" && material.source_kind === "upload" &&
+      material.processing_status === "ready") ||
+    (material.kind === "image" && material.source_kind === "upload" &&
       material.processing_status === "ready");
 }
 

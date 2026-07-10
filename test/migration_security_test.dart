@@ -71,7 +71,9 @@ void main() {
     expect(source, contains('Important formulas or relationships'));
     expect(source, contains('Do not reconstruct unreadable formulas'));
     expect(source, contains('Preserve the language of the material'));
-    expect(source, contains('supplied portion of the PDF text'));
+    expect(source, contains('supplied portion of extracted PDF or image text'));
+    expect(source, contains('Do not reconstruct unreadable formulas'));
+    expect(source, contains('missing diagram content'));
   });
 
   test('quiz attempt RPC is the only authenticated mutation path', () async {

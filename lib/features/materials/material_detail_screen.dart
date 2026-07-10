@@ -29,8 +29,8 @@ class MaterialDetailScreen extends StatelessWidget {
     final subject = state.subjectFor(freshMaterial.subjectId);
     final isFavorite = state.isMaterialFavorite(freshMaterial.id);
     final isUpload = freshMaterial.sourceKind == MaterialSourceKind.upload;
-    final isReadyPdf =
-        freshMaterial.kind == MaterialKind.pdf &&
+    final isReadyUpload =
+        isUpload &&
         freshMaterial.processingStatus == MaterialProcessingStatus.ready &&
         freshMaterial.hasContentText;
 
@@ -80,11 +80,21 @@ class MaterialDetailScreen extends StatelessWidget {
                   ),
                   Text('MIME: ${freshMaterial.mimeType ?? 'Unknown'}'),
                   Text('Status: ${_materialStatus(freshMaterial)}'),
+                  if (freshMaterial.kind == MaterialKind.image &&
+                      freshMaterial.processingStatus ==
+                          MaterialProcessingStatus.ready &&
+                      _imageOcrWarning(freshMaterial.imageOcr?.warningCodes) !=
+                          null)
+                    Text(
+                      _imageOcrWarning(freshMaterial.imageOcr?.warningCodes)!,
+                    ),
                 ],
               ),
             ),
             if (freshMaterial.kind == MaterialKind.pdf)
               _PdfExtractionSection(material: freshMaterial),
+            if (freshMaterial.kind == MaterialKind.image)
+              _ImageExtractionSection(material: freshMaterial),
           ],
           if (!isUpload)
             SectionCard(
@@ -92,7 +102,7 @@ class MaterialDetailScreen extends StatelessWidget {
               title: 'Pasted text',
               child: Text(freshMaterial.content),
             ),
-          if (!isUpload || isReadyPdf) ...[
+          if (!isUpload || isReadyUpload) ...[
             SectionCard(
               key: const Key('summary-section'),
               icon: Icons.auto_awesome_outlined,
@@ -161,9 +171,93 @@ class MaterialDetailScreen extends StatelessWidget {
           ? 'Text extracted'
           : 'Text extracted · $pageCount ${pageCount == 1 ? 'page' : 'pages'}';
     }
+    if (material.kind == MaterialKind.image &&
+        material.processingStatus == MaterialProcessingStatus.ready &&
+        material.hasContentText) {
+      return 'Text extracted';
+    }
     return material.processingStatus == MaterialProcessingStatus.pending
         ? 'Uploaded · Waiting for processing'
         : material.processingStatus.name;
+  }
+}
+
+String? _imageOcrWarning(List<String>? codes) {
+  if (codes == null) return null;
+  const messages = <String, String>{
+    'handwriting_low_confidence': 'Handwritten text may be less accurate.',
+    'blur_detected': 'Some text may be unclear because the image is blurry.',
+    'low_contrast': 'Some low-contrast text may be missing.',
+    'layout_uncertain': 'The reading order may be imperfect.',
+    'formula_uncertain': 'Some formula notation may be incomplete.',
+    'partial_text': 'Only part of the image text could be read.',
+    'rotated_content': 'Rotated text may be less accurate.',
+  };
+  for (final code in codes) {
+    final message = messages[code];
+    if (message != null) return message;
+  }
+  return null;
+}
+
+class _ImageExtractionSection extends StatelessWidget {
+  const _ImageExtractionSection({required this.material});
+  final StudyMaterial material;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
+    final loading = state.isExtractingImage(material.id);
+    final processing =
+        material.processingStatus == MaterialProcessingStatus.processing;
+    final ready =
+        material.processingStatus == MaterialProcessingStatus.ready &&
+        material.hasContentText;
+    if (ready) return const SizedBox.shrink();
+    final failed =
+        material.processingStatus == MaterialProcessingStatus.failed ||
+        (material.processingStatus == MaterialProcessingStatus.ready &&
+            !material.hasContentText);
+    final error =
+        state.imageExtractionErrorFor(material.id) ??
+        material.imageOcr?.failureMessage;
+    return SectionCard(
+      icon: failed ? Icons.error_outline : Icons.document_scanner_outlined,
+      title: failed ? 'Image text extraction failed' : 'Image text extraction',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (loading || processing)
+            const Text('Reading image text…')
+          else if (failed)
+            Text(error ?? 'Could not extract image text. Try again.')
+          else
+            const Text('Extract readable study text from this image.'),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: loading || processing
+                ? null
+                : () => AppStateScope.read(context).extractImageTextFor(
+                    AuthScope.read(context).user,
+                    material.id,
+                  ),
+            icon: loading || processing
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.document_scanner_outlined),
+            label: Text(
+              loading || processing
+                  ? 'Reading image text…'
+                  : failed
+                  ? 'Retry image text extraction'
+                  : 'Extract text from image',
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -545,7 +639,8 @@ class _SummarySectionState extends State<_SummarySection> {
   }
 
   bool _shouldCollapse(String summary) {
-    return widget.material.kind == MaterialKind.pdf &&
+    return (widget.material.kind == MaterialKind.pdf ||
+            widget.material.kind == MaterialKind.image) &&
         (summary.length > 900 || '\n'.allMatches(summary).length >= 14);
   }
 

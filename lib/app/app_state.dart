@@ -20,6 +20,7 @@ import '../features/materials/material_file_picker.dart';
 import '../features/materials/material_upload.dart';
 import '../features/materials/material_upload_repository.dart';
 import '../features/materials/pdf_text_extraction_repository.dart';
+import '../features/materials/image_text_extraction_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -33,6 +34,7 @@ class AppState extends ChangeNotifier {
     MaterialRepository? materialRepository,
     MaterialUploadRepository? materialUploadRepository,
     PdfTextExtractionRepository? pdfTextExtractionRepository,
+    ImageTextExtractionRepository? imageTextExtractionRepository,
     MaterialFilePicker? materialFilePicker,
     String Function()? materialIdGenerator,
     FavoriteRepository? favoriteRepository,
@@ -67,6 +69,12 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyPdfTextExtractionRepository()
                : const MockPdfTextExtractionRepository()),
+       imageTextExtractionRepository =
+           imageTextExtractionRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyImageTextExtractionRepository()
+               : const MockImageTextExtractionRepository()),
        materialIdGenerator = materialIdGenerator ?? newUuidV4,
        favoriteRepository =
            favoriteRepository ??
@@ -130,6 +138,7 @@ class AppState extends ChangeNotifier {
   final MaterialRepository materialRepository;
   final MaterialUploadRepository materialUploadRepository;
   final PdfTextExtractionRepository pdfTextExtractionRepository;
+  final ImageTextExtractionRepository imageTextExtractionRepository;
   final MaterialFilePicker materialFilePicker;
   final String Function() materialIdGenerator;
   final FavoriteRepository favoriteRepository;
@@ -165,6 +174,8 @@ class AppState extends ChangeNotifier {
   String? _uploadError;
   final Set<String> _extractingPdfIds = {};
   final Map<String, String> _pdfExtractionErrors = {};
+  final Set<String> _extractingImageIds = {};
+  final Map<String, String> _imageExtractionErrors = {};
   bool _isLoadingMaterialFavorites = false;
   bool _isUpdatingMaterialFavorite = false;
   String? _favoriteSyncErrorMessage;
@@ -215,6 +226,11 @@ class AppState extends ChangeNotifier {
 
   String? pdfExtractionErrorFor(String materialId) =>
       _pdfExtractionErrors[materialId];
+
+  bool isExtractingImage(String materialId) =>
+      _extractingImageIds.contains(materialId);
+  String? imageExtractionErrorFor(String materialId) =>
+      _imageExtractionErrors[materialId];
 
   List<StudyMaterial> get favoriteMaterials {
     return _materials
@@ -603,6 +619,67 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> extractImageTextFor(AuthUser? user, String materialId) async {
+    if (_extractingImageIds.contains(materialId)) return false;
+    final material = materialById(materialId);
+    if (material == null ||
+        material.kind != MaterialKind.image ||
+        material.sourceKind != MaterialSourceKind.upload ||
+        material.processingStatus == MaterialProcessingStatus.processing ||
+        (material.processingStatus == MaterialProcessingStatus.ready &&
+            material.hasContentText)) {
+      _imageExtractionErrors[materialId] = 'This image cannot be processed.';
+      notifyListeners();
+      return false;
+    }
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _imageExtractionErrors[materialId] = 'Log in to extract image text.';
+      notifyListeners();
+      return false;
+    }
+    _extractingImageIds.add(materialId);
+    _imageExtractionErrors.remove(materialId);
+    notifyListeners();
+    try {
+      final result = await imageTextExtractionRepository.extractImageText(
+        user: effectiveUser,
+        materialId: materialId,
+      );
+      final returned = config.effectiveBackendMode == AppBackendMode.supabase
+          ? result.material
+          : result.material.copyWith(
+              subjectId: material.subjectId,
+              title: material.title,
+              createdLabel: material.createdLabel,
+              storageBucket: material.storageBucket,
+              storagePath: material.storagePath,
+              mimeType: material.mimeType,
+              fileSizeBytes: material.fileSizeBytes,
+            );
+      _replaceMaterial(returned);
+      if (result.errorMessage != null) {
+        _imageExtractionErrors[materialId] = result.errorMessage!;
+      }
+      return result.succeeded;
+    } catch (error) {
+      _imageExtractionErrors[materialId] = error is ImageTextExtractionException
+          ? error.message
+          : 'Could not extract image text. Try again.';
+      return false;
+    } finally {
+      _extractingImageIds.remove(materialId);
+      notifyListeners();
+    }
+  }
+
   void _replaceMaterial(StudyMaterial material) {
     _materials = [
       for (final existing in _materials)
@@ -821,6 +898,8 @@ class AppState extends ChangeNotifier {
     _isLoadingCumulativeWeakTopics = false;
     _extractingPdfIds.clear();
     _pdfExtractionErrors.clear();
+    _extractingImageIds.clear();
+    _imageExtractionErrors.clear();
     _favoriteMaterialIds.clear();
     _flashcards = [];
     _quizzes = [];
@@ -940,6 +1019,10 @@ class AppState extends ChangeNotifier {
     return (material.kind == MaterialKind.pastedText &&
             material.sourceKind == MaterialSourceKind.manual) ||
         (material.kind == MaterialKind.pdf &&
+            material.sourceKind == MaterialSourceKind.upload &&
+            material.processingStatus == MaterialProcessingStatus.ready &&
+            material.hasContentText) ||
+        (material.kind == MaterialKind.image &&
             material.sourceKind == MaterialSourceKind.upload &&
             material.processingStatus == MaterialProcessingStatus.ready &&
             material.hasContentText);

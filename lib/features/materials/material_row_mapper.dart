@@ -34,6 +34,37 @@ StudyMaterial mapMaterialRow(Map<String, dynamic> row) {
       _ => MaterialProcessingStatus.ready,
     },
     pdfExtraction: _pdfExtraction(row['metadata']),
+    imageOcr: _imageOcr(row['metadata']),
+  );
+}
+
+ImageOcrMetadata? _imageOcr(Object? rawMetadata) {
+  if (rawMetadata is! Map) return null;
+  final metadata = Map<String, dynamic>.from(rawMetadata);
+  final successRaw = metadata['image_ocr'];
+  final errorRaw = metadata['image_ocr_error'];
+  final success = successRaw is Map
+      ? Map<String, dynamic>.from(successRaw)
+      : const <String, dynamic>{};
+  final error = errorRaw is Map
+      ? Map<String, dynamic>.from(errorRaw)
+      : const <String, dynamic>{};
+  if (success.isEmpty && error.isEmpty) return null;
+  final warnings = success['warning_codes'];
+  return ImageOcrMetadata(
+    extractedAt: DateTime.tryParse(_string(success['extracted_at']) ?? ''),
+    characterCount: _int(success['character_count']),
+    detectedLanguage: _string(success['detected_language']),
+    handwritingDetected: success['handwriting_detected'] == true,
+    warningCodes: warnings is List
+        ? warnings.whereType<String>().toList(growable: false)
+        : const [],
+    truncated: success['truncated'] == true,
+    extractionVersion: _string(success['extraction_version']),
+    provider: _string(success['provider']),
+    model: _string(success['model']),
+    failureCode: _string(error['code']),
+    failureMessage: _string(error['message']),
   );
 }
 
