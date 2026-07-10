@@ -15,10 +15,11 @@ class SupabaseMaterialRepository implements MaterialRepository {
       final rows = await _client
           .from('materials')
           .select(
-            'id,subject_id,title,kind,source_kind,content_text,summary,processing_status,created_at',
+            'id,subject_id,title,kind,source_kind,content_text,summary,'
+            'storage_bucket,storage_path,mime_type,file_size_bytes,'
+            'processing_status,created_at',
           )
           .eq('user_id', user.id)
-          .eq('source_kind', 'manual')
           .filter('deleted_at', 'is', null)
           .order('created_at', ascending: false);
 
@@ -54,7 +55,9 @@ class SupabaseMaterialRepository implements MaterialRepository {
             'processing_status': 'ready',
           })
           .select(
-            'id,subject_id,title,kind,source_kind,content_text,summary,processing_status,created_at',
+            'id,subject_id,title,kind,source_kind,content_text,summary,'
+            'storage_bucket,storage_path,mime_type,file_size_bytes,'
+            'processing_status,created_at',
           )
           .single();
       return _mapMaterial(row);
@@ -74,6 +77,14 @@ class SupabaseMaterialRepository implements MaterialRepository {
       content: _stringValue(row, 'content_text') ?? '',
       createdLabel: _createdLabelFor(_stringValue(row, 'created_at')),
       summary: _stringValue(row, 'summary'),
+      sourceKind: _sourceKindFor(_stringValue(row, 'source_kind')),
+      storageBucket: _stringValue(row, 'storage_bucket'),
+      storagePath: _stringValue(row, 'storage_path'),
+      mimeType: _stringValue(row, 'mime_type'),
+      fileSizeBytes: _intValue(row, 'file_size_bytes'),
+      processingStatus: _processingStatusFor(
+        _stringValue(row, 'processing_status'),
+      ),
     );
   }
 
@@ -83,6 +94,23 @@ class SupabaseMaterialRepository implements MaterialRepository {
       'image' => MaterialKind.image,
       'pdf' => MaterialKind.pdf,
       _ => MaterialKind.pastedText,
+    };
+  }
+
+  MaterialSourceKind _sourceKindFor(String? value) {
+    return switch (value) {
+      'upload' => MaterialSourceKind.upload,
+      'generated' => MaterialSourceKind.generated,
+      _ => MaterialSourceKind.manual,
+    };
+  }
+
+  MaterialProcessingStatus _processingStatusFor(String? value) {
+    return switch (value) {
+      'pending' => MaterialProcessingStatus.pending,
+      'processing' => MaterialProcessingStatus.processing,
+      'failed' => MaterialProcessingStatus.failed,
+      _ => MaterialProcessingStatus.ready,
     };
   }
 
@@ -100,5 +128,10 @@ class SupabaseMaterialRepository implements MaterialRepository {
     }
     final trimmedValue = value.trim();
     return trimmedValue.isEmpty ? null : trimmedValue;
+  }
+
+  int? _intValue(Map<String, dynamic> row, String key) {
+    final value = row[key];
+    return value is num ? value.toInt() : null;
   }
 }

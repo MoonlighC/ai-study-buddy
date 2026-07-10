@@ -112,4 +112,80 @@ void main() {
     );
     expect(edgeFunction, isNot(contains('service_role_key_value')));
   });
+
+  test(
+    'material upload migration keeps buckets private and user-owned',
+    () async {
+      final migration = await File(
+        'supabase/migrations/004_material_upload_storage.sql',
+      ).readAsString();
+      final normalized = migration.toLowerCase();
+
+      expect(normalized, contains("id = 'study-materials'"));
+      expect(normalized, contains("id = 'study-images'"));
+      expect(normalized, isNot(contains('insert into storage.buckets')));
+      expect(normalized, isNot(contains('delete from storage.buckets')));
+      expect(normalized, contains('set public = false'));
+      expect(normalized, contains('file_size_limit = 10485760'));
+      expect(normalized, contains('file_size_limit = 8388608'));
+      expect(normalized, contains('drop policy if exists'));
+      expect(normalized, contains('on storage.objects for insert'));
+      expect(normalized, contains('on storage.objects for select'));
+      expect(normalized, contains('on storage.objects for delete'));
+      expect(normalized, isNot(contains('on storage.objects for update')));
+      expect(
+        normalized,
+        contains("(storage.foldername(name))[1] = (select auth.uid())::text"),
+      );
+      expect(
+        'coalesce(array_length(storage.foldername(name), 1), 0) = 2'
+            .allMatches(normalized)
+            .length,
+        3,
+      );
+      const uuidPathCheck =
+          r"(storage.foldername(name))[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'";
+      expect(uuidPathCheck.allMatches(normalized).length, 3);
+      expect(
+        "btrim(storage.filename(name)) <> ''".allMatches(normalized).length,
+        3,
+      );
+      expect(normalized, contains('constraint materials_upload_shape'));
+      expect(normalized, contains("source_kind <> 'upload'"));
+      expect(normalized, contains('content_text is null'));
+      expect(normalized, contains('summary is null'));
+      expect(normalized, contains("processing_status = 'pending'"));
+      expect(normalized, contains('user_id = (select auth.uid())'));
+      expect(
+        normalized,
+        contains("split_part(storage_path, '/', 2) = id::text"),
+      );
+    },
+  );
+
+  test('storage policy preflight covers unknown permissive policies', () async {
+    for (final migrationName in [
+      '001_initial_schema.sql',
+      '002_subject_color_value_bigint.sql',
+      '003_quiz_attempt_weak_topics_rpc.sql',
+    ]) {
+      final earlierMigration = await File(
+        'supabase/migrations/$migrationName',
+      ).readAsString();
+      expect(
+        earlierMigration.toLowerCase(),
+        isNot(contains('on storage.objects')),
+      );
+    }
+
+    final setup = (await File(
+      'supabase/README.md',
+    ).readAsString()).toLowerCase();
+    expect(setup, contains('from pg_policies'));
+    expect(setup, contains("schemaname = 'storage'"));
+    expect(setup, contains("tablename = 'objects'"));
+    expect(setup, contains('permissive rls policies combine with `or`'));
+    expect(setup, contains('drop it by its exact policy name'));
+    expect(setup, contains('do not blindly'));
+  });
 }

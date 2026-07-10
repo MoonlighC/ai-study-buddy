@@ -13,6 +13,7 @@ import '../auth/auth_controller.dart';
 import '../flashcards/flashcard_training_screen.dart';
 import '../quizzes/quiz_repository.dart';
 import '../quizzes/quiz_taking_screen.dart';
+import 'material_upload.dart';
 
 class MaterialDetailScreen extends StatelessWidget {
   const MaterialDetailScreen({required this.material, super.key});
@@ -25,6 +26,7 @@ class MaterialDetailScreen extends StatelessWidget {
     final freshMaterial = state.materialById(material.id) ?? material;
     final subject = state.subjectFor(freshMaterial.subjectId);
     final isFavorite = state.isMaterialFavorite(freshMaterial.id);
+    final isUpload = freshMaterial.sourceKind == MaterialSourceKind.upload;
 
     return Scaffold(
       appBar: AppBar(
@@ -48,50 +50,83 @@ class MaterialDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '${freshMaterial.createdLabel} - pasted text',
+            isUpload
+                ? '${freshMaterial.kind == MaterialKind.pdf ? 'PDF' : 'Image'} · ${freshMaterial.createdLabel}'
+                : '${freshMaterial.createdLabel} - pasted text',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
-          SectionCard(
-            icon: Icons.article_outlined,
-            title: 'Pasted text',
-            child: Text(
-              freshMaterial.content.isEmpty
-                  ? 'No pasted text available for this material.'
-                  : freshMaterial.content,
+          if (isUpload) ...[
+            SectionCard(
+              icon: freshMaterial.kind == MaterialKind.pdf
+                  ? Icons.picture_as_pdf_outlined
+                  : Icons.image_outlined,
+              title: 'File metadata',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Filename: ${freshMaterial.title}'),
+                  Text(
+                    'Type: ${freshMaterial.kind == MaterialKind.pdf ? 'PDF' : 'Image'}',
+                  ),
+                  Text(
+                    'Size: ${freshMaterial.fileSizeBytes == null ? 'Unknown' : formatFileSize(freshMaterial.fileSizeBytes!)}',
+                  ),
+                  Text('MIME: ${freshMaterial.mimeType ?? 'Unknown'}'),
+                  Text(
+                    'Status: ${freshMaterial.processingStatus == MaterialProcessingStatus.pending ? 'Uploaded · Waiting for processing' : freshMaterial.processingStatus.name}',
+                  ),
+                ],
+              ),
             ),
-          ),
-          SectionCard(
-            icon: Icons.auto_awesome_outlined,
-            title: 'Summary',
-            child: _SummarySection(material: freshMaterial),
-          ),
-          SectionCard(
-            icon: Icons.style_outlined,
-            title: 'Flashcards',
-            child: _FlashcardsSection(material: freshMaterial),
-          ),
-          SectionCard(
-            icon: Icons.quiz_outlined,
-            title: 'Quiz',
-            child: _QuizSection(material: freshMaterial),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              AppStateScope.read(context).createStudySession(
-                subject: subject,
-                confidence: LectureConfidence.mostly,
-                materialId: freshMaterial.id,
-              );
-              Navigator.pushNamed(
-                context,
-                AppRoutes.studySessionResult,
-                arguments: subject,
-              );
-            },
-            icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('Create study session'),
-          ),
+            const SectionCard(
+              icon: Icons.hourglass_empty_outlined,
+              title: 'Waiting for processing',
+              child: Text('Text extraction will be added in the next phase.'),
+            ),
+          ],
+          if (!isUpload || freshMaterial.hasContentText) ...[
+            SectionCard(
+              icon: Icons.article_outlined,
+              title: 'Pasted text',
+              child: Text(
+                freshMaterial.content.isEmpty
+                    ? 'No pasted text available for this material.'
+                    : freshMaterial.content,
+              ),
+            ),
+            SectionCard(
+              icon: Icons.auto_awesome_outlined,
+              title: 'Summary',
+              child: _SummarySection(material: freshMaterial),
+            ),
+            SectionCard(
+              icon: Icons.style_outlined,
+              title: 'Flashcards',
+              child: _FlashcardsSection(material: freshMaterial),
+            ),
+            SectionCard(
+              icon: Icons.quiz_outlined,
+              title: 'Quiz',
+              child: _QuizSection(material: freshMaterial),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                AppStateScope.read(context).createStudySession(
+                  subject: subject,
+                  confidence: LectureConfidence.mostly,
+                  materialId: freshMaterial.id,
+                );
+                Navigator.pushNamed(
+                  context,
+                  AppRoutes.studySessionResult,
+                  arguments: subject,
+                );
+              },
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('Create study session'),
+            ),
+          ],
         ],
       ),
       bottomNavigationBar: const AppBottomNav(),

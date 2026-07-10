@@ -10,11 +10,15 @@ import '../core/models/study_session.dart';
 import '../core/models/study_time_block.dart';
 import '../core/models/subject.dart';
 import '../core/models/weak_topic.dart';
+import '../core/utils/uuid.dart';
 import '../features/auth/auth_models.dart';
 import '../features/favorites/favorite_repository.dart';
 import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
+import '../features/materials/material_file_picker.dart';
+import '../features/materials/material_upload.dart';
+import '../features/materials/material_upload_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -26,6 +30,9 @@ class AppState extends ChangeNotifier {
     AppConfig? config,
     SubjectRepository? subjectRepository,
     MaterialRepository? materialRepository,
+    MaterialUploadRepository? materialUploadRepository,
+    MaterialFilePicker? materialFilePicker,
+    String Function()? materialIdGenerator,
     FavoriteRepository? favoriteRepository,
     FlashcardRepository? flashcardRepository,
     SummaryRepository? summaryRepository,
@@ -44,6 +51,15 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyMaterialRepository()
                : MockMaterialRepository()),
+       materialUploadRepository =
+           materialUploadRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyMaterialUploadRepository()
+               : MockMaterialUploadRepository()),
+       materialFilePicker =
+           materialFilePicker ?? const PlatformMaterialFilePicker(),
+       materialIdGenerator = materialIdGenerator ?? newUuidV4,
        favoriteRepository =
            favoriteRepository ??
            ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
@@ -104,6 +120,9 @@ class AppState extends ChangeNotifier {
   final AppConfig config;
   final SubjectRepository subjectRepository;
   final MaterialRepository materialRepository;
+  final MaterialUploadRepository materialUploadRepository;
+  final MaterialFilePicker materialFilePicker;
+  final String Function() materialIdGenerator;
   final FavoriteRepository favoriteRepository;
   final FlashcardRepository flashcardRepository;
   final SummaryRepository summaryRepository;
@@ -131,6 +150,10 @@ class AppState extends ChangeNotifier {
   bool _isLoadingMaterials = false;
   bool _isCreatingMaterial = false;
   String? _materialSyncErrorMessage;
+  bool _isUploadingMaterial = false;
+  double? _uploadProgress;
+  String? _uploadStage;
+  String? _uploadError;
   bool _isLoadingMaterialFavorites = false;
   bool _isUpdatingMaterialFavorite = false;
   String? _favoriteSyncErrorMessage;
@@ -167,6 +190,14 @@ class AppState extends ChangeNotifier {
   bool get isCreatingMaterial => _isCreatingMaterial;
 
   String? get materialSyncErrorMessage => _materialSyncErrorMessage;
+
+  bool get isUploadingMaterial => _isUploadingMaterial;
+
+  double? get uploadProgress => _uploadProgress;
+
+  String? get uploadStage => _uploadStage;
+
+  String? get uploadError => _uploadError;
 
   List<StudyMaterial> get favoriteMaterials {
     return _materials
@@ -418,6 +449,76 @@ class AppState extends ChangeNotifier {
       return false;
     } finally {
       _isCreatingMaterial = false;
+      notifyListeners();
+    }
+  }
+
+  Future<SelectedMaterialFile?> pickMaterialFile(MaterialKind kind) {
+    return materialFilePicker.pick(kind);
+  }
+
+  Future<bool> uploadMaterialFor(
+    AuthUser? user, {
+    required String subjectId,
+    required MaterialKind kind,
+    required SelectedMaterialFile selectedFile,
+  }) async {
+    if (_isUploadingMaterial) return false;
+    if (kind == MaterialKind.pastedText) {
+      _uploadError = 'Choose a PDF or image to upload.';
+      notifyListeners();
+      return false;
+    }
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _uploadError = 'Log in to upload materials.';
+      notifyListeners();
+      return false;
+    }
+
+    _isUploadingMaterial = true;
+    _uploadProgress = null;
+    _uploadStage = 'Reading file';
+    _uploadError = null;
+    notifyListeners();
+    try {
+      final request = await prepareMaterialUpload(
+        selectedFile: selectedFile,
+        expectedKind: kind,
+        materialId: materialIdGenerator(),
+        subjectId: subjectId,
+      );
+      _uploadStage = 'Uploading file';
+      notifyListeners();
+      final material = await materialUploadRepository.uploadMaterial(
+        expectedUser: effectiveUser,
+        request: request,
+        onProgress: (progress) {
+          _uploadProgress = progress;
+          _uploadStage = progress == 1 ? 'Saving material' : 'Uploading file';
+          notifyListeners();
+        },
+      );
+      _materials = [
+        material,
+        for (final existing in _materials)
+          if (existing.id != material.id) existing,
+      ];
+      return true;
+    } catch (error) {
+      _uploadError = _materialUploadMessageFor(error);
+      return false;
+    } finally {
+      _isUploadingMaterial = false;
+      _uploadProgress = null;
+      _uploadStage = null;
       notifyListeners();
     }
   }
@@ -1399,6 +1500,12 @@ class AppState extends ChangeNotifier {
       return error.message;
     }
     return 'Could not sync materials. Try again.';
+  }
+
+  String _materialUploadMessageFor(Object error) {
+    if (error is MaterialUploadValidationException) return error.message;
+    if (error is MaterialUploadException) return error.message;
+    return 'Could not upload the selected file.';
   }
 
   String _favoriteMessageFor(Object error) {

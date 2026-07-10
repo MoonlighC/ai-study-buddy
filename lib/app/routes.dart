@@ -12,6 +12,7 @@ import '../features/flashcards/flashcard_training_screen.dart';
 import '../features/generation/generated_outputs_screen.dart';
 import '../features/materials/add_material_screen.dart';
 import '../features/materials/material_detail_screen.dart';
+import '../features/materials/upload_material_screen.dart';
 import '../features/progress/progress_screen.dart';
 import '../features/quizzes/quiz_taking_screen.dart';
 import '../features/search/search_screen.dart';
@@ -34,6 +35,7 @@ class AppRoutes {
   static const subjectDetail = '/subjects/detail';
   static const addMaterial = '/materials/add';
   static const materialDetail = '/materials/detail';
+  static const uploadMaterial = '/materials/upload';
   static const generatedOutputs = '/generation/outputs';
   static const flashcards = '/flashcards';
   static const flashcardTraining = '/flashcards/training';
@@ -77,6 +79,9 @@ class AppRoutes {
     final quizTakingArgs = routeSettings.arguments is QuizTakingArgs
         ? routeSettings.arguments! as QuizTakingArgs
         : null;
+    final uploadMaterialArgs = routeSettings.arguments is UploadMaterialArgs
+        ? routeSettings.arguments! as UploadMaterialArgs
+        : UploadMaterialArgs(subject: subject, kind: MaterialKind.pdf);
 
     final widget = switch (routeSettings.name) {
       authGate => const AuthGateScreen(),
@@ -87,6 +92,7 @@ class AppRoutes {
       subjectDetail => SubjectDetailScreen(subject: subject),
       addMaterial => AddMaterialScreen(subject: subject),
       materialDetail => MaterialDetailScreen(material: material),
+      uploadMaterial => UploadMaterialScreen(args: uploadMaterialArgs),
       generatedOutputs => GeneratedOutputsScreen(subject: subject),
       flashcards => FlashcardsScreen(subject: subject),
       flashcardTraining => FlashcardTrainingScreen(args: flashcardTrainingArgs),

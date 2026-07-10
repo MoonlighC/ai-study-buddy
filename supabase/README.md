@@ -122,3 +122,64 @@ updates.
 The service-role credential and OpenAI secret remain server-side only. Apply the
 migration and deploy the updated `generate-quiz` function manually when this
 phase is approved; neither action is performed by Codex here.
+
+## Phase 9A: Private PDF and Image Uploads
+
+The Flutter app uses `file_picker` for PDF, PNG, JPEG, and WEBP selection. PDFs
+are limited to 10 MiB and images to 8 MiB. The client checks the extension,
+reported and actual byte sizes, canonical MIME type, and a basic file signature
+before uploading. These client checks are UX and basic filtering, not a complete
+trust boundary.
+
+Review `migrations/004_material_upload_storage.sql` and confirm the existing
+`study-materials` and `study-images` buckets are present. Migrations 001-003 do
+not create any `storage.objects` policies, but policies created manually in the
+Dashboard are not visible in this repository. Before applying migration 004,
+run this preflight in Dashboard > SQL Editor:
+
+```sql
+select
+  schemaname,
+  tablename,
+  policyname,
+  permissive,
+  roles,
+  cmd,
+  qual,
+  with_check
+from pg_policies
+where schemaname = 'storage'
+  and tablename = 'objects'
+order by policyname;
+```
+
+PostgreSQL permissive RLS policies combine with `OR`. Verify that no policy
+other than the three Phase 9A policies grants INSERT, SELECT, UPDATE, or DELETE
+access to `study-materials` or `study-images`. Pay particular attention to
+policies that name either bucket and broad policies with no bucket restriction.
+If one exists, stop: review it and drop it by its exact policy name in a
+separate, deliberate SQL change before applying migration 004. Do not blindly
+drop policies for unrelated buckets.
+
+Only after that preflight is clean, apply the migration manually:
+
+```powershell
+supabase db push
+```
+
+Alternatively, execute the migration once in Dashboard > SQL Editor. Codex does
+not apply it remotely. Afterwards, confirm both buckets remain private, their
+MIME/size restrictions are configured, and authenticated users have only
+INSERT, SELECT, and DELETE access at the exact private path
+`{auth.uid()}/{material_uuid}/{filename}`. The path policies require exactly
+two folder segments, a UUID second segment, and a non-empty basename; extra
+nested folders are rejected.
+
+Run Flutter with the existing public client configuration and upload one file
+from each of two test accounts. Confirm each account sees only its own material
+metadata and cannot read or delete the other account's object. No Edge Function,
+OpenAI secret, service-role credential, signed URL, or public bucket is needed.
+
+TODO(Phase 9B): PDF extraction and OCR code must revalidate the actual stored
+file format server-side before parsing or processing it. Phase 9A does not
+extract text or inspect image contents.

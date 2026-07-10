@@ -9,6 +9,8 @@ import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/app_top_actions.dart';
 import '../../shared/widgets/section_card.dart';
 import '../auth/auth_controller.dart';
+import '../materials/material_upload.dart';
+import '../materials/upload_material_screen.dart';
 
 class SubjectDetailScreen extends StatelessWidget {
   const SubjectDetailScreen({required this.subject, super.key});
@@ -122,9 +124,9 @@ class SubjectDetailScreen extends StatelessWidget {
                   for (final material in materials)
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.article_outlined),
+                      leading: Icon(_materialIcon(material)),
                       title: Text(material.title),
-                      subtitle: Text('${material.createdLabel} - pasted text'),
+                      subtitle: Text(_materialSubtitle(material)),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -162,22 +164,36 @@ class SubjectDetailScreen extends StatelessWidget {
             child: _SummariesList(materials: summaryMaterials),
           ),
           SectionCard(
-            icon: Icons.hourglass_empty_outlined,
-            title: 'Coming later',
-            subtitle: 'Visible placeholders only; no upload is performed.',
-            child: const Column(
+            icon: Icons.cloud_upload_outlined,
+            title: 'Upload materials',
+            subtitle: 'Store a private PDF or image for this subject.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.image_outlined),
-                  title: Text('Photo upload placeholder'),
-                  subtitle: Text('Later: storage plus OCR pipeline'),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    AppRoutes.uploadMaterial,
+                    arguments: UploadMaterialArgs(
+                      subject: subject,
+                      kind: MaterialKind.pdf,
+                    ),
+                  ),
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: const Text('Upload PDF'),
                 ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.picture_as_pdf_outlined),
-                  title: Text('PDF upload placeholder'),
-                  subtitle: Text('Later: storage plus extraction'),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    AppRoutes.uploadMaterial,
+                    arguments: UploadMaterialArgs(
+                      subject: subject,
+                      kind: MaterialKind.image,
+                    ),
+                  ),
+                  icon: const Icon(Icons.image_outlined),
+                  label: const Text('Upload image'),
                 ),
               ],
             ),
@@ -205,6 +221,28 @@ class SubjectDetailScreen extends StatelessWidget {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+IconData _materialIcon(StudyMaterial material) {
+  return switch (material.kind) {
+    MaterialKind.pdf => Icons.picture_as_pdf_outlined,
+    MaterialKind.image => Icons.image_outlined,
+    MaterialKind.pastedText => Icons.article_outlined,
+  };
+}
+
+String _materialSubtitle(StudyMaterial material) {
+  if (material.sourceKind != MaterialSourceKind.upload) {
+    return '${material.createdLabel} - pasted text';
+  }
+  final type = material.kind == MaterialKind.pdf ? 'PDF' : 'Image';
+  final size = material.fileSizeBytes == null
+      ? 'Unknown size'
+      : formatFileSize(material.fileSizeBytes!);
+  final status = material.processingStatus == MaterialProcessingStatus.pending
+      ? 'Uploaded · Waiting for processing'
+      : 'Uploaded';
+  return '$type · $size · $status';
 }
 
 class _SummariesList extends StatelessWidget {
