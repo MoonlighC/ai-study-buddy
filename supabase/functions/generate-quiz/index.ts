@@ -48,6 +48,8 @@ serve(async (request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const supabaseServiceRoleKey =
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const openAiApiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
   const model = Deno.env.get("OPENAI_MODEL") ?? defaultModel;
   if (supabaseUrl.length === 0 || supabaseAnonKey.length === 0) {
@@ -96,7 +98,15 @@ serve(async (request) => {
   const contentText = typeof material?.content_text === "string"
     ? material.content_text.trim()
     : "";
-  if (materialError || material === null || contentText.length === 0) {
+  const materialOwnerId = typeof material?.user_id === "string"
+    ? material.user_id
+    : "";
+  if (
+    materialError ||
+    material === null ||
+    materialOwnerId !== user.id ||
+    contentText.length === 0
+  ) {
     logKnownFailure("material_unavailable");
     return jsonResponse({ error: "Material unavailable." }, 404);
   }
@@ -126,6 +136,16 @@ serve(async (request) => {
     logKnownFailure("openai_key_missing");
     return jsonResponse({ error: "Quiz generation is unavailable." }, 500);
   }
+  if (supabaseServiceRoleKey.length === 0) {
+    logKnownFailure("trusted_database_credential_missing");
+    return jsonResponse({ error: "Quiz generation is unavailable." }, 500);
+  }
+
+  const trustedWriteClient = createClient(
+    supabaseUrl,
+    supabaseServiceRoleKey,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
 
   try {
     // TODO: Enforce daily_usage_limits server-side before making this request.
@@ -147,19 +167,20 @@ serve(async (request) => {
     const subjectId = typeof material.subject_id === "string"
       ? material.subject_id
       : null;
-    const { data: insertedQuiz, error: quizInsertError } = await supabaseClient
-      .from("quizzes")
-      .insert({
-        user_id: user.id,
-        subject_id: subjectId,
-        material_id: materialId,
-        title: draft.title,
-        quiz_type: "practice",
-        question_count: draft.questions.length,
-        metadata: { source: "generate-quiz", model },
-      })
-      .select("id,material_id,title")
-      .single();
+    const { data: insertedQuiz, error: quizInsertError } =
+      await trustedWriteClient
+        .from("quizzes")
+        .insert({
+          user_id: user.id,
+          subject_id: subjectId,
+          material_id: materialId,
+          title: draft.title,
+          quiz_type: "practice",
+          question_count: draft.questions.length,
+          metadata: { source: "generate-quiz", model },
+        })
+        .select("id,material_id,title")
+        .single();
     if (quizInsertError || insertedQuiz === null) {
       logKnownFailure("quiz_insert_failed");
       return jsonResponse({ error: "Could not save quiz." }, 500);
@@ -181,7 +202,7 @@ serve(async (request) => {
       metadata: { source: "generate-quiz", model },
     }));
     const { data: insertedQuestions, error: questionInsertError } =
-      await supabaseClient
+      await trustedWriteClient
         .from("quiz_questions")
         .insert(rows)
         .select(
@@ -190,6 +211,11 @@ serve(async (request) => {
         .order("sort_order", { ascending: true });
     if (questionInsertError || !Array.isArray(insertedQuestions)) {
       logKnownFailure("quiz_questions_insert_failed");
+      await trustedWriteClient
+        .from("quizzes")
+        .delete()
+        .eq("id", quizId)
+        .eq("user_id", user.id);
       return jsonResponse({ error: "Could not save quiz questions." }, 500);
     }
     logStage("quiz_inserted", {
