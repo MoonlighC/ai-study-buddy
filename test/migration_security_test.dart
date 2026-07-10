@@ -3,6 +3,56 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('material processing migration revokes update only', () async {
+    final migration = await File(
+      'supabase/migrations/005_material_processing_authority.sql',
+    ).readAsString();
+    final normalized = migration.toLowerCase();
+    expect(normalized, contains('revoke update on table public.materials'));
+    expect(normalized, contains('from public, anon, authenticated'));
+    expect(
+      normalized,
+      contains('drop policy if exists "users can update own materials"'),
+    );
+    expect(normalized, isNot(contains('revoke select')));
+    expect(normalized, isNot(contains('revoke insert')));
+    expect(normalized, isNot(contains('revoke delete')));
+  });
+
+  test('service role credential is absent from Flutter source', () async {
+    final files = Directory('lib').listSync(recursive: true).whereType<File>();
+    for (final file in files) {
+      expect(
+        await file.readAsString(),
+        isNot(contains('SUPABASE_SERVICE_ROLE_KEY')),
+      );
+    }
+  });
+
+  test('AI functions accept only manual text or ready uploaded PDF', () async {
+    for (final path in [
+      'supabase/functions/generate-summary/index.ts',
+      'supabase/functions/generate-flashcards/index.ts',
+      'supabase/functions/generate-quiz/index.ts',
+    ]) {
+      final source = await File(path).readAsString();
+      expect(source, contains('material.kind === "pasted_text"'));
+      expect(source, contains('material.source_kind === "manual"'));
+      expect(source, contains('material.kind === "pdf"'));
+      expect(source, contains('material.source_kind === "upload"'));
+      expect(source, contains('material.processing_status === "ready"'));
+    }
+    final summary = await File(
+      'supabase/functions/generate-summary/index.ts',
+    ).readAsString();
+    expect(summary, contains('SUPABASE_SERVICE_ROLE_KEY'));
+    expect(summary, contains('.update({ summary })'));
+    expect(summary, contains('.select("id")'));
+    expect(summary, contains('updatedMaterials.length !== 1'));
+    expect(summary, isNot(contains('processing_status: "processing"')));
+    expect(summary, isNot(contains('processing_status: "failed"')));
+  });
+
   test('quiz attempt RPC is the only authenticated mutation path', () async {
     final migration = await File(
       'supabase/migrations/003_quiz_attempt_weak_topics_rpc.sql',

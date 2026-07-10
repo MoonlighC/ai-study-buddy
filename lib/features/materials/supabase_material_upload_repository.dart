@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../../core/models/material.dart';
 import '../auth/auth_models.dart';
 import 'material_upload.dart';
+import 'material_row_mapper.dart';
 import 'material_upload_repository.dart';
 
 abstract class MaterialUploadDataSource {
@@ -56,11 +57,7 @@ class SupabaseMaterialUploadDataSource implements MaterialUploadDataSource {
     return _client
         .from('materials')
         .insert(values)
-        .select(
-          'id,subject_id,title,kind,source_kind,content_text,summary,'
-          'storage_bucket,storage_path,mime_type,file_size_bytes,'
-          'processing_status,created_at',
-        )
+        .select(materialSelectColumns)
         .single();
   }
 
@@ -127,7 +124,7 @@ class SupabaseMaterialUploadRepository implements MaterialUploadRepository {
         'processing_status': 'pending',
       });
       onProgress?.call(1);
-      return _mapMaterial(row);
+      return mapMaterialRow(row);
     } catch (_) {
       try {
         await _dataSource.removeObject(bucket: request.bucket, path: path);
@@ -138,48 +135,5 @@ class SupabaseMaterialUploadRepository implements MaterialUploadRepository {
         'The file uploaded, but its material could not be saved.',
       );
     }
-  }
-
-  StudyMaterial _mapMaterial(Map<String, dynamic> row) {
-    return StudyMaterial(
-      id: _string(row['id']) ?? '',
-      subjectId: _string(row['subject_id']) ?? '',
-      title: _string(row['title']) ?? 'Untitled material',
-      kind: switch (_string(row['kind'])) {
-        'pdf' => MaterialKind.pdf,
-        'image' => MaterialKind.image,
-        _ => MaterialKind.pastedText,
-      },
-      content: _string(row['content_text']) ?? '',
-      createdLabel: _createdLabel(_string(row['created_at'])),
-      summary: _string(row['summary']),
-      sourceKind: switch (_string(row['source_kind'])) {
-        'upload' => MaterialSourceKind.upload,
-        'generated' => MaterialSourceKind.generated,
-        _ => MaterialSourceKind.manual,
-      },
-      storageBucket: _string(row['storage_bucket']),
-      storagePath: _string(row['storage_path']),
-      mimeType: _string(row['mime_type']),
-      fileSizeBytes: row['file_size_bytes'] is num
-          ? (row['file_size_bytes'] as num).toInt()
-          : null,
-      processingStatus: switch (_string(row['processing_status'])) {
-        'pending' => MaterialProcessingStatus.pending,
-        'processing' => MaterialProcessingStatus.processing,
-        'failed' => MaterialProcessingStatus.failed,
-        _ => MaterialProcessingStatus.ready,
-      },
-    );
-  }
-
-  String? _string(Object? value) {
-    if (value is! String || value.trim().isEmpty) return null;
-    return value.trim();
-  }
-
-  String _createdLabel(String? value) {
-    if (value == null || value.length < 10) return 'Just now';
-    return value.substring(0, 10);
   }
 }

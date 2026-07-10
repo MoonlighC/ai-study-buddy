@@ -119,10 +119,7 @@ void main() {
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.materialDetail, arguments: upload);
 
-    expect(
-      find.text('Text extraction will be added in the next phase.'),
-      findsOneWidget,
-    );
+    expect(find.text('Extract text'), findsOneWidget);
     expect(find.text('MIME: application/pdf'), findsOneWidget);
     expect(find.text('Summary'), findsNothing);
     expect(find.text('Flashcards'), findsNothing);

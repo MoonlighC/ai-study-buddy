@@ -12,6 +12,7 @@ import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
 import '../features/materials/material_file_picker.dart';
 import '../features/materials/material_upload_repository.dart';
+import '../features/materials/pdf_text_extraction_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -24,6 +25,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.subjectRepository,
     this.materialRepository,
     this.materialUploadRepository,
+    this.pdfTextExtractionRepository,
     this.materialFilePicker,
     this.materialIdGenerator,
     this.favoriteRepository,
@@ -40,6 +42,7 @@ class StudyBuddyApp extends StatefulWidget {
   final SubjectRepository? subjectRepository;
   final MaterialRepository? materialRepository;
   final MaterialUploadRepository? materialUploadRepository;
+  final PdfTextExtractionRepository? pdfTextExtractionRepository;
   final MaterialFilePicker? materialFilePicker;
   final String Function()? materialIdGenerator;
   final FavoriteRepository? favoriteRepository;
@@ -59,6 +62,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
     subjectRepository: widget.subjectRepository,
     materialRepository: widget.materialRepository,
     materialUploadRepository: widget.materialUploadRepository,
+    pdfTextExtractionRepository: widget.pdfTextExtractionRepository,
     materialFilePicker: widget.materialFilePicker,
     materialIdGenerator: widget.materialIdGenerator,
     favoriteRepository: widget.favoriteRepository,

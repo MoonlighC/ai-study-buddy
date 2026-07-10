@@ -19,6 +19,7 @@ import '../features/materials/material_repository.dart';
 import '../features/materials/material_file_picker.dart';
 import '../features/materials/material_upload.dart';
 import '../features/materials/material_upload_repository.dart';
+import '../features/materials/pdf_text_extraction_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -31,6 +32,7 @@ class AppState extends ChangeNotifier {
     SubjectRepository? subjectRepository,
     MaterialRepository? materialRepository,
     MaterialUploadRepository? materialUploadRepository,
+    PdfTextExtractionRepository? pdfTextExtractionRepository,
     MaterialFilePicker? materialFilePicker,
     String Function()? materialIdGenerator,
     FavoriteRepository? favoriteRepository,
@@ -59,6 +61,12 @@ class AppState extends ChangeNotifier {
                : MockMaterialUploadRepository()),
        materialFilePicker =
            materialFilePicker ?? const PlatformMaterialFilePicker(),
+       pdfTextExtractionRepository =
+           pdfTextExtractionRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyPdfTextExtractionRepository()
+               : const MockPdfTextExtractionRepository()),
        materialIdGenerator = materialIdGenerator ?? newUuidV4,
        favoriteRepository =
            favoriteRepository ??
@@ -121,6 +129,7 @@ class AppState extends ChangeNotifier {
   final SubjectRepository subjectRepository;
   final MaterialRepository materialRepository;
   final MaterialUploadRepository materialUploadRepository;
+  final PdfTextExtractionRepository pdfTextExtractionRepository;
   final MaterialFilePicker materialFilePicker;
   final String Function() materialIdGenerator;
   final FavoriteRepository favoriteRepository;
@@ -154,6 +163,8 @@ class AppState extends ChangeNotifier {
   double? _uploadProgress;
   String? _uploadStage;
   String? _uploadError;
+  final Set<String> _extractingPdfIds = {};
+  final Map<String, String> _pdfExtractionErrors = {};
   bool _isLoadingMaterialFavorites = false;
   bool _isUpdatingMaterialFavorite = false;
   String? _favoriteSyncErrorMessage;
@@ -198,6 +209,12 @@ class AppState extends ChangeNotifier {
   String? get uploadStage => _uploadStage;
 
   String? get uploadError => _uploadError;
+
+  bool isExtractingPdf(String materialId) =>
+      _extractingPdfIds.contains(materialId);
+
+  String? pdfExtractionErrorFor(String materialId) =>
+      _pdfExtractionErrors[materialId];
 
   List<StudyMaterial> get favoriteMaterials {
     return _materials
@@ -523,6 +540,76 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> extractPdfTextFor(AuthUser? user, String materialId) async {
+    if (_extractingPdfIds.contains(materialId)) return false;
+    final material = materialById(materialId);
+    if (material == null ||
+        material.kind != MaterialKind.pdf ||
+        material.sourceKind != MaterialSourceKind.upload ||
+        material.processingStatus == MaterialProcessingStatus.processing ||
+        (material.processingStatus == MaterialProcessingStatus.ready &&
+            material.hasContentText)) {
+      _pdfExtractionErrors[materialId] = 'This PDF cannot be extracted.';
+      notifyListeners();
+      return false;
+    }
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _pdfExtractionErrors[materialId] = 'Log in to extract PDF text.';
+      notifyListeners();
+      return false;
+    }
+
+    _extractingPdfIds.add(materialId);
+    _pdfExtractionErrors.remove(materialId);
+    notifyListeners();
+    try {
+      final result = await pdfTextExtractionRepository.extractPdfText(
+        user: effectiveUser,
+        materialId: materialId,
+      );
+      final returnedMaterial =
+          config.effectiveBackendMode == AppBackendMode.supabase
+          ? result.material
+          : result.material.copyWith(
+              subjectId: material.subjectId,
+              title: material.title,
+              createdLabel: material.createdLabel,
+              storageBucket: material.storageBucket,
+              storagePath: material.storagePath,
+              mimeType: material.mimeType,
+              fileSizeBytes: material.fileSizeBytes,
+            );
+      _replaceMaterial(returnedMaterial);
+      if (result.errorMessage != null) {
+        _pdfExtractionErrors[materialId] = result.errorMessage!;
+      }
+      return result.succeeded;
+    } catch (error) {
+      _pdfExtractionErrors[materialId] = error is PdfTextExtractionException
+          ? error.message
+          : 'Could not extract text. Try again.';
+      return false;
+    } finally {
+      _extractingPdfIds.remove(materialId);
+      notifyListeners();
+    }
+  }
+
+  void _replaceMaterial(StudyMaterial material) {
+    _materials = [
+      for (final existing in _materials)
+        if (existing.id == material.id) material else existing,
+    ];
+  }
+
   Future<void> loadMaterialFavoritesFor(AuthUser? user) async {
     if (config.effectiveBackendMode != AppBackendMode.supabase) {
       _favoriteMaterialIds
@@ -732,6 +819,8 @@ class AppState extends ChangeNotifier {
     _isLoadingQuizAttempts = false;
     _isSavingQuizAttempt = false;
     _isLoadingCumulativeWeakTopics = false;
+    _extractingPdfIds.clear();
+    _pdfExtractionErrors.clear();
     _favoriteMaterialIds.clear();
     _flashcards = [];
     _quizzes = [];
@@ -833,18 +922,27 @@ class AppState extends ChangeNotifier {
   }
 
   bool canGenerateSummaryForMaterial(StudyMaterial material) {
-    return material.kind == MaterialKind.pastedText &&
+    return isAiSourceReadyForMaterial(material) &&
         material.content.trim().length >= summaryMinimumContentCharacters;
   }
 
   bool canGenerateFlashcardsForMaterial(StudyMaterial material) {
-    return material.kind == MaterialKind.pastedText &&
+    return isAiSourceReadyForMaterial(material) &&
         material.content.trim().length >= summaryMinimumContentCharacters;
   }
 
   bool canGenerateQuizForMaterial(StudyMaterial material) {
-    return material.kind == MaterialKind.pastedText &&
+    return isAiSourceReadyForMaterial(material) &&
         material.content.trim().length >= summaryMinimumContentCharacters;
+  }
+
+  bool isAiSourceReadyForMaterial(StudyMaterial material) {
+    return (material.kind == MaterialKind.pastedText &&
+            material.sourceKind == MaterialSourceKind.manual) ||
+        (material.kind == MaterialKind.pdf &&
+            material.sourceKind == MaterialSourceKind.upload &&
+            material.processingStatus == MaterialProcessingStatus.ready &&
+            material.hasContentText);
   }
 
   StudySession? get latestStudySession {
@@ -1035,7 +1133,7 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (material.kind != MaterialKind.pastedText) {
+    if (!isAiSourceReadyForMaterial(material)) {
       _summaryGenerationErrorMessage = 'Could not generate summary. Try again.';
       notifyListeners();
       return false;
@@ -1093,7 +1191,7 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (material.kind != MaterialKind.pastedText) {
+    if (!isAiSourceReadyForMaterial(material)) {
       _flashcardGenerationErrorMessage =
           'Could not generate flashcards. Try again.';
       notifyListeners();
@@ -1163,7 +1261,7 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (material.kind != MaterialKind.pastedText) {
+    if (!isAiSourceReadyForMaterial(material)) {
       _quizGenerationErrorMessage = 'Could not generate quiz. Try again.';
       notifyListeners();
       return false;

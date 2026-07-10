@@ -180,6 +180,37 @@ from each of two test accounts. Confirm each account sees only its own material
 metadata and cannot read or delete the other account's object. No Edge Function,
 OpenAI secret, service-role credential, signed URL, or public bucket is needed.
 
-TODO(Phase 9B): PDF extraction and OCR code must revalidate the actual stored
-file format server-side before parsing or processing it. Phase 9A does not
-extract text or inspect image contents.
+## Phase 9B: Selectable PDF Text Extraction
+
+`extract-pdf-text` verifies the caller, derives all storage metadata from the
+owned material row, downloads the private object with the caller's authenticated
+context, and extracts selectable text with the pinned serverless `unpdf` build.
+It does not perform OCR, process images, create URLs, or call OpenAI. A hard
+runtime termination can leave a row in `processing`; automatic stale-claim
+recovery is deferred and requires deliberate manual recovery.
+
+Deploy the updated functions before applying migration 005, in this order:
+
+```powershell
+supabase functions deploy generate-summary
+supabase functions deploy generate-flashcards
+supabase functions deploy generate-quiz
+supabase functions deploy extract-pdf-text
+```
+
+Then review and apply `005_material_processing_authority.sql` manually:
+
+```powershell
+supabase db push
+```
+
+The migration removes direct authenticated/anonymous `UPDATE` authority from
+`public.materials`; it does not revoke SELECT, INSERT, or DELETE. Extraction and
+summary writes use the Supabase-provided server-only service-role environment
+credential. No new custom secret is required and no such credential belongs in
+Flutter.
+
+Manually verify a selectable-text PDF becomes `ready`, displays its preview and
+can use summary/flashcard/quiz generation. Verify an image-only/scanned PDF
+becomes `failed` with: “No selectable text was found. Scanned PDFs will be
+supported in the OCR phase.” Images must remain metadata-only and ineligible.

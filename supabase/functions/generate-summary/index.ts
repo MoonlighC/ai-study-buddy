@@ -32,9 +32,10 @@ serve(async (request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const openAiApiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
   const model = Deno.env.get("OPENAI_MODEL") ?? defaultModel;
-  if (supabaseUrl.length === 0 || supabaseAnonKey.length === 0) {
+  if (supabaseUrl.length === 0 || supabaseAnonKey.length === 0 || serviceRoleKey.length === 0) {
     logKnownFailure("supabase_env_missing");
     return jsonResponse({ error: "Summary generation is unavailable." }, 500);
   }
@@ -55,6 +56,9 @@ serve(async (request) => {
   const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
+  const trustedClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
   const { data: userData, error: userError } = await supabaseClient.auth.getUser(
     jwt,
   );
@@ -67,18 +71,16 @@ serve(async (request) => {
 
   const { data: material, error: materialError } = await supabaseClient
     .from("materials")
-    .select("id,user_id,kind,source_kind,content_text")
+    .select("id,user_id,kind,source_kind,content_text,processing_status")
     .eq("id", materialId)
     .eq("user_id", user.id)
-    .eq("kind", "pasted_text")
-    .eq("source_kind", "manual")
     .is("deleted_at", null)
     .maybeSingle();
 
   const contentText = typeof material?.content_text === "string"
     ? material.content_text.trim()
     : "";
-  if (materialError || material === null || contentText.length === 0) {
+  if (materialError || material === null || !isEligibleAiMaterial(material, contentText)) {
     logKnownFailure("material_unavailable");
     return jsonResponse({ error: "Material unavailable." }, 404);
   }
@@ -93,16 +95,9 @@ serve(async (request) => {
     return jsonResponse({ error: shortInputMessage }, 400);
   }
   if (openAiApiKey.length === 0) {
-    await markMaterialFailed(supabaseClient, materialId, user.id);
     logKnownFailure("openai_key_missing");
     return jsonResponse({ error: "Summary generation is unavailable." }, 500);
   }
-
-  await supabaseClient
-    .from("materials")
-    .update({ processing_status: "processing" })
-    .eq("id", materialId)
-    .eq("user_id", user.id);
 
   try {
     // TODO: Enforce daily_usage_limits server-side before making this request.
@@ -112,13 +107,18 @@ serve(async (request) => {
       contentText.slice(0, maxInputChars),
     );
     logStage("summary_parsed", { material_id: materialId });
-    const { error: updateError } = await supabaseClient
+    const { data: updatedMaterials, error: updateError } = await trustedClient
       .from("materials")
-      .update({ summary, processing_status: "ready" })
+      .update({ summary })
       .eq("id", materialId)
-      .eq("user_id", user.id);
-    if (updateError) {
-      await markMaterialFailed(supabaseClient, materialId, user.id);
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .select("id");
+    if (
+      updateError ||
+      !Array.isArray(updatedMaterials) ||
+      updatedMaterials.length !== 1
+    ) {
       logKnownFailure("material_update_failed");
       return jsonResponse({ error: "Could not save summary." }, 500);
     }
@@ -126,7 +126,6 @@ serve(async (request) => {
 
     return jsonResponse({ material_id: materialId, summary });
   } catch (error) {
-    await markMaterialFailed(supabaseClient, materialId, user.id);
     const reason = error instanceof SafeFunctionError
       ? error.reason
       : "unexpected_generation_failure";
@@ -216,16 +215,11 @@ function collectResponseText(value: unknown, textParts: string[]) {
   }
 }
 
-async function markMaterialFailed(
-  supabaseClient: ReturnType<typeof createClient>,
-  materialId: string,
-  userId: string,
-) {
-  await supabaseClient
-    .from("materials")
-    .update({ processing_status: "failed" })
-    .eq("id", materialId)
-    .eq("user_id", userId);
+function isEligibleAiMaterial(material: Record<string, unknown>, content: string) {
+  if (content.length === 0) return false;
+  return (material.kind === "pasted_text" && material.source_kind === "manual") ||
+    (material.kind === "pdf" && material.source_kind === "upload" &&
+      material.processing_status === "ready");
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {

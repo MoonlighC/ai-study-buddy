@@ -27,6 +27,10 @@ class MaterialDetailScreen extends StatelessWidget {
     final subject = state.subjectFor(freshMaterial.subjectId);
     final isFavorite = state.isMaterialFavorite(freshMaterial.id);
     final isUpload = freshMaterial.sourceKind == MaterialSourceKind.upload;
+    final isReadyPdf =
+        freshMaterial.kind == MaterialKind.pdf &&
+        freshMaterial.processingStatus == MaterialProcessingStatus.ready &&
+        freshMaterial.hasContentText;
 
     return Scaffold(
       appBar: AppBar(
@@ -79,21 +83,16 @@ class MaterialDetailScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SectionCard(
-              icon: Icons.hourglass_empty_outlined,
-              title: 'Waiting for processing',
-              child: Text('Text extraction will be added in the next phase.'),
-            ),
+            if (freshMaterial.kind == MaterialKind.pdf)
+              _PdfExtractionSection(material: freshMaterial),
           ],
-          if (!isUpload || freshMaterial.hasContentText) ...[
+          if (!isUpload || isReadyPdf) ...[
             SectionCard(
               icon: Icons.article_outlined,
-              title: 'Pasted text',
-              child: Text(
-                freshMaterial.content.isEmpty
-                    ? 'No pasted text available for this material.'
-                    : freshMaterial.content,
-              ),
+              title: isReadyPdf ? 'Extracted text' : 'Pasted text',
+              child: isReadyPdf
+                  ? _ExtractedTextPreview(material: freshMaterial)
+                  : Text(freshMaterial.content),
             ),
             SectionCard(
               icon: Icons.auto_awesome_outlined,
@@ -152,6 +151,97 @@ class MaterialDetailScreen extends StatelessWidget {
   }
 }
 
+class _PdfExtractionSection extends StatelessWidget {
+  const _PdfExtractionSection({required this.material});
+  final StudyMaterial material;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
+    final loading = state.isExtractingPdf(material.id);
+    final processing =
+        material.processingStatus == MaterialProcessingStatus.processing;
+    final ready =
+        material.processingStatus == MaterialProcessingStatus.ready &&
+        material.hasContentText;
+    if (ready) return const SizedBox.shrink();
+    final failed = material.processingStatus == MaterialProcessingStatus.failed;
+    final error =
+        state.pdfExtractionErrorFor(material.id) ??
+        material.pdfExtraction?.failureMessage;
+
+    return SectionCard(
+      icon: failed ? Icons.error_outline : Icons.text_snippet_outlined,
+      title: failed ? 'Text extraction failed' : 'PDF text extraction',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (loading || processing)
+            const Text('Extracting selectable text…')
+          else if (failed)
+            Text(error ?? 'Could not extract text. Try again.')
+          else
+            const Text('Extract selectable text from this PDF.'),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: loading || processing
+                ? null
+                : () => _extract(context, material.id),
+            icon: loading || processing
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.text_snippet_outlined),
+            label: Text(
+              loading || processing
+                  ? 'Extracting selectable text…'
+                  : failed
+                  ? 'Retry text extraction'
+                  : 'Extract text',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _extract(BuildContext context, String materialId) async {
+    await AppStateScope.read(
+      context,
+    ).extractPdfTextFor(AuthScope.read(context).user, materialId);
+  }
+}
+
+class _ExtractedTextPreview extends StatelessWidget {
+  const _ExtractedTextPreview({required this.material});
+  final StudyMaterial material;
+
+  @override
+  Widget build(BuildContext context) {
+    const previewLimit = 2000;
+    final text = material.content;
+    final preview = text.length <= previewLimit
+        ? text
+        : text.substring(0, previewLimit);
+    final metadata = material.pdfExtraction;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (metadata?.pageCount != null) Text('Pages: ${metadata!.pageCount}'),
+        if (metadata?.characterCount != null)
+          Text('Characters: ${metadata!.characterCount}'),
+        if (metadata?.truncated == true)
+          const Text('Text was truncated to the safe storage limit.'),
+        if (text.length > previewLimit)
+          const Text('Previewing the first 2,000 characters.'),
+        const SizedBox(height: 8),
+        Text(preview),
+      ],
+    );
+  }
+}
+
 class _QuizSection extends StatelessWidget {
   const _QuizSection({required this.material});
 
@@ -162,7 +252,7 @@ class _QuizSection extends StatelessWidget {
     final state = AppStateScope.watch(context);
     final quiz = state.latestQuizForMaterial(material.id);
     final hasQuiz = quiz != null && quiz.questions.isNotEmpty;
-    final canGenerate = material.kind == MaterialKind.pastedText;
+    final canGenerate = state.isAiSourceReadyForMaterial(material);
     final hasEnoughText = state.canGenerateQuizForMaterial(material);
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
@@ -250,7 +340,7 @@ class _FlashcardsSection extends StatelessWidget {
     final state = AppStateScope.watch(context);
     final cards = state.flashcardsForMaterial(material.id);
     final hasCards = cards.isNotEmpty;
-    final canGenerate = material.kind == MaterialKind.pastedText;
+    final canGenerate = state.isAiSourceReadyForMaterial(material);
     final hasEnoughText = state.canGenerateFlashcardsForMaterial(material);
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
@@ -360,7 +450,7 @@ class _SummarySection extends StatelessWidget {
     final state = AppStateScope.watch(context);
     final summary = material.summary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
-    final canGenerate = material.kind == MaterialKind.pastedText;
+    final canGenerate = state.isAiSourceReadyForMaterial(material);
     final hasEnoughText = state.canGenerateSummaryForMaterial(material);
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;

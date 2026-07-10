@@ -87,11 +87,9 @@ serve(async (request) => {
 
   const { data: material, error: materialError } = await supabaseClient
     .from("materials")
-    .select("id,user_id,subject_id,title,kind,source_kind,content_text")
+    .select("id,user_id,subject_id,title,kind,source_kind,content_text,processing_status")
     .eq("id", materialId)
     .eq("user_id", user.id)
-    .eq("kind", "pasted_text")
-    .eq("source_kind", "manual")
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -105,7 +103,7 @@ serve(async (request) => {
     materialError ||
     material === null ||
     materialOwnerId !== user.id ||
-    contentText.length === 0
+    !isEligibleAiMaterial(material, contentText)
   ) {
     logKnownFailure("material_unavailable");
     return jsonResponse({ error: "Material unavailable." }, 404);
@@ -469,6 +467,13 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
       "Content-Type": "application/json",
     },
   });
+}
+
+function isEligibleAiMaterial(material: Record<string, unknown>, content: string) {
+  if (content.length === 0) return false;
+  return (material.kind === "pasted_text" && material.source_kind === "manual") ||
+    (material.kind === "pdf" && material.source_kind === "upload" &&
+      material.processing_status === "ready");
 }
 
 class SafeFunctionError extends Error {
