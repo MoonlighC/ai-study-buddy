@@ -18,7 +18,7 @@ abstract class QuizRepository {
 
   Future<QuizAttempt> saveQuizAttempt({
     required AuthUser user,
-    required QuizAttempt attempt,
+    required QuizAttemptSubmission submission,
   });
 }
 
@@ -34,11 +34,14 @@ class MockQuizRepository implements QuizRepository {
   MockQuizRepository({
     List<Quiz> initialQuizzes = const [],
     List<QuizAttempt> initialAttempts = const [],
+    DateTime Function()? now,
   }) : _quizzes = List<Quiz>.of(initialQuizzes),
-       _attempts = List<QuizAttempt>.of(initialAttempts);
+       _attempts = List<QuizAttempt>.of(initialAttempts),
+       _now = now ?? _utcNow;
 
   final List<Quiz> _quizzes;
   final List<QuizAttempt> _attempts;
+  final DateTime Function() _now;
 
   @override
   Future<List<Quiz>> loadQuizzes(AuthUser user) async {
@@ -93,17 +96,94 @@ class MockQuizRepository implements QuizRepository {
   @override
   Future<QuizAttempt> saveQuizAttempt({
     required AuthUser user,
-    required QuizAttempt attempt,
+    required QuizAttemptSubmission submission,
   }) async {
-    final saved = attempt.copyWith(
-      id: attempt.id.isEmpty
-          ? 'mock-attempt-${_attempts.length + 1}'
-          : attempt.id,
+    for (final existing in _attempts) {
+      if (existing.id != submission.attemptId) continue;
+      if (existing.quizId != submission.quizId) {
+        throw const QuizRepositoryException(
+          'Could not save this quiz attempt.',
+        );
+      }
+      return existing;
+    }
+    final completedAt = _now().toUtc();
+    final startedAt = submission.startedAt.toUtc();
+    if (startedAt.isAfter(completedAt.add(const Duration(minutes: 5))) ||
+        startedAt.isBefore(completedAt.subtract(const Duration(hours: 24)))) {
+      throw const QuizRepositoryException('Could not save this quiz attempt.');
+    }
+    final quiz = _quizzes
+        .where((item) => item.id == submission.quizId)
+        .firstOrNull;
+    if (quiz == null || quiz.questions.isEmpty) {
+      throw const QuizRepositoryException('Could not save this quiz attempt.');
+    }
+    final questionById = {
+      for (final question in quiz.questions) question.id: question,
+    };
+    final submittedIds = submission.selectedAnswers
+        .map((answer) => answer.questionId)
+        .toList();
+    if (submittedIds.length != questionById.length ||
+        submittedIds.toSet().length != submittedIds.length ||
+        submittedIds.any((id) => !questionById.containsKey(id)) ||
+        submission.selectedAnswers.any((answer) {
+          if (answer.selectedAnswer.isEmpty) return false;
+          final question = questionById[answer.questionId];
+          return question == null ||
+              !question.options.contains(answer.selectedAnswer);
+        })) {
+      throw const QuizRepositoryException('Could not save this quiz attempt.');
+    }
+    final answers = [
+      for (final selected in submission.selectedAnswers)
+        QuizAttemptAnswer(
+          questionId: selected.questionId,
+          question: questionById[selected.questionId]!.question,
+          selectedAnswer: selected.selectedAnswer,
+          correctAnswer: questionById[selected.questionId]!.correctAnswer,
+          isCorrect:
+              selected.selectedAnswer.isNotEmpty &&
+              selected.selectedAnswer ==
+                  questionById[selected.questionId]!.correctAnswer,
+          topic: questionById[selected.questionId]!.topic.trim(),
+          difficulty: questionById[selected.questionId]!.difficulty,
+        ),
+    ];
+    final correctQuestions = answers.where((answer) => answer.isCorrect).length;
+    final weakCounts = <String, ({String display, int count})>{};
+    for (final answer in answers.where((answer) => !answer.isCorrect)) {
+      final display = answer.topic.trim();
+      final key = display.toLowerCase();
+      if (key.isEmpty) continue;
+      final existing = weakCounts[key];
+      weakCounts[key] = (
+        display: existing?.display ?? display,
+        count: (existing?.count ?? 0) + 1,
+      );
+    }
+    final saved = QuizAttempt(
+      id: submission.attemptId,
+      quizId: submission.quizId,
+      subjectId: quiz.subjectId,
+      score: (correctQuestions * 10000 / answers.length).round() / 100,
+      totalQuestions: answers.length,
+      correctQuestions: correctQuestions,
+      startedAt: startedAt,
+      completedAt: completedAt,
+      answers: answers,
+      weakTopicsSnapshot: [
+        for (final value in weakCounts.values)
+          QuizWeakTopicSnapshot(topic: value.display, missCount: value.count),
+      ],
     );
     _attempts.insert(0, saved);
     return saved;
   }
 }
+
+DateTime _utcNow() => DateTime.now().toUtc();
 
 class SupabaseQuizRepository implements QuizRepository {
   const SupabaseQuizRepository(this._client);
@@ -229,29 +309,23 @@ class SupabaseQuizRepository implements QuizRepository {
   @override
   Future<QuizAttempt> saveQuizAttempt({
     required AuthUser user,
-    required QuizAttempt attempt,
+    required QuizAttemptSubmission submission,
   }) async {
     try {
-      final row = await _client
-          .from('quiz_attempts')
-          .insert({
-            'user_id': user.id,
-            'quiz_id': attempt.quizId,
-            'subject_id': attempt.subjectId,
-            'score': attempt.score,
-            'total_questions': attempt.totalQuestions,
-            'correct_questions': attempt.correctQuestions,
-            'started_at': attempt.startedAt.toUtc().toIso8601String(),
-            'completed_at': attempt.completedAt.toUtc().toIso8601String(),
-            'answers': [for (final answer in attempt.answers) answer.toJson()],
-            'weak_topics_snapshot': [
-              for (final topic in attempt.weakTopicsSnapshot) topic.toJson(),
-            ],
-          })
-          .select(
-            'id,quiz_id,subject_id,score,total_questions,correct_questions,started_at,completed_at,answers,weak_topics_snapshot',
-          )
-          .single();
+      final response = await _client.rpc(
+        'save_quiz_attempt_with_weak_topics',
+        params: submission.toRpcParameters(),
+      );
+      final Map<String, dynamic> row;
+      if (response is List && response.isNotEmpty && response.first is Map) {
+        row = Map<String, dynamic>.from(response.first as Map);
+      } else if (response is Map) {
+        row = Map<String, dynamic>.from(response);
+      } else {
+        throw const QuizRepositoryException(
+          'Could not save this quiz attempt.',
+        );
+      }
       return _mapAttempt(row);
     } catch (_) {
       throw const QuizRepositoryException('Could not save this quiz attempt.');
@@ -378,7 +452,7 @@ class EmptyQuizRepository implements QuizRepository {
   @override
   Future<QuizAttempt> saveQuizAttempt({
     required AuthUser user,
-    required QuizAttempt attempt,
+    required QuizAttemptSubmission submission,
   }) async {
     throw const QuizRepositoryException('Could not save this quiz attempt.');
   }

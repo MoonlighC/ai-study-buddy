@@ -7,6 +7,7 @@ import '../../core/models/material.dart';
 import '../../core/models/quiz.dart';
 import '../../core/models/quiz_attempt.dart';
 import '../../core/models/quiz_question.dart';
+import '../../core/utils/uuid.dart';
 import '../../core/models/subject.dart';
 import '../../shared/widgets/app_page.dart';
 import '../../shared/widgets/section_card.dart';
@@ -46,6 +47,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
   _QuizMode _mode = _QuizMode.taking;
   bool _isCompleting = false;
   late DateTime _startedAt;
+  late String _attemptId;
 
   @override
   void initState() {
@@ -154,6 +156,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
       quiz: _attempt.quiz,
       selectedAnswers: _answers,
       startedAt: _startedAt,
+      attemptId: _attemptId,
     );
     if (!mounted) return;
     setState(() => _isCompleting = false);
@@ -187,6 +190,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
     _mode = _QuizMode.taking;
     _isCompleting = false;
     _startedAt = DateTime.now().toUtc();
+    _attemptId = newUuidV4();
   }
 
   void _startMissedReview() {

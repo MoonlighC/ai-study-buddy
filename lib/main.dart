@@ -9,6 +9,7 @@ import 'features/flashcards/flashcard_repository.dart';
 import 'features/generation/summary_repository.dart';
 import 'features/materials/supabase_material_repository.dart';
 import 'features/quizzes/quiz_repository.dart';
+import 'features/progress/weak_topic_repository.dart';
 import 'features/subjects/supabase_subject_repository.dart';
 
 Future<void> main() async {
@@ -42,6 +43,9 @@ Future<void> main() async {
       quizRepository: supabaseClient == null
           ? null
           : SupabaseQuizRepository(supabaseClient),
+      weakTopicRepository: supabaseClient == null
+          ? null
+          : SupabaseWeakTopicRepository(supabaseClient),
     ),
   );
 }

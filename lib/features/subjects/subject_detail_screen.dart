@@ -22,6 +22,7 @@ class SubjectDetailScreen extends StatelessWidget {
     final summaryMaterials = materials
         .where((material) => material.summary?.trim().isNotEmpty ?? false)
         .toList();
+    final focusTopics = state.cumulativeWeakTopicsFor(subject.id).take(3);
 
     return Scaffold(
       appBar: AppBar(
@@ -32,6 +33,26 @@ class SubjectDetailScreen extends StatelessWidget {
         children: [
           _SubjectHeader(subject: subject),
           const SizedBox(height: 12),
+          if (focusTopics.isNotEmpty)
+            SectionCard(
+              icon: Icons.flag_outlined,
+              title: 'Focus topics',
+              subtitle: 'Cumulative misses from completed quizzes.',
+              child: Column(
+                children: [
+                  for (final topic in focusTopics)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(topic.topic),
+                      trailing: Text(
+                        topic.missCount == 1
+                            ? '1 miss'
+                            : '${topic.missCount} misses',
+                      ),
+                    ),
+                ],
+              ),
+            ),
           SectionCard(
             icon: Icons.auto_awesome_outlined,
             title: 'Study actions',

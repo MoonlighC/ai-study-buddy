@@ -16,6 +16,7 @@ import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
+import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
 import '../mock/mock_ai_service.dart';
 import '../mock/mock_data.dart';
@@ -29,6 +30,7 @@ class AppState extends ChangeNotifier {
     FlashcardRepository? flashcardRepository,
     SummaryRepository? summaryRepository,
     QuizRepository? quizRepository,
+    WeakTopicRepository? weakTopicRepository,
   }) : config = config ?? AppConfig.fromValues(),
        subjectRepository =
            subjectRepository ??
@@ -66,6 +68,12 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyQuizRepository()
                : MockQuizRepository()),
+       weakTopicRepository =
+           weakTopicRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyWeakTopicRepository()
+               : const MockWeakTopicRepository()),
        _subjects =
            (config ?? AppConfig.fromValues()).effectiveBackendMode ==
                AppBackendMode.supabase
@@ -100,11 +108,13 @@ class AppState extends ChangeNotifier {
   final FlashcardRepository flashcardRepository;
   final SummaryRepository summaryRepository;
   final QuizRepository quizRepository;
+  final WeakTopicRepository weakTopicRepository;
   List<Subject> _subjects;
   List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
   List<Quiz> _quizzes = [];
   List<QuizAttempt> _quizAttempts = [];
+  List<CumulativeWeakTopic> _cumulativeWeakTopics = [];
   QuizAttempt? _latestQuizCompletion;
   final Set<String> _favoriteMaterialIds = {};
   final List<StudySession> _studySessions = [];
@@ -139,6 +149,8 @@ class AppState extends ChangeNotifier {
   bool _isLoadingQuizAttempts = false;
   bool _isSavingQuizAttempt = false;
   String? _quizAttemptSyncErrorMessage;
+  bool _isLoadingCumulativeWeakTopics = false;
+  String? _weakTopicSyncErrorMessage;
 
   List<Subject> get subjects => List.unmodifiable(_subjects);
 
@@ -207,6 +219,19 @@ class AppState extends ChangeNotifier {
 
   String? get quizAttemptSyncErrorMessage => _quizAttemptSyncErrorMessage;
 
+  List<CumulativeWeakTopic> get cumulativeWeakTopics =>
+      List.unmodifiable(_cumulativeWeakTopics);
+
+  List<CumulativeWeakTopic> cumulativeWeakTopicsFor(String subjectId) {
+    return _cumulativeWeakTopics
+        .where((topic) => topic.subjectId == subjectId)
+        .toList();
+  }
+
+  bool get isLoadingCumulativeWeakTopics => _isLoadingCumulativeWeakTopics;
+
+  String? get weakTopicSyncErrorMessage => _weakTopicSyncErrorMessage;
+
   AppLanguagePreference get languagePreference => _languagePreference;
 
   int get defaultFlashcardSessionSize => _defaultFlashcardSessionSize;
@@ -257,6 +282,7 @@ class AppState extends ChangeNotifier {
     await loadFlashcardsFor(user);
     await loadQuizzesFor(user);
     await loadQuizAttemptsFor(user);
+    await loadCumulativeWeakTopicsFor(user);
   }
 
   Future<void> loadMaterialsFor(AuthUser? user) async {
@@ -545,6 +571,34 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<void> loadCumulativeWeakTopicsFor(AuthUser? user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      _cumulativeWeakTopics = _deriveCumulativeWeakTopics(_quizAttempts);
+      _weakTopicSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    if (user == null) {
+      _cumulativeWeakTopics = [];
+      _weakTopicSyncErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingCumulativeWeakTopics = true;
+    _weakTopicSyncErrorMessage = null;
+    notifyListeners();
+    try {
+      _cumulativeWeakTopics = await weakTopicRepository.loadWeakTopics(user);
+    } catch (error) {
+      _weakTopicSyncErrorMessage = _weakTopicMessageFor(error);
+    } finally {
+      _isLoadingCumulativeWeakTopics = false;
+      notifyListeners();
+    }
+  }
+
   void clearSyncedSubjectsForSignOut() {
     if (config.effectiveBackendMode != AppBackendMode.supabase) {
       return;
@@ -561,6 +615,7 @@ class AppState extends ChangeNotifier {
     _quizSyncErrorMessage = null;
     _quizGenerationErrorMessage = null;
     _quizAttemptSyncErrorMessage = null;
+    _weakTopicSyncErrorMessage = null;
     _isLoadingSubjects = false;
     _isCreatingSubject = false;
     _isLoadingMaterials = false;
@@ -575,10 +630,12 @@ class AppState extends ChangeNotifier {
     _isGeneratingQuiz = false;
     _isLoadingQuizAttempts = false;
     _isSavingQuizAttempt = false;
+    _isLoadingCumulativeWeakTopics = false;
     _favoriteMaterialIds.clear();
     _flashcards = [];
     _quizzes = [];
     _quizAttempts = [];
+    _cumulativeWeakTopics = [];
     _latestQuizCompletion = null;
     notifyListeners();
   }
@@ -1080,6 +1137,7 @@ class AppState extends ChangeNotifier {
 
   Future<bool> completeQuizFor(
     AuthUser? user, {
+    required String attemptId,
     required Quiz quiz,
     required Map<String, String> selectedAnswers,
     required DateTime startedAt,
@@ -1100,8 +1158,11 @@ class AppState extends ChangeNotifier {
           question: question.question,
           selectedAnswer: selectedAnswers[question.id] ?? '',
           correctAnswer: question.correctAnswer,
-          isCorrect: selectedAnswers[question.id] == question.correctAnswer,
+          isCorrect:
+              (selectedAnswers[question.id] ?? '').isNotEmpty &&
+              selectedAnswers[question.id] == question.correctAnswer,
           topic: question.topic.trim(),
+          difficulty: question.difficulty,
         ),
     ];
     final correctQuestions = answerRows
@@ -1115,7 +1176,7 @@ class AppState extends ChangeNotifier {
       weakTopicCounts.update(topic, (count) => count + 1, ifAbsent: () => 1);
     }
     final attempt = QuizAttempt(
-      id: '',
+      id: attemptId,
       quizId: quiz.id,
       subjectId: quiz.subjectId,
       score: totalQuestions == 0
@@ -1146,7 +1207,18 @@ class AppState extends ChangeNotifier {
     try {
       final savedAttempt = await quizRepository.saveQuizAttempt(
         user: effectiveUser,
-        attempt: attempt,
+        submission: QuizAttemptSubmission(
+          attemptId: attemptId,
+          quizId: quiz.id,
+          startedAt: startedAt.toUtc(),
+          selectedAnswers: [
+            for (final question in quiz.questions)
+              QuizSelectedAnswer(
+                questionId: question.id,
+                selectedAnswer: selectedAnswers[question.id] ?? '',
+              ),
+          ],
+        ),
       );
       _latestQuizCompletion = savedAttempt;
       _quizAttempts = [
@@ -1154,6 +1226,11 @@ class AppState extends ChangeNotifier {
         for (final existing in _quizAttempts)
           if (existing.id != savedAttempt.id) existing,
       ];
+      if (config.effectiveBackendMode == AppBackendMode.supabase) {
+        await loadCumulativeWeakTopicsFor(user);
+      } else {
+        _cumulativeWeakTopics = _deriveCumulativeWeakTopics(_quizAttempts);
+      }
       return true;
     } catch (error) {
       _quizAttemptSyncErrorMessage = _quizAttemptMessageFor(error);
@@ -1385,6 +1462,59 @@ class AppState extends ChangeNotifier {
       return error.message;
     }
     return 'Could not save this quiz attempt.';
+  }
+
+  String _weakTopicMessageFor(Object error) {
+    if (error is WeakTopicRepositoryException) {
+      return error.message;
+    }
+    return 'Could not sync cumulative weak topics.';
+  }
+
+  List<CumulativeWeakTopic> _deriveCumulativeWeakTopics(
+    List<QuizAttempt> attempts,
+  ) {
+    final totals =
+        <
+          String,
+          ({String subjectId, String topic, int count, DateTime seen})
+        >{};
+    final uniqueAttempts = <String>{};
+    for (final attempt in attempts.reversed) {
+      if (!uniqueAttempts.add(attempt.id)) continue;
+      for (final weakTopic in attempt.weakTopicsSnapshot) {
+        final display = weakTopic.topic.trim();
+        final topicKey = display.toLowerCase();
+        if (topicKey.isEmpty || weakTopic.missCount <= 0) continue;
+        final identity = '${attempt.subjectId}\u0000$topicKey';
+        final existing = totals[identity];
+        totals[identity] = (
+          subjectId: attempt.subjectId,
+          topic: existing?.topic ?? display,
+          count: (existing?.count ?? 0) + weakTopic.missCount,
+          seen: existing == null || attempt.completedAt.isAfter(existing.seen)
+              ? attempt.completedAt
+              : existing.seen,
+        );
+      }
+    }
+    final topics = [
+      for (final entry in totals.entries)
+        CumulativeWeakTopic(
+          id: 'mock-weak-${entry.key.hashCode}',
+          subjectId: entry.value.subjectId,
+          topic: entry.value.topic,
+          topicKey: entry.value.topic.toLowerCase(),
+          missCount: entry.value.count,
+          lastSeenAt: entry.value.seen,
+        ),
+    ];
+    topics.sort((left, right) {
+      final countOrder = right.missCount.compareTo(left.missCount);
+      if (countOrder != 0) return countOrder;
+      return right.lastSeenAt.compareTo(left.lastSeenAt);
+    });
+    return topics;
   }
 
   String _summaryFor(

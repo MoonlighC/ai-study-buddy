@@ -163,6 +163,7 @@ void main() {
 
         final saved = await state.completeQuizFor(
           user,
+          attemptId: '00000000-0000-4000-8000-000000000001',
           quiz: _attemptQuiz,
           selectedAnswers: const {
             'attempt-question-1': 'Wrong',
@@ -176,7 +177,7 @@ void main() {
         expect(saved, isTrue);
         expect(repository.attemptUsers, [user]);
         final attempt = repository.savedAttempts.single;
-        expect(attempt.score, closeTo(33.333, 0.001));
+        expect(attempt.score, 33.33);
         expect(attempt.correctQuestions, 1);
         expect(attempt.totalQuestions, 3);
         expect(attempt.answers, hasLength(3));
@@ -188,7 +189,10 @@ void main() {
         expect(attempt.weakTopicsSnapshot, hasLength(1));
         expect(attempt.weakTopicsSnapshot.single.topic, 'Shared topic');
         expect(attempt.weakTopicsSnapshot.single.missCount, 2);
-        expect(state.latestQuizAttempt?.id, 'saved-attempt-1');
+        expect(
+          state.latestQuizAttempt?.id,
+          '00000000-0000-4000-8000-000000000001',
+        );
       },
     );
 
@@ -198,6 +202,7 @@ void main() {
 
       final saved = await state.completeQuizFor(
         null,
+        attemptId: '00000000-0000-4000-8000-000000000002',
         quiz: _generatedQuiz,
         selectedAnswers: const {'generated-question-1': 'Correct'},
         startedAt: DateTime.utc(2026, 7, 10, 10),
@@ -206,6 +211,70 @@ void main() {
       expect(saved, isTrue);
       expect(repository.savedAttempts.single.weakTopicsSnapshot, isEmpty);
     });
+
+    test(
+      'authoritative repository result replaces forged provisional data',
+      () async {
+        final repository = _FakeQuizRepository();
+        final state = AppState(quizRepository: repository);
+        final forgedQuiz = Quiz(
+          id: _attemptQuiz.id,
+          subjectId: 'forged-subject',
+          materialId: _attemptQuiz.materialId,
+          title: _attemptQuiz.title,
+          questions: [
+            for (final question in _attemptQuiz.questions)
+              QuizQuestion(
+                id: question.id,
+                quizId: question.quizId,
+                subjectId: 'forged-subject',
+                materialId: question.materialId,
+                question: 'Forged question',
+                options: question.options,
+                correctAnswer: 'Wrong',
+                explanation: question.explanation,
+                topic: 'Forged topic',
+                difficulty: question.difficulty,
+              ),
+          ],
+        );
+
+        final saved = await state.completeQuizFor(
+          null,
+          attemptId: '00000000-0000-4000-8000-000000000007',
+          quiz: forgedQuiz,
+          selectedAnswers: const {
+            'attempt-question-1': 'Correct',
+            'attempt-question-2': 'Correct',
+            'attempt-question-3': 'Correct',
+          },
+          startedAt: DateTime.utc(2026, 7, 10, 10),
+        );
+
+        expect(saved, isTrue);
+        expect(state.latestQuizCompletion?.score, 100);
+        expect(state.latestQuizCompletion?.subjectId, 'subject-1');
+        expect(
+          state.latestQuizCompletion?.answers.first.question,
+          'Question one',
+        );
+        expect(
+          state.latestQuizCompletion?.answers.first.correctAnswer,
+          'Correct',
+        );
+        expect(state.latestQuizCompletion?.answers.first.topic, 'Shared topic');
+        expect(
+          state.latestQuizCompletion?.answers.first.difficulty,
+          StudyDifficulty.easy,
+        );
+        expect(repository.savedSubmissions.single.toRpcParameters().keys, {
+          'p_attempt_id',
+          'p_quiz_id',
+          'p_started_at',
+          'p_selected_answers',
+        });
+      },
+    );
 
     test(
       'completion scores strings and preserves presented question order',
@@ -222,6 +291,7 @@ void main() {
 
         await state.completeQuizFor(
           null,
+          attemptId: '00000000-0000-4000-8000-000000000003',
           quiz: presentedQuiz,
           selectedAnswers: const {
             'attempt-question-1': 'Correct',
@@ -252,6 +322,7 @@ void main() {
 
       final saved = await state.completeQuizFor(
         null,
+        attemptId: '00000000-0000-4000-8000-000000000004',
         quiz: _generatedQuiz,
         selectedAnswers: const {'generated-question-1': 'Correct'},
         startedAt: DateTime.utc(2026, 7, 10, 10),
@@ -272,6 +343,7 @@ void main() {
 
       final saved = await state.completeQuizFor(
         null,
+        attemptId: '00000000-0000-4000-8000-000000000005',
         quiz: _generatedQuiz,
         selectedAnswers: const {'generated-question-1': 'Wrong A'},
         startedAt: DateTime.utc(2026, 7, 10, 10),
@@ -291,10 +363,14 @@ void main() {
     });
 
     test('mock repository reloads saved attempts', () async {
-      final repository = MockQuizRepository();
+      final repository = MockQuizRepository(
+        initialQuizzes: [_generatedQuiz],
+        now: () => DateTime.utc(2026, 7, 10, 10, 5),
+      );
       final state = AppState(quizRepository: repository);
       await state.completeQuizFor(
         null,
+        attemptId: '00000000-0000-4000-8000-000000000006',
         quiz: _generatedQuiz,
         selectedAnswers: const {'generated-question-1': 'Correct'},
         startedAt: DateTime.utc(2026, 7, 10, 10),
@@ -443,15 +519,16 @@ class _FakeQuizRepository implements QuizRepository {
   _FakeQuizRepository({
     List<Quiz> loadedQuizzes = const [],
     List<QuizAttempt> loadedAttempts = const [],
-    this._generatedQuiz,
+    Quiz? generatedQuiz,
     this.throwOnGenerate = false,
     this.throwOnSave = false,
-  }) : _quizzes = List<Quiz>.of(loadedQuizzes),
+  }) : _generatedQuizResult = generatedQuiz,
+       _quizzes = List<Quiz>.of(loadedQuizzes),
        _attempts = List<QuizAttempt>.of(loadedAttempts);
 
   final List<Quiz> _quizzes;
   final List<QuizAttempt> _attempts;
-  final Quiz? _generatedQuiz;
+  final Quiz? _generatedQuizResult;
   final bool throwOnGenerate;
   final bool throwOnSave;
   final List<AuthUser> loadedUsers = [];
@@ -460,6 +537,7 @@ class _FakeQuizRepository implements QuizRepository {
   final List<int> generatedCounts = [];
   final List<AuthUser> attemptUsers = [];
   final List<QuizAttempt> savedAttempts = [];
+  final List<QuizAttemptSubmission> savedSubmissions = [];
 
   @override
   Future<List<Quiz>> loadQuizzes(AuthUser user) async {
@@ -487,7 +565,7 @@ class _FakeQuizRepository implements QuizRepository {
         'Could not generate quiz. Try again.',
       );
     }
-    final quiz = _generatedQuiz ?? _generatedQuizFor(materialId);
+    final quiz = _generatedQuizResult ?? _generatedQuizFor(materialId);
     _quizzes
       ..removeWhere((item) => item.materialId == materialId)
       ..insert(0, quiz);
@@ -497,14 +575,28 @@ class _FakeQuizRepository implements QuizRepository {
   @override
   Future<QuizAttempt> saveQuizAttempt({
     required AuthUser user,
-    required QuizAttempt attempt,
+    required QuizAttemptSubmission submission,
   }) async {
     attemptUsers.add(user);
-    savedAttempts.add(attempt);
+    savedSubmissions.add(submission);
     if (throwOnSave) {
       throw const QuizRepositoryException('Could not save this quiz attempt.');
     }
-    final saved = attempt.copyWith(id: 'saved-attempt-${_attempts.length + 1}');
+    final authoritativeQuiz = switch (submission.quizId) {
+      'attempt-quiz' => _attemptQuiz,
+      'generated-quiz' => _generatedQuiz,
+      _ => _quizzes.firstWhere((quiz) => quiz.id == submission.quizId),
+    };
+    final server = MockQuizRepository(
+      initialQuizzes: [authoritativeQuiz],
+      initialAttempts: _attempts,
+      now: () => submission.startedAt.toUtc().add(const Duration(minutes: 5)),
+    );
+    final saved = await server.saveQuizAttempt(
+      user: user,
+      submission: submission,
+    );
+    savedAttempts.add(saved);
     _attempts.insert(0, saved);
     return saved;
   }

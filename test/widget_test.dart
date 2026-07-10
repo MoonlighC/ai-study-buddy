@@ -9,6 +9,7 @@ import 'package:ai_study_buddy/core/models/quiz.dart';
 import 'package:ai_study_buddy/core/models/quiz_attempt.dart';
 import 'package:ai_study_buddy/core/models/quiz_question.dart';
 import 'package:ai_study_buddy/core/models/subject.dart';
+import 'package:ai_study_buddy/core/models/weak_topic.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/favorites/favorite_repository.dart';
@@ -16,6 +17,7 @@ import 'package:ai_study_buddy/features/flashcards/flashcard_repository.dart';
 import 'package:ai_study_buddy/features/flashcards/flashcard_training_screen.dart';
 import 'package:ai_study_buddy/features/generation/summary_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
+import 'package:ai_study_buddy/features/progress/weak_topic_repository.dart';
 import 'package:ai_study_buddy/features/quizzes/quiz_repository.dart';
 import 'package:ai_study_buddy/features/quizzes/quiz_taking_screen.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
@@ -502,6 +504,10 @@ void main() {
     await tester.tap(find.text('Show score'));
     await tester.pumpAndSettle();
     expect(quizRepository.savedAttempts, hasLength(2));
+    expect(
+      quizRepository.savedAttempts.first.id,
+      isNot(quizRepository.savedAttempts.last.id),
+    );
   });
 
   testWidgets('missed quiz topic is shown and save failure is non-blocking', (
@@ -721,7 +727,7 @@ void main() {
     expect(find.text('1 / 2 correct'), findsOneWidget);
     await _scrollTo(tester, find.text('Cell division'));
     expect(find.text('Cell division'), findsOneWidget);
-    expect(find.text('Missed once in the latest quiz'), findsOneWidget);
+    expect(find.text('1 miss'), findsOneWidget);
   });
 
   testWidgets('progress shows safe empty quiz state', (tester) async {
@@ -729,8 +735,75 @@ void main() {
     await _pushRoute(tester, AppRoutes.progress);
 
     expect(find.text('Complete a quiz to see results here.'), findsOneWidget);
-    await _scrollTo(tester, find.text('No quiz weak topics yet'));
-    expect(find.text('No quiz weak topics yet'), findsOneWidget);
+    await _scrollTo(
+      tester,
+      find.text('Complete quizzes to discover topics that need more practice.'),
+    );
+    expect(
+      find.text('Complete quizzes to discover topics that need more practice.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('supabase progress shows real cumulative data only', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        subjectRepository: MockSubjectRepository(
+          initialSubjects: [MockData.subjects.first],
+        ),
+        quizRepository: _RecordingQuizRepository(attempts: [_progressAttempt]),
+        weakTopicRepository: _StaticWeakTopicRepository([
+          CumulativeWeakTopic(
+            id: 'progress-weak',
+            subjectId: 'biology',
+            topic: 'Cell division',
+            topicKey: 'cell division',
+            missCount: 4,
+            lastSeenAt: DateTime.utc(2026, 7, 10),
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.progress);
+
+    expect(find.text('Attempts completed'), findsOneWidget);
+    expect(find.text('4 misses'), findsOneWidget);
+    expect(find.text('Biology'), findsOneWidget);
+    expect(find.text('Knowledge scores'), findsNothing);
+    expect(find.text('Study history'), findsNothing);
+    expect(find.text('Streak placeholder'), findsNothing);
+
+    await _pushRoute(
+      tester,
+      AppRoutes.subjectDetail,
+      arguments: MockData.subjects.first,
+    );
+    expect(find.text('Focus topics'), findsOneWidget);
+    expect(find.text('Cell division'), findsOneWidget);
+    expect(find.text('4 misses'), findsOneWidget);
+  });
+
+  testWidgets('supabase progress shows cumulative empty state', (tester) async {
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+        weakTopicRepository: const _StaticWeakTopicRepository([]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.progress);
+
+    expect(
+      find.text('Complete quizzes to discover topics that need more practice.'),
+      findsOneWidget,
+    );
+    expect(find.text('Knowledge scores'), findsNothing);
   });
 
   testWidgets('flashcards screen shows Start training when cards exist', (
@@ -3018,6 +3091,7 @@ class _RecordingQuizRepository implements QuizRepository {
   final List<String> generatedMaterialIds = [];
   final List<int> generatedCounts = [];
   final List<QuizAttempt> savedAttempts = [];
+  final List<QuizAttemptSubmission> savedSubmissions = [];
 
   @override
   Future<List<Quiz>> loadQuizzes(AuthUser user) async {
@@ -3050,17 +3124,39 @@ class _RecordingQuizRepository implements QuizRepository {
   @override
   Future<QuizAttempt> saveQuizAttempt({
     required AuthUser user,
-    required QuizAttempt attempt,
+    required QuizAttemptSubmission submission,
   }) async {
-    savedAttempts.add(attempt);
+    savedSubmissions.add(submission);
+    final authoritativeQuiz = switch (submission.quizId) {
+      'multi-widget-quiz' => _multiQuestionWidgetQuiz,
+      _ => generatedQuiz ?? _widgetQuiz,
+    };
+    final server = MockQuizRepository(
+      initialQuizzes: [authoritativeQuiz],
+      initialAttempts: _attempts,
+      now: () => submission.startedAt.toUtc().add(const Duration(minutes: 5)),
+    );
+    final saved = await server.saveQuizAttempt(
+      user: user,
+      submission: submission,
+    );
+    savedAttempts.add(saved);
     if (throwOnSave) {
       throw const QuizRepositoryException('Could not save this quiz attempt.');
     }
-    final saved = attempt.copyWith(
-      id: 'widget-attempt-${_attempts.length + 1}',
-    );
     _attempts.insert(0, saved);
     return saved;
+  }
+}
+
+class _StaticWeakTopicRepository implements WeakTopicRepository {
+  const _StaticWeakTopicRepository(this.topics);
+
+  final List<CumulativeWeakTopic> topics;
+
+  @override
+  Future<List<CumulativeWeakTopic>> loadWeakTopics(AuthUser user) async {
+    return List.of(topics);
   }
 }
 
