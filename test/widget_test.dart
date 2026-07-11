@@ -76,11 +76,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Pasted text'), findsOneWidget);
+    await _scrollTo(
+      tester,
+      find.text('Cells release energy from glucose during respiration.'),
+    );
     expect(
       find.text('Cells release energy from glucose during respiration.'),
       findsOneWidget,
     );
-    expect(find.text('Generate mock summary'), findsOneWidget);
   });
 
   testWidgets('material deletion confirms, cancels, then returns to subject', (
@@ -168,13 +171,7 @@ void main() {
 
     expect(find.text('What is photosynthesis?'), findsOneWidget);
 
-    final favoriteTile = find.ancestor(
-      of: find.text('What is photosynthesis?'),
-      matching: find.byType(ListTile),
-    );
-    await tester.tap(
-      find.descendant(of: favoriteTile, matching: find.byTooltip('Unfavorite')),
-    );
+    await tester.tap(find.byTooltip('Unfavorite').first);
     await tester.pumpAndSettle();
 
     expect(find.text('What is photosynthesis?'), findsNothing);
@@ -209,14 +206,20 @@ void main() {
     );
 
     expect(find.text('Photosynthesis lecture notes'), findsOneWidget);
+    await _scrollTo(
+      tester,
+      find.textContaining(
+        'Plants convert light, water, and carbon dioxide into glucose',
+      ),
+    );
     expect(
       find.textContaining(
         'Plants convert light, water, and carbon dioxide into glucose',
       ),
       findsOneWidget,
     );
-    expect(find.text('Generate mock summary'), findsOneWidget);
-
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, 1200));
+    await tester.pumpAndSettle();
     await _scrollTo(tester, find.text('Create study session'));
     await tester.tap(find.text('Create study session'));
     await tester.pumpAndSettle();
@@ -1350,7 +1353,7 @@ void main() {
     );
   });
 
-  testWidgets('settings renders required mock sections and planned limits', (
+  testWidgets('settings renders real controls and planned usage state', (
     tester,
   ) async {
     await _enterDashboard(tester);
@@ -1368,10 +1371,9 @@ void main() {
 
     await _scrollTo(tester, find.text('Usage & Limits'));
 
-    expect(find.text('120/day'), findsOneWidget);
-    expect(find.text('80/day'), findsOneWidget);
-    expect(find.text('3/day'), findsOneWidget);
-    expect(find.text(r'$0.25/day'), findsOneWidget);
+    expect(find.text('Usage tracking is not connected'), findsOneWidget);
+    expect(find.textContaining('/day'), findsNothing);
+    expect(find.textContaining(r'$0.25'), findsNothing);
 
     await _scrollTo(tester, find.text('Support'));
 
@@ -1381,7 +1383,7 @@ void main() {
 
     await _scrollTo(tester, find.text('About / Debug'));
 
-    expect(find.text('0.1.0 placeholder'), findsOneWidget);
+    expect(find.text('0.1.0 placeholder'), findsNothing);
     expect(find.text('mock'), findsOneWidget);
     expect(
       find.text('No server secrets or OpenAI key in Flutter.'),
@@ -2652,6 +2654,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Pasted text'), findsOneWidget);
+    await _scrollTo(
+      tester,
+      find.textContaining(
+        'Plants convert light, water, and carbon dioxide into glucose',
+      ),
+    );
     expect(
       find.textContaining(
         'Plants convert light, water, and carbon dioxide into glucose',

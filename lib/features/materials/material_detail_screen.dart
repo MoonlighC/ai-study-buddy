@@ -5,9 +5,8 @@ import '../../app/app_config.dart';
 import '../../app/routes.dart';
 import '../../core/models/material.dart';
 import '../../core/models/study_session.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
-import '../../shared/widgets/app_page.dart';
-import '../../shared/widgets/app_top_actions.dart';
+import '../../shared/widgets/glass_components.dart';
+import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/section_card.dart';
 import '../auth/auth_controller.dart';
 import '../flashcards/flashcard_training_screen.dart';
@@ -16,6 +15,7 @@ import '../flashcards/flashcards_screen.dart';
 import '../quizzes/quiz_repository.dart';
 import '../quizzes/quiz_taking_screen.dart';
 import 'material_upload.dart';
+import 'material_presentation.dart';
 
 class MaterialDetailScreen extends StatelessWidget {
   const MaterialDetailScreen({required this.material, super.key});
@@ -35,6 +35,176 @@ class MaterialDetailScreen extends StatelessWidget {
         freshMaterial.processingStatus == MaterialProcessingStatus.ready &&
         freshMaterial.hasContentText;
 
+    return ResponsiveAppScaffold(
+      title: 'Material',
+      subtitle: subject.name,
+      showBack: true,
+      subjectColor: Color(subject.colorValue),
+      body: ResponsiveContent(
+        width: ResponsiveContentWidth.wide,
+        child: ListView(
+          key: const ValueKey('material-detail-scroll-view'),
+          children: [
+            MaterialHero(
+              title: freshMaterial.title,
+              subject: subject.name,
+              typeLabel: freshMaterial.kind == MaterialKind.pdf
+                  ? 'PDF'
+                  : freshMaterial.kind == MaterialKind.image
+                  ? 'Image'
+                  : 'Pasted text',
+              statusLabel: _materialStatus(freshMaterial),
+              isFavorite: isFavorite,
+              onFavorite: deleting || state.isUpdatingMaterialFavorite
+                  ? null
+                  : () => _toggleMaterialFavorite(context, freshMaterial.id),
+              onDelete: deleting
+                  ? null
+                  : () => _confirmDelete(context, freshMaterial),
+            ),
+            const SizedBox(height: 16),
+            if (deleting)
+              const MaterialStatusPanel(
+                key: Key('material-delete-progress'),
+                title: 'Deleting material',
+                message:
+                    'Removing the source and material-specific study content.',
+                icon: Icons.delete_outline,
+                progress: true,
+              )
+            else if (freshMaterial.processingStatus ==
+                MaterialProcessingStatus.processing)
+              _StaleRecoverySection(
+                materialId: freshMaterial.id,
+                processingMessage: freshMaterial.kind == MaterialKind.pdf
+                    ? 'Extracting selectable text…'
+                    : 'Reading image text…',
+              )
+            else if (state.isGeneratingSummary ||
+                state.isGeneratingFlashcards ||
+                state.isGeneratingQuiz)
+              const MaterialStatusPanel(
+                title: 'Generating study content',
+                message: 'Creating material-scoped learning content…',
+                icon: Icons.auto_awesome_outlined,
+                progress: true,
+              )
+            else if (freshMaterial.scannedPdfOcr?.partial == true)
+              const MaterialStatusPanel(
+                title: 'Partial result',
+                message:
+                    'Some pages could not be read. Available study text can still be used.',
+                icon: Icons.warning_amber_rounded,
+                warning: true,
+              )
+            else if (_imageOcrWarning(freshMaterial.imageOcr?.warningCodes)
+                case final warning?)
+              MaterialStatusPanel(
+                title: 'Partial result',
+                message: warning,
+                icon: Icons.warning_amber_rounded,
+                warning: true,
+              )
+            else if (isUpload && freshMaterial.kind == MaterialKind.pdf)
+              _PdfExtractionSection(material: freshMaterial)
+            else if (isUpload && freshMaterial.kind == MaterialKind.image)
+              _ImageExtractionSection(material: freshMaterial),
+            if (isUpload) ...[
+              const SizedBox(height: 16),
+              MaterialMetadata(
+                title: 'File metadata',
+                rows: [
+                  ('Filename', freshMaterial.title),
+                  (
+                    'Type',
+                    freshMaterial.kind == MaterialKind.pdf ? 'PDF' : 'Image',
+                  ),
+                  (
+                    'Size',
+                    freshMaterial.fileSizeBytes == null
+                        ? 'Unknown'
+                        : formatFileSize(freshMaterial.fileSizeBytes!),
+                  ),
+                  ('MIME', freshMaterial.mimeType ?? 'Unknown'),
+                  ('Status', _materialStatus(freshMaterial)),
+                ],
+              ),
+            ],
+            if (!isUpload || isReadyUpload) ...[
+              const SizedBox(height: 16),
+              AiOutputSection(
+                key: const Key('summary-section'),
+                title: 'Summary',
+                icon: Icons.auto_awesome_outlined,
+                reading: true,
+                child: _SummarySection(material: freshMaterial),
+              ),
+              const SizedBox(height: 16),
+              AiOutputSection(
+                key: const Key('flashcards-section'),
+                title: 'Flashcards',
+                icon: Icons.style_outlined,
+                child: _FlashcardsSection(material: freshMaterial),
+              ),
+              const SizedBox(height: 16),
+              AiOutputSection(
+                key: const Key('quiz-section'),
+                title: 'Quiz',
+                icon: Icons.quiz_outlined,
+                child: _QuizSection(material: freshMaterial),
+              ),
+              const SizedBox(height: 16),
+              MaterialActionSection(
+                title: 'Study session',
+                child: GlassButton(
+                  label: 'Create study session',
+                  icon: Icons.auto_awesome_outlined,
+                  prominent: true,
+                  onPressed: deleting
+                      ? null
+                      : () {
+                          AppStateScope.read(context).createStudySession(
+                            subject: subject,
+                            confidence: LectureConfidence.mostly,
+                            materialId: freshMaterial.id,
+                          );
+                          Navigator.pushNamed(
+                            context,
+                            AppRoutes.studySessionResult,
+                            arguments: subject,
+                          );
+                        },
+                ),
+              ),
+            ],
+            if (!isUpload) ...[
+              const SizedBox(height: 16),
+              AiOutputSection(
+                title: 'Pasted text',
+                icon: Icons.article_outlined,
+                reading: true,
+                child: Text(freshMaterial.content),
+              ),
+            ],
+            const SizedBox(height: 16),
+            MaterialMetadata(
+              rows: [
+                ('Created', freshMaterial.createdLabel),
+                ('Status', _materialStatus(freshMaterial)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            DestructiveActionSection(
+              deleting: deleting,
+              onDelete: deleting
+                  ? null
+                  : () => _confirmDelete(context, freshMaterial),
+            ),
+          ],
+        ),
+      ),
+    );
+    /* legacy presentation retained temporarily for callback reference
     return Scaffold(
       appBar: AppBar(
         title: const Text('Material'),
@@ -161,7 +331,7 @@ class MaterialDetailScreen extends StatelessWidget {
         ),
       ),
       bottomNavigationBar: const AppBottomNav(),
-    );
+    ); */
   }
 
   Future<void> _confirmDelete(
@@ -311,8 +481,12 @@ class _DeleteConfirmationItem extends StatelessWidget {
 }
 
 class _StaleRecoverySection extends StatefulWidget {
-  const _StaleRecoverySection({required this.materialId});
+  const _StaleRecoverySection({
+    required this.materialId,
+    required this.processingMessage,
+  });
   final String materialId;
+  final String processingMessage;
   @override
   State<_StaleRecoverySection> createState() => _StaleRecoverySectionState();
 }
@@ -335,17 +509,21 @@ class _StaleRecoverySectionState extends State<_StaleRecoverySection> {
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
     if (!state.isMaterialRecoveryEligible(widget.materialId)) {
-      return const SizedBox.shrink();
+      return MaterialStatusPanel(
+        title: 'Processing material',
+        message: widget.processingMessage,
+        icon: Icons.autorenew,
+        progress: true,
+      );
     }
-    return SectionCard(
+    return MaterialStatusPanel(
+      title: 'Processing appears to be stuck',
+      message: 'Reset this material and try processing again.',
       icon: Icons.restart_alt,
-      title: 'Processing appears to be stuck.',
-      child: FilledButton(
-        onPressed: () => state.recoverStuckMaterialFor(
-          AuthScope.read(context).user,
-          widget.materialId,
-        ),
-        child: const Text('Reset and try again.'),
+      actionLabel: 'Reset and try again',
+      onAction: () => state.recoverStuckMaterialFor(
+        AuthScope.read(context).user,
+        widget.materialId,
       ),
     );
   }

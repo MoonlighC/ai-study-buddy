@@ -4,6 +4,8 @@ import '../../app/app_state.dart';
 import '../../core/models/material.dart';
 import '../../core/models/subject.dart';
 import '../auth/auth_controller.dart';
+import '../../shared/widgets/glass_components.dart';
+import '../../shared/widgets/responsive_app_scaffold.dart';
 import 'material_upload.dart';
 
 class UploadMaterialArgs {
@@ -32,70 +34,99 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
     final selected = selectedFile;
-    return Scaffold(
-      appBar: AppBar(title: Text(isPdf ? 'Upload PDF' : 'Upload image')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            widget.args.subject.name,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            isPdf
-                ? 'PDF files up to 10 MiB.'
-                : 'PNG, JPG, JPEG, or WEBP images up to 8 MiB.',
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: state.isUploadingMaterial ? null : _pickFile,
-            icon: Icon(
-              isPdf ? Icons.picture_as_pdf_outlined : Icons.image_outlined,
-            ),
-            label: Text(isPdf ? 'Choose PDF' : 'Choose image'),
-          ),
-          if (selected != null) ...[
-            const SizedBox(height: 16),
-            Card(
-              child: ListTile(
-                leading: Icon(
-                  isPdf ? Icons.picture_as_pdf_outlined : Icons.image_outlined,
-                ),
-                title: Text(selected.name),
-                subtitle: Text(formatFileSize(selected.reportedSizeBytes)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: state.isUploadingMaterial ? null : _upload,
-              icon: state.isUploadingMaterial
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.cloud_upload_outlined),
-              label: Text(
-                state.isUploadingMaterial
-                    ? state.uploadStage ?? 'Uploading material'
-                    : 'Upload material',
-              ),
-            ),
-          ],
-          if (pickerError != null || state.uploadError != null) ...[
-            const SizedBox(height: 12),
+    return ResponsiveAppScaffold(
+      title: isPdf ? 'Upload PDF' : 'Upload image',
+      subtitle: widget.args.subject.name,
+      showBack: true,
+      body: ResponsiveContent(
+        width: ResponsiveContentWidth.reading,
+        child: ListView(
+          key: const ValueKey('upload-material-scroll-view'),
+          children: [
             Text(
-              pickerError ?? state.uploadError!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              widget.args.subject.name,
+              style: Theme.of(context).textTheme.titleLarge,
             ),
+            const SizedBox(height: 8),
+            Text(
+              isPdf
+                  ? 'PDF files up to 10 MiB.'
+                  : 'PNG, JPG, JPEG, or WEBP images up to 8 MiB.',
+            ),
+            const SizedBox(height: 16),
+            GlassCard(
+              key: const ValueKey('upload-picker-surface'),
+              reading: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  GlassStatusChip(
+                    label: isPdf ? 'PDF' : 'Image',
+                    icon: isPdf
+                        ? Icons.picture_as_pdf_outlined
+                        : Icons.image_outlined,
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: state.isUploadingMaterial ? null : _pickFile,
+                    icon: Icon(
+                      isPdf
+                          ? Icons.picture_as_pdf_outlined
+                          : Icons.image_outlined,
+                    ),
+                    label: Text(isPdf ? 'Choose PDF' : 'Choose image'),
+                  ),
+                ],
+              ),
+            ),
+            if (selected != null) ...[
+              const SizedBox(height: 16),
+              GlassCard(
+                key: const ValueKey('selected-file-metadata'),
+                child: AppListRow(
+                  leading: Icon(
+                    isPdf
+                        ? Icons.picture_as_pdf_outlined
+                        : Icons.image_outlined,
+                  ),
+                  title: Text(selected.name),
+                  subtitle: Text(
+                    '${isPdf ? 'PDF' : 'Image'} · ${formatFileSize(selected.reportedSizeBytes)}',
+                  ),
+                  showDivider: false,
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: state.isUploadingMaterial ? null : _upload,
+                icon: state.isUploadingMaterial
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_upload_outlined),
+                label: Text(
+                  state.isUploadingMaterial
+                      ? state.uploadStage ?? 'Uploading material'
+                      : 'Upload material',
+                ),
+              ),
+            ],
+            if (pickerError != null || state.uploadError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                pickerError ?? state.uploadError!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            if (state.isUploadingMaterial) ...[
+              const SizedBox(height: 12),
+              state.uploadProgress == null
+                  ? const LinearProgressIndicator()
+                  : LinearProgressIndicator(value: state.uploadProgress),
+            ],
           ],
-          if (state.isUploadingMaterial) ...[
-            const SizedBox(height: 12),
-            state.uploadProgress == null
-                ? const LinearProgressIndicator()
-                : LinearProgressIndicator(value: state.uploadProgress),
-          ],
-        ],
+        ),
       ),
     );
   }

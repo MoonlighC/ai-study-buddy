@@ -4,10 +4,8 @@ import '../../app/app_config.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../auth/auth_controller.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
-import '../../shared/widgets/app_page.dart';
-import '../../shared/widgets/app_top_actions.dart';
-import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/glass_components.dart';
+import '../../shared/widgets/responsive_app_scaffold.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -23,173 +21,176 @@ class SettingsScreen extends StatelessWidget {
         ? auth.effectiveDisplayName
         : 'Alex Student';
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        actions: const [AppTopActions()],
-      ),
-      body: AppPage(
-        children: [
-          Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(
-            'Mock preferences for the local prototype.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-          SectionCard(
-            icon: Icons.person_outline,
-            title: 'Account',
-            subtitle: isSupabaseMode
-                ? 'Supabase account'
-                : 'Local mock profile',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _InfoRow(label: 'Name', value: accountName),
-                _InfoRow(label: 'Email', value: accountEmail),
-                const SizedBox(height: 12),
-                if (isSupabaseMode) ...[
+    return ResponsiveAppScaffold(
+      title: 'Settings',
+      activeRoute: AppRoutes.settings,
+      body: ResponsiveContent(
+        width: ResponsiveContentWidth.wide,
+        child: ListView(
+          key: const ValueKey('settings-scroll-view'),
+          children: [
+            Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text(
+              'Mock preferences for the local prototype.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            _SettingsSection(
+              icon: Icons.person_outline,
+              title: 'Account',
+              subtitle: isSupabaseMode
+                  ? 'Supabase account'
+                  : 'Local mock profile',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _InfoRow(label: 'Name', value: accountName),
+                  _InfoRow(label: 'Email', value: accountEmail),
+                  const SizedBox(height: 12),
+                  if (isSupabaseMode) ...[
+                    OutlinedButton.icon(
+                      onPressed: auth.isLoading || auth.user == null
+                          ? null
+                          : () => _editName(context),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit name'),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  FilledButton.tonalIcon(
+                    onPressed: auth.isLoading ? null : () => _logOut(context),
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Log out'),
+                  ),
+                ],
+              ),
+            ),
+            _SettingsSection(
+              icon: Icons.language_outlined,
+              title: 'Language',
+              subtitle: 'Display preference only',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _PreferenceChips<AppLanguagePreference>(
+                    values: AppLanguagePreference.values,
+                    selected: state.languagePreference,
+                    labelFor: (value) => value.label,
+                    onSelected: state.setLanguagePreference,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Full translation comes later.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            _SettingsSection(
+              icon: Icons.tune_outlined,
+              title: 'Study Preferences',
+              subtitle: 'Stored in local AppState only',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _PreferenceLabel('Default flashcard session size'),
+                  _PreferenceChips<int>(
+                    values: const [5, 10, 20],
+                    selected: state.defaultFlashcardSessionSize,
+                    labelFor: (value) => '$value',
+                    onSelected: state.setDefaultFlashcardSessionSize,
+                  ),
+                  const SizedBox(height: 14),
+                  const _PreferenceLabel('Daily study goal'),
+                  _PreferenceChips<int>(
+                    values: const [10, 20, 30],
+                    selected: state.dailyStudyGoalMinutes,
+                    labelFor: (value) => '$value min',
+                    onSelected: state.setDailyStudyGoalMinutes,
+                  ),
+                  const SizedBox(height: 14),
+                  const _PreferenceLabel('Default difficulty'),
+                  _PreferenceChips<StudyDifficultyPreference>(
+                    values: StudyDifficultyPreference.values,
+                    selected: state.defaultDifficulty,
+                    labelFor: (value) => value.label,
+                    onSelected: state.setDefaultDifficulty,
+                  ),
+                ],
+              ),
+            ),
+            _SettingsSection(
+              icon: Icons.palette_outlined,
+              title: 'App preferences',
+              subtitle: 'Appearance options are planned',
+              child: const ListTile(
+                enabled: false,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.dark_mode_outlined),
+                title: Text('Appearance'),
+                subtitle: Text('Dark mode is not available yet.'),
+              ),
+            ),
+            _SettingsSection(
+              icon: Icons.speed_outlined,
+              title: 'Usage & Limits',
+              subtitle: 'Usage tracking is not connected',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('View usage information'),
+                subtitle: const Text('Limits and enforcement are planned.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pushNamed(context, AppRoutes.usage),
+              ),
+            ),
+            _SettingsSection(
+              icon: Icons.support_agent_outlined,
+              title: 'Support',
+              subtitle: 'No email or network integration yet',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                   OutlinedButton.icon(
-                    onPressed: auth.isLoading || auth.user == null
-                        ? null
-                        : () => _editName(context),
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Edit name'),
+                    onPressed: null,
+                    icon: const Icon(Icons.bug_report_outlined),
+                    label: const Text('Report a bug placeholder'),
                   ),
                   const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.contact_support_outlined),
+                    label: const Text('Contact support placeholder'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.feedback_outlined),
+                    label: const Text('Send feedback placeholder'),
+                  ),
                 ],
-                FilledButton.tonalIcon(
-                  onPressed: auth.isLoading ? null : () => _logOut(context),
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Log out'),
-                ),
-              ],
+              ),
             ),
-          ),
-          SectionCard(
-            icon: Icons.language_outlined,
-            title: 'Language',
-            subtitle: 'Display preference only',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _PreferenceChips<AppLanguagePreference>(
-                  values: AppLanguagePreference.values,
-                  selected: state.languagePreference,
-                  labelFor: (value) => value.label,
-                  onSelected: state.setLanguagePreference,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Full translation comes later.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+            _SettingsSection(
+              icon: Icons.info_outline,
+              title: 'About / Debug',
+              subtitle: 'Prototype diagnostics',
+              child: Column(
+                children: [
+                  _InfoRow(
+                    label: 'Backend mode',
+                    value: _backendModeLabel(state.config.effectiveBackendMode),
+                  ),
+                  const _InfoRow(
+                    label: 'Security note',
+                    value: 'No server secrets or OpenAI key in Flutter.',
+                  ),
+                ],
+              ),
             ),
-          ),
-          SectionCard(
-            icon: Icons.tune_outlined,
-            title: 'Study Preferences',
-            subtitle: 'Stored in local AppState only',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _PreferenceLabel('Default flashcard session size'),
-                _PreferenceChips<int>(
-                  values: const [5, 10, 20],
-                  selected: state.defaultFlashcardSessionSize,
-                  labelFor: (value) => '$value',
-                  onSelected: state.setDefaultFlashcardSessionSize,
-                ),
-                const SizedBox(height: 14),
-                const _PreferenceLabel('Daily study goal'),
-                _PreferenceChips<int>(
-                  values: const [10, 20, 30],
-                  selected: state.dailyStudyGoalMinutes,
-                  labelFor: (value) => '$value min',
-                  onSelected: state.setDailyStudyGoalMinutes,
-                ),
-                const SizedBox(height: 14),
-                const _PreferenceLabel('Default difficulty'),
-                _PreferenceChips<StudyDifficultyPreference>(
-                  values: StudyDifficultyPreference.values,
-                  selected: state.defaultDifficulty,
-                  labelFor: (value) => value.label,
-                  onSelected: state.setDefaultDifficulty,
-                ),
-              ],
-            ),
-          ),
-          SectionCard(
-            icon: Icons.speed_outlined,
-            title: 'Usage & Limits',
-            subtitle: 'Planned server limits',
-            child: const Column(
-              children: [
-                _InfoRow(label: 'Flashcards', value: '120/day'),
-                _InfoRow(label: 'Quiz questions', value: '80/day'),
-                _InfoRow(label: 'Uploads', value: '3/day'),
-                _InfoRow(label: 'Estimated AI cost', value: r'$0.25/day'),
-                SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Server enforcement is not connected yet.'),
-                ),
-              ],
-            ),
-          ),
-          SectionCard(
-            icon: Icons.support_agent_outlined,
-            title: 'Support',
-            subtitle: 'No email or network integration yet',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.bug_report_outlined),
-                  label: const Text('Report a bug placeholder'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.contact_support_outlined),
-                  label: const Text('Contact support placeholder'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.feedback_outlined),
-                  label: const Text('Send feedback placeholder'),
-                ),
-              ],
-            ),
-          ),
-          SectionCard(
-            icon: Icons.info_outline,
-            title: 'About / Debug',
-            subtitle: 'Prototype diagnostics',
-            child: Column(
-              children: [
-                const _InfoRow(
-                  label: 'App version',
-                  value: '0.1.0 placeholder',
-                ),
-                _InfoRow(
-                  label: 'Backend mode',
-                  value: _backendModeLabel(state.config.effectiveBackendMode),
-                ),
-                const _InfoRow(
-                  label: 'Security note',
-                  value: 'No server secrets or OpenAI key in Flutter.',
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-      bottomNavigationBar: const AppBottomNav(),
     );
   }
 
@@ -220,7 +221,8 @@ class SettingsScreen extends StatelessWidget {
     final auth = AuthScope.read(context);
     final updatedName = await showDialog<String>(
       context: context,
-      builder: (_) => _EditNameDialog(initialName: _editableName(auth)),
+      builder: (_) =>
+          GlassDialog(child: _EditNameDialog(initialName: _editableName(auth))),
     );
     if (!context.mounted || updatedName == null) {
       return;
@@ -282,29 +284,39 @@ class _EditNameDialogState extends State<_EditNameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Edit name'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        textInputAction: TextInputAction.done,
-        decoration: InputDecoration(labelText: 'Name', errorText: _errorText),
-        onChanged: (_) {
-          if (_errorText == null) {
-            return;
-          }
-          setState(() {
-            _errorText = null;
-          });
-        },
-        onSubmitted: (_) => _save(),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Edit name', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(labelText: 'Name', errorText: _errorText),
+          onChanged: (_) {
+            if (_errorText == null) {
+              return;
+            }
+            setState(() {
+              _errorText = null;
+            });
+          },
+          onSubmitted: (_) => _save(),
         ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
+        const SizedBox(height: 16),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(onPressed: _save, child: const Text('Save')),
+          ],
+        ),
       ],
     );
   }
@@ -319,6 +331,48 @@ class _EditNameDialogState extends State<_EditNameDialog> {
     }
     Navigator.pop(context, trimmedName);
   }
+}
+
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({
+    required this.icon,
+    required this.title,
+    required this.child,
+    this.subtitle,
+  });
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(icon),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ],
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+          ],
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    ),
+  );
 }
 
 class _PreferenceChips<T> extends StatelessWidget {

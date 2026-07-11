@@ -4,6 +4,9 @@ import '../../app/routes.dart';
 import '../flashcards/flashcards_screen.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
+import '../../shared/widgets/glass_components.dart';
+import '../../shared/widgets/responsive_app_scaffold.dart';
+import '../../shared/widgets/state_views.dart';
 
 class GeneratedOutputsScreen extends StatelessWidget {
   const GeneratedOutputsScreen({required this.subject, super.key});
@@ -16,80 +19,96 @@ class GeneratedOutputsScreen extends StatelessWidget {
     final quiz = ai.quizFor(subject);
     final plan = ai.examPlanFor(subject);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Mock AI outputs')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(subject.name, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 12),
-          _OutputSection(
-            icon: Icons.summarize_outlined,
-            title: 'Summary',
-            child: Text(ai.summaryFor(subject)),
-          ),
-          _OutputSection(
-            icon: Icons.style_outlined,
-            title: 'Flashcards',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Choose generation count'),
-                const SizedBox(height: 8),
-                const Wrap(
-                  spacing: 8,
+    final hasContent =
+        ai.summaryFor(subject).trim().isNotEmpty ||
+        quiz.isNotEmpty ||
+        plan.isNotEmpty;
+    return ResponsiveAppScaffold(
+      title: 'Prototype preview',
+      subtitle: 'Mock generated output · ${subject.name}',
+      showBack: true,
+      body: ResponsiveContent(
+        width: ResponsiveContentWidth.reading,
+        child: ListView(
+          key: const ValueKey('generated-outputs-scroll-view'),
+          children: [
+            const GlassStatusChip(
+              label: 'Prototype preview',
+              icon: Icons.science_outlined,
+            ),
+            const SizedBox(height: 16),
+            if (!hasContent)
+              const EmptyState(
+                icon: Icons.auto_awesome_outlined,
+                title: 'No preview available',
+                message:
+                    'Generated study output will appear here when available.',
+              )
+            else ...[
+              Text(
+                subject.name,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 12),
+              _OutputSection(
+                icon: Icons.summarize_outlined,
+                title: 'Summary',
+                child: Text(ai.summaryFor(subject)),
+              ),
+              _OutputSection(
+                icon: Icons.style_outlined,
+                title: 'Flashcards',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ChoiceChip(label: Text('5'), selected: true),
-                    ChoiceChip(label: Text('10'), selected: false),
-                    ChoiceChip(label: Text('20'), selected: false),
-                    ChoiceChip(label: Text('Custom'), selected: false),
+                    const Text('Generation count preview: 5 cards'),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: () => Navigator.pushNamed(
+                        context,
+                        AppRoutes.flashcards,
+                        arguments: FlashcardsRouteArgs(subject: subject),
+                      ),
+                      icon: const Icon(Icons.play_arrow_outlined),
+                      label: const Text('Open flashcards'),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: () => Navigator.pushNamed(
-                    context,
-                    AppRoutes.flashcards,
-                    arguments: FlashcardsRouteArgs(subject: subject),
-                  ),
-                  icon: const Icon(Icons.play_arrow_outlined),
-                  label: const Text('Open flashcards'),
-                ),
-              ],
-            ),
-          ),
-          _OutputSection(
-            icon: Icons.quiz_outlined,
-            title: 'Quick quiz',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(quiz.first.question),
-                const SizedBox(height: 8),
-                for (final option in quiz.first.options)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: OutlinedButton(
-                      onPressed: () {},
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(option),
+              ),
+              _OutputSection(
+                icon: Icons.quiz_outlined,
+                title: 'Quick quiz',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(quiz.first.question),
+                    const SizedBox(height: 8),
+                    for (final option in quiz.first.options)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('• '),
+                            Expanded(child: Text(option)),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                Text('Explain mistake: ${quiz.first.explanation}'),
-              ],
-            ),
-          ),
-          _OutputSection(
-            icon: Icons.calendar_month_outlined,
-            title: 'Exam preparation plan',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [for (final item in plan) Text(item)],
-            ),
-          ),
-        ],
+                    Text('Explain mistake: ${quiz.first.explanation}'),
+                  ],
+                ),
+              ),
+              _OutputSection(
+                icon: Icons.calendar_month_outlined,
+                title: 'Exam preparation plan',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [for (final item in plan) Text(item)],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -108,10 +127,9 @@ class _OutputSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GlassCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../flashcards/flashcards_screen.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
-import '../../shared/widgets/app_page.dart';
-import '../../shared/widgets/app_top_actions.dart';
-import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/glass_components.dart';
+import '../../shared/widgets/responsive_app_scaffold.dart';
+import '../../shared/widgets/state_views.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -30,57 +29,97 @@ class _SearchScreenState extends State<SearchScreen> {
     final state = AppStateScope.watch(context);
     final results = state.search(query);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Search'),
-        actions: const [AppTopActions(showHome: true, showFavorites: true)],
-      ),
-      body: AppPage(
-        children: [
-          TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Search study workspace',
-              prefixIcon: Icon(Icons.search),
+    final grouped = {
+      for (final kind in LocalSearchResultKind.values)
+        kind: results.where((result) => result.kind == kind).toList(),
+    };
+    return ResponsiveAppScaffold(
+      title: 'Search',
+      activeRoute: AppRoutes.search,
+      body: ResponsiveContent(
+        width: ResponsiveContentWidth.wide,
+        child: ListView(
+          key: const ValueKey('search-scroll-view'),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (value) => setState(() => query = value),
+              decoration: InputDecoration(
+                labelText: 'Search study workspace',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: query.isEmpty
+                    ? null
+                    : IconButton(
+                        key: const ValueKey('clear-search-query'),
+                        tooltip: 'Clear search',
+                        onPressed: () {
+                          controller.clear();
+                          setState(() => query = '');
+                        },
+                        icon: const Icon(Icons.close),
+                      ),
+              ),
+              onChanged: (value) => setState(() => query = value),
             ),
-            onChanged: (value) => setState(() => query = value),
-          ),
-          const SizedBox(height: 16),
-          SectionCard(
-            icon: Icons.manage_search_outlined,
-            title: 'Results',
-            subtitle: 'Subjects, materials, and flashcards from app state.',
-            child: Column(
-              children: [
-                if (query.trim().isEmpty)
-                  const ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.search),
-                    title: Text('Start typing to search'),
-                  )
-                else if (results.isEmpty)
-                  const ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.search_off_outlined),
-                    title: Text('No results'),
-                  )
-                else
-                  for (final result in results)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(_iconFor(result.kind)),
-                      title: Text(result.title),
-                      subtitle: Text(result.subtitle),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _openResult(context, result),
-                    ),
-              ],
-            ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            if (query.trim().isEmpty)
+              const EmptyState(
+                icon: Icons.search,
+                title: 'Start typing to search',
+                message:
+                    'Find subjects, materials, and flashcards in this workspace.',
+              )
+            else if (results.isEmpty)
+              const EmptyState(
+                icon: Icons.search_off_outlined,
+                title: 'No results',
+                message: 'Try another search term.',
+              )
+            else
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final groups = [
+                    for (final kind in LocalSearchResultKind.values)
+                      if (grouped[kind]!.isNotEmpty)
+                        _SearchGroup(
+                          kind: kind,
+                          results: grouped[kind]!,
+                          open: (result) => _openResult(context, result),
+                          iconFor: _iconFor,
+                        ),
+                  ];
+                  final columns =
+                      constraints.maxWidth >= 1000 &&
+                      MediaQuery.textScalerOf(context).scale(1) < 1.6;
+                  return columns
+                      ? Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
+                          children: [
+                            for (final group in groups)
+                              SizedBox(
+                                width: (constraints.maxWidth - 16) / 2,
+                                child: group,
+                              ),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            for (final group in groups)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: group,
+                              ),
+                          ],
+                        );
+                },
+              ),
+          ],
+        ),
       ),
-      bottomNavigationBar: const AppBottomNav(),
     );
   }
 
@@ -113,5 +152,51 @@ class _SearchScreenState extends State<SearchScreen> {
           arguments: FlashcardsRouteArgs(subject: result.subject),
         );
     }
+  }
+}
+
+class _SearchGroup extends StatelessWidget {
+  const _SearchGroup({
+    required this.kind,
+    required this.results,
+    required this.open,
+    required this.iconFor,
+  });
+  final LocalSearchResultKind kind;
+  final List<LocalSearchResult> results;
+  final ValueChanged<LocalSearchResult> open;
+  final IconData Function(LocalSearchResultKind) iconFor;
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (kind) {
+      LocalSearchResultKind.subject => 'Subjects',
+      LocalSearchResultKind.material => 'Materials',
+      LocalSearchResultKind.flashcard => 'Flashcards',
+    };
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      key: ValueKey('search-${title.toLowerCase()}-group'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              '$title (${results.length})',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          for (final result in results)
+            AppListRow(
+              leading: Icon(iconFor(kind)),
+              title: Text(result.title),
+              subtitle: Text(result.subtitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => open(result),
+              showDivider: result != results.last,
+            ),
+        ],
+      ),
+    );
   }
 }
