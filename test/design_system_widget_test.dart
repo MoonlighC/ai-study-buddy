@@ -11,6 +11,7 @@ import 'package:ai_study_buddy/mock/mock_data.dart';
 import 'package:ai_study_buddy/shared/widgets/app_bottom_nav.dart';
 import 'package:ai_study_buddy/shared/widgets/glass_components.dart';
 import 'package:ai_study_buddy/shared/widgets/responsive_app_scaffold.dart';
+import 'package:ai_study_buddy/shared/widgets/study_buddy_mark.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,6 +28,16 @@ void main() {
     expect(find.byType(AppBottomNav), findsNothing);
     expect(find.byType(AppBar), findsNothing);
     expect(find.byKey(const ValueKey('home-hero')), findsOneWidget);
+  });
+
+  testWidgets('home top bar uses the original application mark', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    await _pumpWorkspace(tester);
+
+    expect(find.byType(StudyBuddyMark), findsOneWidget);
+    expect(find.byIcon(Icons.menu_book_rounded), findsNothing);
   });
 
   testWidgets('phone navigation overlays scrollable content with clearance', (

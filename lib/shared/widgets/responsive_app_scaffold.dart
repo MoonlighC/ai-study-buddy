@@ -7,6 +7,7 @@ import '../../app/design_system/theme_extensions.dart';
 import '../../app/design_system/tokens.dart';
 import '../../app/routes.dart';
 import 'glass_components.dart';
+import 'study_buddy_mark.dart';
 
 class AtmosphericBackground extends StatelessWidget {
   const AtmosphericBackground({this.subjectColor, super.key});
@@ -211,23 +212,9 @@ class _AppMark extends StatelessWidget {
   const _AppMark();
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'AI Study Buddy',
-    image: true,
-    child: Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(13),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.secondary],
-        ),
-        boxShadow: AppShadows.soft,
-      ),
-      child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 22),
-    ),
+  Widget build(BuildContext context) => const SizedBox.square(
+    dimension: 40,
+    child: Padding(padding: EdgeInsets.all(2), child: StudyBuddyMark()),
   );
 }
 
