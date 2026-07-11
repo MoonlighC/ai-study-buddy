@@ -66,6 +66,7 @@ class StudySession {
   }
 
   StudySession copyWith({
+    String? materialId,
     String? selectedAnswer,
     int? quizScorePercent,
     List<WeakTopic>? weakTopics,
@@ -74,7 +75,7 @@ class StudySession {
     return StudySession(
       id: id,
       subjectId: subjectId,
-      materialId: materialId,
+      materialId: materialId ?? this.materialId,
       confidence: confidence,
       summary: summary,
       studyTimeBlocks: studyTimeBlocks,
@@ -86,4 +87,19 @@ class StudySession {
       feedback: feedback ?? this.feedback,
     );
   }
+
+  StudySession detachMaterial() => StudySession(
+    id: id,
+    subjectId: subjectId,
+    materialId: '',
+    confidence: confidence,
+    summary: summary,
+    studyTimeBlocks: studyTimeBlocks,
+    flashcards: flashcards,
+    quizQuestion: quizQuestion,
+    weakTopics: weakTopics,
+    selectedAnswer: selectedAnswer,
+    quizScorePercent: quizScorePercent,
+    feedback: feedback,
+  );
 }

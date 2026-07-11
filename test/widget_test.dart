@@ -82,6 +82,70 @@ void main() {
     expect(find.text('Generate mock summary'), findsOneWidget);
   });
 
+  testWidgets('material deletion confirms, cancels, then returns to subject', (
+    tester,
+  ) async {
+    await _enterDashboard(tester);
+    final material = MockData.materials.first;
+    await _pushRoute(tester, AppRoutes.materialDetail, arguments: material);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete material'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete material?'), findsOneWidget);
+    final dialog = find.byType(AlertDialog);
+    for (final label in [
+      'Source material',
+      'Uploaded file, if present',
+      'Summary',
+      'Material-specific flashcards',
+      'Material-specific quizzes',
+      'Completed quiz results',
+      'Progress history',
+      'Cumulative weak topics',
+      'Study history',
+    ]) {
+      expect(
+        find.descendant(of: dialog, matching: find.text(label)),
+        findsOneWidget,
+      );
+    }
+    const malformedBullet = '\u0432\u0402\u045e';
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.textContaining(malformedBullet),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('Cancel')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.widgetWithText(FilledButton, 'Delete material'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text(material.title), findsOneWidget);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete material'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete material'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Material deleted.'), findsOneWidget);
+    expect(find.text('Materials'), findsOneWidget);
+    expect(find.text(material.title), findsNothing);
+  });
+
   testWidgets('favorite toggle updates favorites screen', (tester) async {
     await _enterDashboard(tester);
     await _pushRoute(

@@ -252,3 +252,57 @@ supabase functions deploy extract-scanned-pdf-text
 No migration is required. Confirm staging completes under 120 seconds and review
 privacy/data controls. Stale claims remain deferred; use a queue/worker in a later
 phase if the runtime gate fails rather than raising synchronous limits.
+# Phase 9D material lifecycle rollout
+
+Phase 9D adds `006_material_lifecycle.sql` and the `delete-material` Edge
+Function. Apply the migration before deploying the function. The function first
+verifies the caller JWT with `SUPABASE_URL` and `SUPABASE_ANON_KEY`, then uses
+the server-only `SUPABASE_SERVICE_ROLE_KEY` for the three internal deletion
+coordination RPCs and exact Storage removal. The service-role credential must
+never be placed in Flutter, logged, or returned.
+
+Rollout order:
+
+1. Back up the database and inspect existing `materials` and `storage.objects`
+   policies for unexpected permissive policies.
+2. Apply migration 006 and verify authenticated users cannot directly delete or
+   update `materials`; internal deletion RPCs are service-role-only, while only
+   narrow recovery RPCs are authenticated-callable.
+3. Deploy the updated extraction/generation functions, then `delete-material`.
+4. Test pasted-text, PDF, and image deletion with two isolated users. Confirm
+   attempts, weak topics, study sessions, and usage logs remain.
+5. Exercise missing-object deletion, a forced Storage failure, repeated delete,
+   and stale recovery before general availability.
+
+## Manual orphan reconciliation
+
+Do not expose these checks to Flutter. Run them only with privileged admin
+access, first as a read-only report:
+
+```sql
+-- Tombstones awaiting cleanup.
+select id, user_id, kind, cleanup_status, cleanup_updated_at
+from public.materials
+where deleted_at is not null
+order by cleanup_updated_at;
+
+-- Active upload rows whose expected object metadata is absent.
+select m.id, m.user_id, m.storage_bucket, m.storage_path
+from public.materials m
+left join storage.objects o
+  on o.bucket_id = m.storage_bucket and o.name = m.storage_path
+where m.source_kind = 'upload' and m.deleted_at is null and o.id is null;
+
+-- Objects without a matching material row. Review age before any deletion.
+select o.bucket_id, o.name, o.created_at
+from storage.objects o
+left join public.materials m
+  on m.storage_bucket = o.bucket_id and m.storage_path = o.name
+where o.bucket_id in ('study-materials', 'study-images') and m.id is null;
+```
+
+For a future scheduled worker, require a conservative age threshold, dry-run
+mode, exact owner/material/filename validation, bounded batches, protection for
+recent uploads, and reports containing identifiers/statuses only—never file or
+extracted content. Lifecycle-created tombstones are reconciled by retrying the
+normal authenticated delete operation.

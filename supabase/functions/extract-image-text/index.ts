@@ -33,7 +33,7 @@ serve(async (request) => {
       return error || !data ? null : data as MaterialRow;
     },
     async claim(material, token) {
-      const metadata = { ...record(material.metadata), image_ocr_claim: token };
+      const metadata = { ...record(material.metadata), image_ocr_claim: { token, claimed_at: new Date().toISOString() } };
       const { data, error } = await trustedClient.from("materials")
         .update({ processing_status: "processing", metadata }).eq("id", material.id)
         .eq("user_id", material.user_id).is("deleted_at", null)
@@ -61,7 +61,7 @@ serve(async (request) => {
         .update({ content_text: text, processing_status: "ready", metadata })
         .eq("id", material.id).eq("user_id", material.user_id).is("deleted_at", null)
         .eq("processing_status", "processing").or("content_text.is.null,content_text.eq.")
-        .contains("metadata", { image_ocr_claim: token }).select(materialColumns).maybeSingle();
+        .contains("metadata", { image_ocr_claim: { token } }).select(materialColumns).maybeSingle();
       return error || !data ? null : data as MaterialRow;
     },
     async fail({ material, token, code, message }) {
@@ -70,7 +70,7 @@ serve(async (request) => {
       const { data, error } = await trustedClient.from("materials")
         .update({ processing_status: "failed", metadata }).eq("id", material.id)
         .eq("user_id", material.user_id).is("deleted_at", null).eq("processing_status", "processing")
-        .contains("metadata", { image_ocr_claim: token }).select(materialColumns).maybeSingle();
+        .contains("metadata", { image_ocr_claim: { token } }).select(materialColumns).maybeSingle();
       return error || !data ? null : data as MaterialRow;
     },
     token: () => crypto.randomUUID(), now: () => new Date().toISOString(), provider: "openai", model,

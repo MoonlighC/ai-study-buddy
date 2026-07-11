@@ -236,6 +236,99 @@ void main() {
     },
   );
 
+  test('Phase 9D lifecycle migration is narrowly authorized', () async {
+    final source = await File(
+      'supabase/migrations/006_material_lifecycle.sql',
+    ).readAsString();
+    final normalized = source.toLowerCase();
+    expect(normalized, contains('revoke delete on table public.materials'));
+    expect(normalized, contains('from public, anon, authenticated'));
+    expect(
+      normalized,
+      contains('drop policy if exists "users can delete own materials"'),
+    );
+    expect(
+      normalized,
+      isNot(contains('grant update on table public.materials')),
+    );
+    expect(
+      normalized,
+      isNot(contains('grant delete on table public.materials')),
+    );
+    for (final function in [
+      'begin_material_deletion_internal',
+      'mark_material_storage_cleanup_internal',
+      'finalize_material_deletion_internal',
+      'inspect_material_recovery',
+      'recover_stale_material',
+    ]) {
+      expect(normalized, contains('function public.$function'));
+    }
+    expect(
+      'security definer'.allMatches(normalized).length,
+      greaterThanOrEqualTo(5),
+    );
+    expect(
+      'set search_path = pg_catalog, public'.allMatches(normalized).length,
+      greaterThanOrEqualTo(5),
+    );
+    expect(normalized, contains('auth.uid()'));
+    expect(normalized, contains("interval '15 minutes'"));
+    for (final signature in [
+      'begin_material_deletion_internal(uuid, uuid)',
+      'mark_material_storage_cleanup_internal(uuid, uuid, text, text)',
+      'finalize_material_deletion_internal(uuid, uuid)',
+    ]) {
+      expect(
+        normalized,
+        contains(
+          'revoke all on function public.$signature from public, anon, authenticated',
+        ),
+      );
+      expect(
+        normalized,
+        contains('grant execute on function public.$signature to service_role'),
+      );
+      expect(
+        normalized,
+        isNot(
+          contains(
+            'grant execute on function public.$signature to authenticated',
+          ),
+        ),
+      );
+    }
+    expect(
+      normalized,
+      contains('create policy "users can read own active materials"'),
+    );
+    expect(
+      normalized,
+      contains('user_id = (select auth.uid()) and deleted_at is null'),
+    );
+    expect(normalized, contains(r"~ '^[0-9]+$'"));
+    expect(normalized, contains('p_user_id uuid'));
+    expect(normalized, contains('user_id = p_user_id'));
+    expect(normalized, isNot(contains('execute immediate')));
+  });
+
+  test(
+    'delete-material verifies JWT before service-role coordination',
+    () async {
+      final source = await File(
+        'supabase/functions/delete-material/index.ts',
+      ).readAsString();
+      expect(source, contains(r'Authorization: `Bearer ${jwt}`'));
+      expect(source, contains('SUPABASE_ANON_KEY'));
+      expect(source, contains('SUPABASE_SERVICE_ROLE_KEY'));
+      expect(source, contains('if (userId) trustedClient = createClient'));
+      expect(source, contains('begin_material_deletion_internal'));
+      expect(source, contains('mark_material_storage_cleanup_internal'));
+      expect(source, contains('finalize_material_deletion_internal'));
+      expect(source, contains('p_user_id: userId'));
+    },
+  );
+
   test('storage policy preflight covers unknown permissive policies', () async {
     for (final migrationName in [
       '001_initial_schema.sql',

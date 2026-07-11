@@ -28,6 +28,7 @@ class MaterialDetailScreen extends StatelessWidget {
     final freshMaterial = state.materialById(material.id) ?? material;
     final subject = state.subjectFor(freshMaterial.subjectId);
     final isFavorite = state.isMaterialFavorite(freshMaterial.id);
+    final deleting = state.isDeletingMaterial(freshMaterial.id);
     final isUpload = freshMaterial.sourceKind == MaterialSourceKind.upload;
     final isReadyUpload =
         isUpload &&
@@ -40,108 +41,204 @@ class MaterialDetailScreen extends StatelessWidget {
         actions: [
           IconButton(
             tooltip: isFavorite ? 'Unfavorite material' : 'Favorite material',
-            onPressed: state.isUpdatingMaterialFavorite
+            onPressed: deleting || state.isUpdatingMaterialFavorite
                 ? null
                 : () => _toggleMaterialFavorite(context, freshMaterial.id),
             icon: Icon(isFavorite ? Icons.star : Icons.star_border),
           ),
+          PopupMenuButton<String>(
+            enabled: !deleting,
+            onSelected: (_) => _confirmDelete(context, freshMaterial),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'delete', child: Text('Delete material')),
+            ],
+          ),
           const AppTopActions(),
         ],
       ),
-      body: AppPage(
-        children: [
-          Text(
-            freshMaterial.title,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            isUpload
-                ? '${freshMaterial.kind == MaterialKind.pdf ? 'PDF' : 'Image'} · ${freshMaterial.createdLabel}'
-                : '${freshMaterial.createdLabel} - pasted text',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 12),
-          if (isUpload) ...[
-            SectionCard(
-              icon: freshMaterial.kind == MaterialKind.pdf
-                  ? Icons.picture_as_pdf_outlined
-                  : Icons.image_outlined,
-              title: 'File metadata',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Filename: ${freshMaterial.title}'),
-                  Text(
-                    'Type: ${freshMaterial.kind == MaterialKind.pdf ? 'PDF' : 'Image'}',
-                  ),
-                  Text(
-                    'Size: ${freshMaterial.fileSizeBytes == null ? 'Unknown' : formatFileSize(freshMaterial.fileSizeBytes!)}',
-                  ),
-                  Text('MIME: ${freshMaterial.mimeType ?? 'Unknown'}'),
-                  Text('Status: ${_materialStatus(freshMaterial)}'),
-                  if (freshMaterial.kind == MaterialKind.image &&
-                      freshMaterial.processingStatus ==
-                          MaterialProcessingStatus.ready &&
-                      _imageOcrWarning(freshMaterial.imageOcr?.warningCodes) !=
-                          null)
-                    Text(
-                      _imageOcrWarning(freshMaterial.imageOcr?.warningCodes)!,
-                    ),
-                ],
+      body: AbsorbPointer(
+        absorbing: deleting,
+        child: AppPage(
+          children: [
+            if (deleting)
+              const LinearProgressIndicator(
+                key: Key('material-delete-progress'),
               ),
+            Text(
+              freshMaterial.title,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
-            if (freshMaterial.kind == MaterialKind.pdf)
-              _PdfExtractionSection(material: freshMaterial),
-            if (freshMaterial.kind == MaterialKind.image)
-              _ImageExtractionSection(material: freshMaterial),
+            const SizedBox(height: 4),
+            Text(
+              isUpload
+                  ? '${freshMaterial.kind == MaterialKind.pdf ? 'PDF' : 'Image'} · ${freshMaterial.createdLabel}'
+                  : '${freshMaterial.createdLabel} - pasted text',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            if (isUpload) ...[
+              SectionCard(
+                icon: freshMaterial.kind == MaterialKind.pdf
+                    ? Icons.picture_as_pdf_outlined
+                    : Icons.image_outlined,
+                title: 'File metadata',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Filename: ${freshMaterial.title}'),
+                    Text(
+                      'Type: ${freshMaterial.kind == MaterialKind.pdf ? 'PDF' : 'Image'}',
+                    ),
+                    Text(
+                      'Size: ${freshMaterial.fileSizeBytes == null ? 'Unknown' : formatFileSize(freshMaterial.fileSizeBytes!)}',
+                    ),
+                    Text('MIME: ${freshMaterial.mimeType ?? 'Unknown'}'),
+                    Text('Status: ${_materialStatus(freshMaterial)}'),
+                    if (freshMaterial.kind == MaterialKind.image &&
+                        freshMaterial.processingStatus ==
+                            MaterialProcessingStatus.ready &&
+                        _imageOcrWarning(
+                              freshMaterial.imageOcr?.warningCodes,
+                            ) !=
+                            null)
+                      Text(
+                        _imageOcrWarning(freshMaterial.imageOcr?.warningCodes)!,
+                      ),
+                  ],
+                ),
+              ),
+              if (freshMaterial.kind == MaterialKind.pdf)
+                _PdfExtractionSection(material: freshMaterial),
+              if (freshMaterial.kind == MaterialKind.image)
+                _ImageExtractionSection(material: freshMaterial),
+              if (freshMaterial.processingStatus ==
+                  MaterialProcessingStatus.processing)
+                _StaleRecoverySection(materialId: freshMaterial.id),
+            ],
+            if (!isUpload)
+              SectionCard(
+                icon: Icons.article_outlined,
+                title: 'Pasted text',
+                child: Text(freshMaterial.content),
+              ),
+            if (!isUpload || isReadyUpload) ...[
+              SectionCard(
+                key: const Key('summary-section'),
+                icon: Icons.auto_awesome_outlined,
+                title: 'Summary',
+                child: _SummarySection(material: freshMaterial),
+              ),
+              SectionCard(
+                key: const Key('flashcards-section'),
+                icon: Icons.style_outlined,
+                title: 'Flashcards',
+                child: _FlashcardsSection(material: freshMaterial),
+              ),
+              SectionCard(
+                key: const Key('quiz-section'),
+                icon: Icons.quiz_outlined,
+                title: 'Quiz',
+                child: _QuizSection(material: freshMaterial),
+              ),
+              FilledButton.icon(
+                onPressed: () {
+                  AppStateScope.read(context).createStudySession(
+                    subject: subject,
+                    confidence: LectureConfidence.mostly,
+                    materialId: freshMaterial.id,
+                  );
+                  Navigator.pushNamed(
+                    context,
+                    AppRoutes.studySessionResult,
+                    arguments: subject,
+                  );
+                },
+                icon: const Icon(Icons.auto_awesome_outlined),
+                label: const Text('Create study session'),
+              ),
+            ],
           ],
-          if (!isUpload)
-            SectionCard(
-              icon: Icons.article_outlined,
-              title: 'Pasted text',
-              child: Text(freshMaterial.content),
-            ),
-          if (!isUpload || isReadyUpload) ...[
-            SectionCard(
-              key: const Key('summary-section'),
-              icon: Icons.auto_awesome_outlined,
-              title: 'Summary',
-              child: _SummarySection(material: freshMaterial),
-            ),
-            SectionCard(
-              key: const Key('flashcards-section'),
-              icon: Icons.style_outlined,
-              title: 'Flashcards',
-              child: _FlashcardsSection(material: freshMaterial),
-            ),
-            SectionCard(
-              key: const Key('quiz-section'),
-              icon: Icons.quiz_outlined,
-              title: 'Quiz',
-              child: _QuizSection(material: freshMaterial),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                AppStateScope.read(context).createStudySession(
-                  subject: subject,
-                  confidence: LectureConfidence.mostly,
-                  materialId: freshMaterial.id,
-                );
-                Navigator.pushNamed(
-                  context,
-                  AppRoutes.studySessionResult,
-                  arguments: subject,
-                );
-              },
-              icon: const Icon(Icons.auto_awesome_outlined),
-              label: const Text('Create study session'),
-            ),
-          ],
-        ],
+        ),
       ),
       bottomNavigationBar: const AppBottomNav(),
     );
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    StudyMaterial material,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete material?'),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Removed:'),
+              SizedBox(height: 6),
+              _DeleteConfirmationItem('Source material'),
+              _DeleteConfirmationItem('Uploaded file, if present'),
+              _DeleteConfirmationItem('Summary'),
+              _DeleteConfirmationItem('Material-specific flashcards'),
+              _DeleteConfirmationItem('Material-specific quizzes'),
+              SizedBox(height: 16),
+              Text('Preserved:'),
+              SizedBox(height: 6),
+              _DeleteConfirmationItem('Completed quiz results'),
+              _DeleteConfirmationItem('Progress history'),
+              _DeleteConfirmationItem('Cumulative weak topics'),
+              _DeleteConfirmationItem('Study history'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete material'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final state = AppStateScope.read(context);
+    final deleted = await state.deleteMaterialFor(
+      AuthScope.read(context).user,
+      material.id,
+    );
+    if (!context.mounted) return;
+    if (deleted) {
+      final subjects = state.subjects.where(
+        (item) => item.id == material.subjectId,
+      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Material deleted.')));
+      if (subjects.isNotEmpty) {
+        Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.subjectDetail,
+          arguments: subjects.first,
+        );
+      } else {
+        Navigator.pushReplacementNamed(context, AppRoutes.subjects);
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            state.materialLifecycleErrorFor(material.id) ??
+                'Could not delete the material. Try again.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _toggleMaterialFavorite(
@@ -186,6 +283,71 @@ class MaterialDetailScreen extends StatelessWidget {
     return material.processingStatus == MaterialProcessingStatus.pending
         ? 'Uploaded · Waiting for processing'
         : material.processingStatus.name;
+  }
+}
+
+class _DeleteConfirmationItem extends StatelessWidget {
+  const _DeleteConfirmationItem(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 7),
+            child: Icon(Icons.circle, size: 6),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(label)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StaleRecoverySection extends StatefulWidget {
+  const _StaleRecoverySection({required this.materialId});
+  final String materialId;
+  @override
+  State<_StaleRecoverySection> createState() => _StaleRecoverySectionState();
+}
+
+class _StaleRecoverySectionState extends State<_StaleRecoverySection> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppStateScope.read(context).inspectMaterialRecoveryFor(
+          AuthScope.read(context).user,
+          widget.materialId,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
+    if (!state.isMaterialRecoveryEligible(widget.materialId)) {
+      return const SizedBox.shrink();
+    }
+    return SectionCard(
+      icon: Icons.restart_alt,
+      title: 'Processing appears to be stuck.',
+      child: FilledButton(
+        onPressed: () => state.recoverStuckMaterialFor(
+          AuthScope.read(context).user,
+          widget.materialId,
+        ),
+        child: const Text('Reset and try again.'),
+      ),
+    );
   }
 }
 

@@ -22,6 +22,7 @@ import '../features/materials/material_upload_repository.dart';
 import '../features/materials/pdf_text_extraction_repository.dart';
 import '../features/materials/image_text_extraction_repository.dart';
 import '../features/materials/scanned_pdf_ocr_repository.dart';
+import '../features/materials/material_lifecycle_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -37,6 +38,7 @@ class AppState extends ChangeNotifier {
     PdfTextExtractionRepository? pdfTextExtractionRepository,
     ImageTextExtractionRepository? imageTextExtractionRepository,
     ScannedPdfOcrRepository? scannedPdfOcrRepository,
+    MaterialLifecycleRepository? materialLifecycleRepository,
     MaterialFilePicker? materialFilePicker,
     String Function()? materialIdGenerator,
     FavoriteRepository? favoriteRepository,
@@ -77,10 +79,18 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyImageTextExtractionRepository()
                : const MockImageTextExtractionRepository()),
-       scannedPdfOcrRepository = scannedPdfOcrRepository ??
-           ((config ?? AppConfig.fromValues()).effectiveBackendMode == AppBackendMode.supabase
+       scannedPdfOcrRepository =
+           scannedPdfOcrRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
                ? const EmptyScannedPdfOcrRepository()
                : const MockScannedPdfOcrRepository()),
+       materialLifecycleRepository =
+           materialLifecycleRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyMaterialLifecycleRepository()
+               : const MockMaterialLifecycleRepository()),
        materialIdGenerator = materialIdGenerator ?? newUuidV4,
        favoriteRepository =
            favoriteRepository ??
@@ -146,6 +156,7 @@ class AppState extends ChangeNotifier {
   final PdfTextExtractionRepository pdfTextExtractionRepository;
   final ImageTextExtractionRepository imageTextExtractionRepository;
   final ScannedPdfOcrRepository scannedPdfOcrRepository;
+  final MaterialLifecycleRepository materialLifecycleRepository;
   final MaterialFilePicker materialFilePicker;
   final String Function() materialIdGenerator;
   final FavoriteRepository favoriteRepository;
@@ -162,6 +173,9 @@ class AppState extends ChangeNotifier {
   QuizAttempt? _latestQuizCompletion;
   final Set<String> _favoriteMaterialIds = {};
   final List<StudySession> _studySessions = [];
+  final Set<String> _deletingMaterialIds = {};
+  final Map<String, String> _materialLifecycleErrors = {};
+  final Map<String, String> _staleMaterialProcessors = {};
   int _materialCounter = 0;
   int _sessionCounter = 0;
   AppLanguagePreference _languagePreference = AppLanguagePreference.system;
@@ -230,14 +244,31 @@ class AppState extends ChangeNotifier {
 
   String? get uploadError => _uploadError;
 
+  bool isDeletingMaterial(String materialId) =>
+      _deletingMaterialIds.contains(materialId);
+  String? materialLifecycleErrorFor(String materialId) =>
+      _materialLifecycleErrors[materialId];
+  bool isMaterialRecoveryEligible(String materialId) =>
+      _staleMaterialProcessors.containsKey(materialId);
+
   bool isExtractingPdf(String materialId) =>
       _extractingPdfIds.contains(materialId);
 
   String? pdfExtractionErrorFor(String materialId) =>
       _pdfExtractionErrors[materialId];
   bool isScanningPdf(String materialId) => _scanningPdfIds.contains(materialId);
-  String? scannedPdfOcrErrorFor(String materialId) => _scannedPdfOcrErrors[materialId];
-  bool isScannedPdfOcrAvailable(StudyMaterial material) => material.kind == MaterialKind.pdf && material.sourceKind == MaterialSourceKind.upload && material.processingStatus == MaterialProcessingStatus.failed && !material.hasContentText && const {'ocr_available','mixed_ocr_available'}.contains(material.pdfExtraction?.classification) && material.scannedPdfOcr?.extractedAt == null;
+  String? scannedPdfOcrErrorFor(String materialId) =>
+      _scannedPdfOcrErrors[materialId];
+  bool isScannedPdfOcrAvailable(StudyMaterial material) =>
+      material.kind == MaterialKind.pdf &&
+      material.sourceKind == MaterialSourceKind.upload &&
+      material.processingStatus == MaterialProcessingStatus.failed &&
+      !material.hasContentText &&
+      const {
+        'ocr_available',
+        'mixed_ocr_available',
+      }.contains(material.pdfExtraction?.classification) &&
+      material.scannedPdfOcr?.extractedAt == null;
 
   bool isExtractingImage(String materialId) =>
       _extractingImageIds.contains(materialId);
@@ -634,22 +665,59 @@ class AppState extends ChangeNotifier {
   Future<bool> scanPdfWithOcrFor(AuthUser? user, String materialId) async {
     if (_scanningPdfIds.contains(materialId)) return false;
     final material = materialById(materialId);
-    if (material == null || !isScannedPdfOcrAvailable(material) ||
+    if (material == null ||
+        !isScannedPdfOcrAvailable(material) ||
         (material.pdfExtraction?.pageCount ?? 0) > 10) {
       _scannedPdfOcrErrors[materialId] = 'This PDF cannot be scanned with OCR.';
-      notifyListeners(); return false;
+      notifyListeners();
+      return false;
     }
-    final effectiveUser = user ?? const AuthUser(id: 'mock-user', email: 'alex.student@example.test', displayName: 'Alex Student');
-    if (config.effectiveBackendMode == AppBackendMode.supabase && user == null) {
-      _scannedPdfOcrErrors[materialId] = 'Log in to scan this PDF.'; notifyListeners(); return false;
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _scannedPdfOcrErrors[materialId] = 'Log in to scan this PDF.';
+      notifyListeners();
+      return false;
     }
-    _scanningPdfIds.add(materialId); _scannedPdfOcrErrors.remove(materialId); notifyListeners();
+    _scanningPdfIds.add(materialId);
+    _scannedPdfOcrErrors.remove(materialId);
+    notifyListeners();
     try {
-      final result = await scannedPdfOcrRepository.scan(user: effectiveUser, materialId: materialId);
-      final returned = config.effectiveBackendMode == AppBackendMode.supabase ? result.material : result.material.copyWith(subjectId: material.subjectId, title: material.title, createdLabel: material.createdLabel, storageBucket: material.storageBucket, storagePath: material.storagePath, mimeType: material.mimeType, fileSizeBytes: material.fileSizeBytes);
-      _replaceMaterial(returned); if (result.errorMessage != null) _scannedPdfOcrErrors[materialId] = result.errorMessage!; return result.succeeded;
-    } catch (error) { _scannedPdfOcrErrors[materialId] = error is ScannedPdfOcrException ? error.message : 'Could not scan this PDF. Try again.'; return false; }
-    finally { _scanningPdfIds.remove(materialId); notifyListeners(); }
+      final result = await scannedPdfOcrRepository.scan(
+        user: effectiveUser,
+        materialId: materialId,
+      );
+      final returned = config.effectiveBackendMode == AppBackendMode.supabase
+          ? result.material
+          : result.material.copyWith(
+              subjectId: material.subjectId,
+              title: material.title,
+              createdLabel: material.createdLabel,
+              storageBucket: material.storageBucket,
+              storagePath: material.storagePath,
+              mimeType: material.mimeType,
+              fileSizeBytes: material.fileSizeBytes,
+            );
+      _replaceMaterial(returned);
+      if (result.errorMessage != null) {
+        _scannedPdfOcrErrors[materialId] = result.errorMessage!;
+      }
+      return result.succeeded;
+    } catch (error) {
+      _scannedPdfOcrErrors[materialId] = error is ScannedPdfOcrException
+          ? error.message
+          : 'Could not scan this PDF. Try again.';
+      return false;
+    } finally {
+      _scanningPdfIds.remove(materialId);
+      notifyListeners();
+    }
   }
 
   Future<bool> extractImageTextFor(AuthUser? user, String materialId) async {
@@ -714,10 +782,127 @@ class AppState extends ChangeNotifier {
   }
 
   void _replaceMaterial(StudyMaterial material) {
+    if (_deletingMaterialIds.contains(material.id) ||
+        materialById(material.id) == null) {
+      return;
+    }
     _materials = [
       for (final existing in _materials)
         if (existing.id == material.id) material else existing,
     ];
+  }
+
+  Future<bool> deleteMaterialFor(AuthUser? user, String materialId) async {
+    if (_deletingMaterialIds.contains(materialId)) return false;
+    final material = materialById(materialId);
+    if (material == null) return true;
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _materialLifecycleErrors[materialId] = 'Log in to delete this material.';
+      notifyListeners();
+      return false;
+    }
+    _deletingMaterialIds.add(materialId);
+    _materialLifecycleErrors.remove(materialId);
+    notifyListeners();
+    try {
+      await materialLifecycleRepository.deleteMaterial(
+        user: effectiveUser,
+        materialId: materialId,
+      );
+      _materials.removeWhere((item) => item.id == materialId);
+      _favoriteMaterialIds.remove(materialId);
+      _flashcards.removeWhere((item) => item.materialId == materialId);
+      _quizzes.removeWhere((item) => item.materialId == materialId);
+      for (var index = 0; index < _studySessions.length; index++) {
+        if (_studySessions[index].materialId == materialId) {
+          _studySessions[index] = _studySessions[index].detachMaterial();
+        }
+      }
+      _pdfExtractionErrors.remove(materialId);
+      _scannedPdfOcrErrors.remove(materialId);
+      _imageExtractionErrors.remove(materialId);
+      _staleMaterialProcessors.remove(materialId);
+      return true;
+    } catch (error) {
+      _materialLifecycleErrors[materialId] = error is MaterialLifecycleException
+          ? error.message
+          : 'Could not delete the material. Try again.';
+      return false;
+    } finally {
+      _deletingMaterialIds.remove(materialId);
+      notifyListeners();
+    }
+  }
+
+  Future<void> inspectMaterialRecoveryFor(
+    AuthUser? user,
+    String materialId,
+  ) async {
+    if (materialById(materialId)?.processingStatus !=
+        MaterialProcessingStatus.processing) {
+      _staleMaterialProcessors.remove(materialId);
+      return;
+    }
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      return;
+    }
+    final result = await materialLifecycleRepository.inspectRecovery(
+      user: effectiveUser,
+      materialId: materialId,
+    );
+    if (result.eligible && result.processor != null) {
+      _staleMaterialProcessors[materialId] = result.processor!;
+    } else {
+      _staleMaterialProcessors.remove(materialId);
+    }
+    notifyListeners();
+  }
+
+  Future<bool> recoverStuckMaterialFor(
+    AuthUser? user,
+    String materialId,
+  ) async {
+    final processor = _staleMaterialProcessors[materialId];
+    if (processor == null) return false;
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    try {
+      await materialLifecycleRepository.recover(
+        user: effectiveUser,
+        materialId: materialId,
+        processor: processor,
+      );
+      _staleMaterialProcessors.remove(materialId);
+      await loadMaterialsFor(user);
+      return true;
+    } catch (error) {
+      _materialLifecycleErrors[materialId] = error is MaterialLifecycleException
+          ? error.message
+          : 'Processing could not be reset.';
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<void> loadMaterialFavoritesFor(AuthUser? user) async {
@@ -935,6 +1120,9 @@ class AppState extends ChangeNotifier {
     _scannedPdfOcrErrors.clear();
     _extractingImageIds.clear();
     _imageExtractionErrors.clear();
+    _deletingMaterialIds.clear();
+    _materialLifecycleErrors.clear();
+    _staleMaterialProcessors.clear();
     _favoriteMaterialIds.clear();
     _flashcards = [];
     _quizzes = [];
@@ -1284,6 +1472,10 @@ class AppState extends ChangeNotifier {
         user: effectiveUser,
         materialId: material.id,
       );
+      if (_deletingMaterialIds.contains(materialId) ||
+          materialById(materialId) == null) {
+        return false;
+      }
       _materials = [
         for (final item in _materials)
           item.id == material.id ? item.copyWith(summary: summary) : item,
@@ -1354,6 +1546,10 @@ class AppState extends ChangeNotifier {
         materialId: material.id,
         requestedNewCount: requestedNewCount,
       );
+      if (_deletingMaterialIds.contains(materialId) ||
+          materialById(materialId) == null) {
+        return null;
+      }
       if (generation.requestedCount != requestedNewCount ||
           generation.createdCount != generation.newFlashcards.length ||
           generation.createdCount < 0 ||
@@ -1433,6 +1629,10 @@ class AppState extends ChangeNotifier {
         materialId: material.id,
         count: requestedCount,
       );
+      if (_deletingMaterialIds.contains(materialId) ||
+          materialById(materialId) == null) {
+        return false;
+      }
       final normalizedQuiz = Quiz(
         id: generatedQuiz.id,
         subjectId: material.subjectId,

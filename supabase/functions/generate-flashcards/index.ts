@@ -64,7 +64,16 @@ serve(createGenerateFlashcardsHandler({
   },
   async insertCards(rows: FlashcardInsert[], jwt) {
     if (rows.length === 0) return [];
-    const { data, error } = await clientFor(jwt)
+    const client = clientFor(jwt);
+    const first = rows[0];
+    const { data: active, error: activeError } = await client.from("materials")
+      .select("id")
+      .eq("id", first.material_id)
+      .eq("user_id", first.user_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (activeError || !active) throw new Error("material_inactive");
+    const { data, error } = await client
       .from("flashcards")
       .insert(rows)
       .select("id,subject_id,material_id,front,back,topic,difficulty");

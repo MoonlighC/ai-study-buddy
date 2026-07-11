@@ -165,6 +165,17 @@ serve(async (request) => {
     const subjectId = typeof material.subject_id === "string"
       ? material.subject_id
       : null;
+    const { data: activeMaterial, error: activeMaterialError } = await supabaseClient
+      .from("materials")
+      .select("id")
+      .eq("id", materialId)
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (activeMaterialError || activeMaterial === null) {
+      logKnownFailure("material_inactive_before_write");
+      return jsonResponse({ error: "Material unavailable." }, 404);
+    }
     const { data: insertedQuiz, error: quizInsertError } =
       await trustedWriteClient
         .from("quizzes")
