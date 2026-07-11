@@ -282,21 +282,39 @@ class GlassDialog extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Dialog(
-    backgroundColor: Colors.transparent,
-    elevation: 0,
-    child: ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final compact = media.size.width < AppBreakpoints.phone;
+    final horizontalInset = compact ? AppSpacing.md : AppSpacing.xxxl;
+    final availableHeight =
+        media.size.height -
+        media.viewInsets.bottom -
+        media.padding.top -
+        media.padding.bottom -
+        (AppSpacing.md * 2);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: horizontalInset,
+        vertical: AppSpacing.md,
       ),
-      child: GlassSurface(
-        depth: GlassDepth.prominent,
-        reading: true,
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: SingleChildScrollView(child: child),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: availableHeight.clamp(0, double.infinity),
+        ),
+        child: GlassSurface(
+          depth: GlassDepth.prominent,
+          reading: true,
+          padding: EdgeInsets.all(compact ? AppSpacing.md : AppSpacing.xl),
+          child: SingleChildScrollView(
+            key: const ValueKey('glass-dialog-scroll-view'),
+            child: child,
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class GlassStatusChip extends StatelessWidget {

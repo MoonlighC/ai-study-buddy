@@ -141,6 +141,7 @@ class ResponsiveContent extends StatelessWidget {
       final horizontal = AppResponsive.horizontalPaddingFor(
         constraints.maxWidth,
       );
+      final mediaPadding = MediaQuery.paddingOf(context);
       final maxWidth = switch (width) {
         ResponsiveContentWidth.reading => AppContentWidths.reading,
         ResponsiveContentWidth.standard => AppContentWidths.standard,
@@ -155,9 +156,9 @@ class ResponsiveContent extends StatelessWidget {
             padding:
                 padding ??
                 EdgeInsets.fromLTRB(
-                  horizontal,
+                  horizontal + mediaPadding.left,
                   8,
-                  horizontal,
+                  horizontal + mediaPadding.right,
                   AppResponsive.windowClassFor(constraints.maxWidth) ==
                           AppWindowClass.phone
                       ? AppShellMetrics.phoneNavigationScrollClearance +
@@ -301,10 +302,14 @@ class ResponsiveAppScaffold extends StatelessWidget {
                                 children: [
                                   Positioned.fill(child: body),
                                   Positioned(
-                                    left: AppShellMetrics
-                                        .phoneNavigationHorizontalInset,
-                                    right: AppShellMetrics
-                                        .phoneNavigationHorizontalInset,
+                                    left:
+                                        AppShellMetrics
+                                            .phoneNavigationHorizontalInset +
+                                        mediaPadding.left,
+                                    right:
+                                        AppShellMetrics
+                                            .phoneNavigationHorizontalInset +
+                                        mediaPadding.right,
                                     bottom:
                                         AppShellMetrics
                                             .phoneNavigationBottomInset +
@@ -387,26 +392,29 @@ class GlassNavigationBar extends StatelessWidget {
   final String? activeRoute;
 
   @override
-  Widget build(BuildContext context) => GlassSurface(
-    key: const ValueKey('glass-navigation-bar'),
-    depth: GlassDepth.prominent,
-    blurSigma: 20,
-    tint: context.glassTheme.navigationTint,
-    borderRadius: BorderRadius.circular(AppRadii.navigation),
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-    child: Row(
-      children: [
-        for (final destination in _destinations)
-          Expanded(
-            child: _NavigationDestination(
-              destination: destination,
-              active: activeRoute == destination.route,
-              showLabel: true,
+  Widget build(BuildContext context) {
+    final showLabels = MediaQuery.textScalerOf(context).scale(10.5) < 18;
+    return GlassSurface(
+      key: const ValueKey('glass-navigation-bar'),
+      depth: GlassDepth.prominent,
+      blurSigma: 20,
+      tint: context.glassTheme.navigationTint,
+      borderRadius: BorderRadius.circular(AppRadii.navigation),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+      child: Row(
+        children: [
+          for (final destination in _destinations)
+            Expanded(
+              child: _NavigationDestination(
+                destination: destination,
+                active: activeRoute == destination.route,
+                showLabel: showLabels,
+              ),
             ),
-          ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class GlassNavigationRail extends StatelessWidget {
@@ -559,6 +567,7 @@ class _NavigationDestinationState extends State<_NavigationDestination> {
                           Text(
                             label,
                             maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 10.5),
                           ),
                         ],

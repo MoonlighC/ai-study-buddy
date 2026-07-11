@@ -21,65 +21,69 @@ class AuthLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final scale = MediaQuery.textScalerOf(context).scale(1);
-          final available = constraints.maxWidth;
-          final split = available >= 980 && scale <= 1.45;
-          final padding = AppResponsive.horizontalPaddingFor(available);
+    body: GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final scale = MediaQuery.textScalerOf(context).scale(1);
+            final available = constraints.maxWidth;
+            final split = available >= 980 && scale <= 1.45;
+            final padding = AppResponsive.horizontalPaddingFor(available);
 
-          return SingleChildScrollView(
-            key: const ValueKey('auth-scroll-view'),
-            padding: EdgeInsets.fromLTRB(
-              padding,
-              AppSpacing.xl,
-              padding,
-              AppSpacing.xl + MediaQuery.viewInsetsOf(context).bottom,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: (constraints.maxHeight - AppSpacing.huge).clamp(
-                  0,
-                  double.infinity,
-                ),
+            return SingleChildScrollView(
+              key: const ValueKey('auth-scroll-view'),
+              padding: EdgeInsets.fromLTRB(
+                padding,
+                AppSpacing.xl,
+                padding,
+                AppSpacing.xl + MediaQuery.viewInsetsOf(context).bottom,
               ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1080),
-                  child: split
-                      ? Row(
-                          key: const ValueKey('auth-split-layout'),
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const Expanded(child: _BrandPanel()),
-                            const SizedBox(width: AppSpacing.xxxl),
-                            Expanded(
-                              child: _FormPanel(
-                                title: title,
-                                subtitle: subtitle,
-                                form: form,
-                                formKey: formKey,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: (constraints.maxHeight - AppSpacing.huge).clamp(
+                    0,
+                    double.infinity,
+                  ),
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1080),
+                    child: split
+                        ? Row(
+                            key: const ValueKey('auth-split-layout'),
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const Expanded(child: _BrandPanel()),
+                              const SizedBox(width: AppSpacing.xxxl),
+                              Expanded(
+                                child: _FormPanel(
+                                  title: title,
+                                  subtitle: subtitle,
+                                  form: form,
+                                  formKey: formKey,
+                                ),
                               ),
+                            ],
+                          )
+                        : ConstrainedBox(
+                            key: const ValueKey('auth-single-layout'),
+                            constraints: const BoxConstraints(maxWidth: 500),
+                            child: _FormPanel(
+                              title: title,
+                              subtitle: subtitle,
+                              form: form,
+                              formKey: formKey,
+                              showCompactBrand: true,
                             ),
-                          ],
-                        )
-                      : ConstrainedBox(
-                          key: const ValueKey('auth-single-layout'),
-                          constraints: const BoxConstraints(maxWidth: 500),
-                          child: _FormPanel(
-                            title: title,
-                            subtitle: subtitle,
-                            form: form,
-                            formKey: formKey,
-                            showCompactBrand: true,
                           ),
-                        ),
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     ),
   );
