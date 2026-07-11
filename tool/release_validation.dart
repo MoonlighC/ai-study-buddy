@@ -258,7 +258,8 @@ List<SecretFinding> scanSecrets(Map<String, String> files) {
   final findings = <SecretFinding>[];
   final paths = files.keys.toList()..sort();
   for (final path in paths) {
-    final lowerPath = path.toLowerCase();
+    final normalizedPath = path.replaceAll('\\', '/');
+    final lowerPath = normalizedPath.toLowerCase();
     if (RegExp(
       r'(^|/)(key|signing)\.properties$|\.(jks|keystore|p12|mobileprovision)$',
     ).hasMatch(lowerPath)) {
@@ -268,8 +269,14 @@ List<SecretFinding> scanSecrets(Map<String, String> files) {
     final content = files[path]!;
     if (content.contains('FAKE_TEST_FIXTURE') || lowerPath.endsWith('.md'))
       continue;
-    if (content.contains('-----BEGIN PRIVATE KEY-----') ||
-        content.contains('-----BEGIN RSA PRIVATE KEY-----')) {
+    const privateKeyMarker =
+        '-----BEGIN '
+        'PRIVATE KEY-----';
+    const rsaPrivateKeyMarker =
+        '-----BEGIN RSA '
+        'PRIVATE KEY-----';
+    if (content.contains(privateKeyMarker) ||
+        content.contains(rsaPrivateKeyMarker)) {
       findings.add(SecretFinding(path, 'private-key'));
     }
     if (RegExp(

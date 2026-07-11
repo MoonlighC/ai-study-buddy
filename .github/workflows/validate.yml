@@ -17,17 +17,30 @@ jobs:
           flutter-version: 3.44.4
           channel: stable
           cache: true
-      - run: flutter pub get
-      - run: flutter gen-l10n
-      - run: flutter analyze
-      - run: flutter test
+      - name: Resolve dependencies
+        shell: bash
+        run: flutter pub get
+      - name: Generate localization
+        shell: bash
+        run: flutter gen-l10n
+      - name: Analyze
+        shell: bash
+        run: flutter analyze
+      - name: Run full test suite with diagnostics
+        shell: bash
+        run: flutter test -r expanded
       - name: Release metadata
+        shell: bash
         run: dart run tool/release_validation_cli.dart metadata
       - name: Localization and release foundation
+        shell: bash
         run: flutter test test/localization_literal_audit_test.dart test/release_foundation_test.dart
       - name: Tracked-secret scan
+        shell: bash
         run: dart run tool/release_validation_cli.dart secret-scan
       - name: Template-asset check
+        shell: bash
         run: dart run tool/release_validation_cli.dart template-assets
       - name: Android structural check
+        shell: bash
         run: dart run tool/release_validation_cli.dart android-structure

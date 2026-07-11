@@ -5,6 +5,7 @@ import 'release_validation.dart';
 
 void main(List<String> args) {
   try {
+    Directory.current = _repositoryRoot();
     if (args.isEmpty) throw const ValidationException('command: required');
     final command = args.first;
     final options = _options(args.skip(1));
@@ -101,6 +102,15 @@ void main(List<String> args) {
   }
 }
 
+Directory _repositoryRoot() {
+  final script = File.fromUri(Platform.script).absolute;
+  final root = script.parent.parent;
+  if (!File('${root.path}${Platform.pathSeparator}pubspec.yaml').existsSync()) {
+    throw const ValidationException('repository root: pubspec.yaml not found');
+  }
+  return root;
+}
+
 Map<String, String> _options(Iterable<String> args) {
   final result = <String, String>{};
   for (final arg in args) {
@@ -143,6 +153,7 @@ List<String> _trackedFiles() {
   return (result.stdout as String)
       .split(RegExp(r'\r?\n'))
       .where((e) => e.isNotEmpty)
+      .map((e) => e.replaceAll('\\', '/'))
       .toList()
     ..sort();
 }
