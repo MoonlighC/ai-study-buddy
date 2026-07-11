@@ -22,6 +22,7 @@ import 'package:ai_study_buddy/features/quizzes/quiz_repository.dart';
 import 'package:ai_study_buddy/features/quizzes/quiz_taking_screen.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
+import 'package:ai_study_buddy/shared/widgets/glass_components.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,7 +39,7 @@ void main() {
     await tester.tap(find.text('Continue with email'));
     await tester.pumpAndSettle();
 
-    expect(find.text('What do you want to do today?'), findsOneWidget);
+    expect(find.text('Ready for your next study step?'), findsOneWidget);
     expect(find.text('After Lecture'), findsOneWidget);
     expect(find.text('Prepare for Exam'), findsOneWidget);
     expect(find.text('Continue Studying'), findsOneWidget);
@@ -52,7 +53,7 @@ void main() {
       AppRoutes.subjectDetail,
       arguments: MockData.subjects.first,
     );
-    await tester.tap(find.text('Add pasted text'));
+    await _tapVisible(tester, find.text('Add pasted text'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -189,7 +190,7 @@ void main() {
       arguments: MockData.subjects.first,
     );
 
-    await tester.tap(find.byTooltip('Favorite material').first);
+    await _tapVisible(tester, find.byTooltip('Favorite material').first);
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.favorites);
 
@@ -1330,7 +1331,7 @@ void main() {
   testWidgets('bottom navigation opens core routes', (tester) async {
     await _enterDashboard(tester);
 
-    await tester.tap(find.text('Subjects').last);
+    await tester.tap(find.byKey(const ValueKey('nav-subjects')));
     await tester.pumpAndSettle();
 
     expect(find.text('Study Workspace'), findsOneWidget);
@@ -1659,7 +1660,7 @@ void main() {
     expect(authRepository.signUpCount, 1);
     expect(authRepository.signUpDisplayNames, ['Casey Student']);
     expect(profileRepository.ensuredUsers.single.displayName, 'Casey Student');
-    expect(find.text('What do you want to do today?'), findsOneWidget);
+    expect(find.text('Ready for your next study step?'), findsOneWidget);
   });
 
   testWidgets('signup password visibility toggle works', (tester) async {
@@ -2092,7 +2093,7 @@ void main() {
 
     final summaryTile = find.ancestor(
       of: find.textContaining('Synced - This summary explains'),
-      matching: find.byType(ListTile),
+      matching: find.byType(AppListRow),
     );
     await tester.tap(summaryTile);
     await tester.pumpAndSettle();
@@ -2385,7 +2386,7 @@ void main() {
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.subjectDetail, arguments: subject);
 
-    await tester.tap(find.byTooltip('Favorite material'));
+    await _tapVisible(tester, find.byTooltip('Favorite material'));
     await tester.pumpAndSettle();
 
     expect(favoriteRepository.addedUsers, [_supabaseUser]);
@@ -2437,7 +2438,7 @@ void main() {
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.subjectDetail, arguments: subject);
 
-    await tester.tap(find.byTooltip('Favorite material'));
+    await _tapVisible(tester, find.byTooltip('Favorite material'));
     await tester.pumpAndSettle();
 
     expect(find.text('Could not update favorite.'), findsOneWidget);
@@ -2462,7 +2463,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.home_outlined).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('What do you want to do today?'), findsOneWidget);
+    expect(find.text('Ready for your next study step?'), findsOneWidget);
   });
 
   testWidgets('scenario screens expose shared navigation actions', (
