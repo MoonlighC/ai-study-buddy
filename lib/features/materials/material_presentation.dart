@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design_system/tokens.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 
 class MaterialHero extends StatelessWidget {
@@ -48,7 +49,9 @@ class MaterialHero extends StatelessWidget {
             ),
             IconButton(
               key: const ValueKey('material-favorite-action'),
-              tooltip: isFavorite ? 'Unfavorite material' : 'Favorite material',
+              tooltip: isFavorite
+                  ? context.l10n.subjectUnfavoriteMaterialTooltip
+                  : context.l10n.subjectFavoriteMaterialTooltip,
               onPressed: onFavorite,
               icon: Icon(
                 isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
@@ -57,11 +60,14 @@ class MaterialHero extends StatelessWidget {
             ),
             PopupMenuButton<String>(
               key: const ValueKey('material-overflow-action'),
-              tooltip: 'Material actions',
+              tooltip: context.l10n.materialActionsTooltip,
               enabled: onDelete != null,
               onSelected: (_) => onDelete?.call(),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'delete', child: Text('Delete material')),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(context.l10n.materialDeleteMaterial),
+                ),
               ],
             ),
           ],
@@ -149,11 +155,11 @@ class MaterialStatusPanel extends StatelessWidget {
 class MaterialMetadata extends StatelessWidget {
   const MaterialMetadata({
     required this.rows,
-    this.title = 'Details',
+    this.title,
     super.key,
   });
   final List<(String, String)> rows;
-  final String title;
+  final String? title;
 
   @override
   Widget build(BuildContext context) => GlassCard(
@@ -161,7 +167,10 @@ class MaterialMetadata extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          title ?? context.l10n.materialDetailsTitle,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: AppSpacing.sm),
         for (final row in rows)
           Padding(
@@ -246,19 +255,17 @@ class DestructiveActionSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Delete material',
+          context.l10n.materialDeleteMaterial,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
             color: Theme.of(context).colorScheme.error,
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
-        const Text(
-          'Remove this source and its generated material-specific study content.',
-        ),
+        Text(context.l10n.materialDeleteDescription),
         const SizedBox(height: AppSpacing.md),
         Semantics(
           button: true,
-          label: 'Delete material',
+          label: context.l10n.materialDeleteMaterial,
           child: OutlinedButton.icon(
             onPressed: deleting ? null : onDelete,
             icon: deleting
@@ -267,7 +274,11 @@ class DestructiveActionSection extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.delete_outline),
-            label: Text(deleting ? 'Deleting material' : 'Delete material'),
+            label: Text(
+              deleting
+                  ? context.l10n.materialDeleting
+                  : context.l10n.materialDeleteMaterial,
+            ),
           ),
         ),
       ],

@@ -591,7 +591,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get materialWaitingForProcessing => 'Ожидает обработки';
 
   @override
-  String get materialUnknownSize => 'Размер неизвестен';
+  String get materialUnknownSize => 'Неизвестно';
 
   @override
   String get materialSaveMaterial => 'Сохранить материал';
@@ -1948,4 +1948,179 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get sessionAskTeacher => 'Спросить ИИ-преподавателя';
+
+  @override
+  String get relativeJustNow => 'Только что';
+
+  @override
+  String get relativeToday => 'Сегодня';
+
+  @override
+  String get relativeYesterday => 'Вчера';
+
+  @override
+  String get relativeSynced => 'Синхронизировано';
+
+  @override
+  String get relativeRecent => 'Недавно';
+
+  @override
+  String fileSizeBytes(Object value) {
+    return '$value Б';
+  }
+
+  @override
+  String fileSizeKibibytes(Object value) {
+    return '$value КиБ';
+  }
+
+  @override
+  String fileSizeMebibytes(Object value) {
+    return '$value МиБ';
+  }
+
+  @override
+  String get favoriteAction => 'Добавить в избранное';
+
+  @override
+  String get unfavoriteAction => 'Удалить из избранного';
+
+  @override
+  String sessionTopic(Object topic) {
+    return 'Тема: $topic';
+  }
+
+  @override
+  String sessionCorrectOption(Object option) {
+    return '$option — верно';
+  }
+
+  @override
+  String sessionIncorrectOption(Object option) {
+    return '$option — неверно';
+  }
+
+  @override
+  String sessionUnavailableForSubject(Object subject) {
+    return 'Добавьте в предмет $subject готовый материал с полезным содержанием перед созданием занятия.';
+  }
+
+  @override
+  String get examPrepRecommendation =>
+      'Рекомендуется: сначала карточки, затем короткий тест.';
+
+  @override
+  String formattedMaterialSize(Object size) {
+    return 'Размер: $size';
+  }
+
+  @override
+  String materialKindDate(Object date, Object kind) {
+    return '$kind · $date';
+  }
+
+  @override
+  String materialPastedDate(Object date, Object kind) {
+    return '$date · $kind';
+  }
+
+  @override
+  String errorUploadTooLarge(Object size) {
+    return 'Выбранный файл слишком большой. Максимальный размер: $size.';
+  }
+
+  @override
+  String get materialActionsTooltip => 'Действия с материалом';
+
+  @override
+  String get materialDetailsTitle => 'Сведения';
+
+  @override
+  String get materialDeleteDescription =>
+      'Удалить этот источник и созданные для него учебные материалы.';
+
+  @override
+  String get materialDeleting => 'Материал удаляется';
+
+  @override
+  String get generatedPreviewTitle => 'Предварительный просмотр прототипа';
+
+  @override
+  String generatedPreviewSubtitle(Object subject) {
+    return 'Тестовый созданный результат · $subject';
+  }
+
+  @override
+  String get generatedPreviewEmptyTitle => 'Предпросмотр недоступен';
+
+  @override
+  String get generatedPreviewEmptyMessage =>
+      'Созданные учебные материалы появятся здесь, когда будут доступны.';
+
+  @override
+  String generatedCountPreview(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count карточки',
+      many: '$count карточек',
+      few: '$count карточки',
+      one: '$count карточка',
+    );
+    return 'Предпросмотр создания: $_temp0';
+  }
+
+  @override
+  String get generatedOpenFlashcards => 'Открыть карточки';
+
+  @override
+  String generatedExplainMistake(Object explanation) {
+    return 'Объяснение: $explanation';
+  }
+
+  @override
+  String get generatedExamPlan => 'План подготовки к экзамену';
+
+  @override
+  String get confidenceUnderstoodEverything => 'Я всё понял(а)';
+
+  @override
+  String get confidenceMostly => 'В основном';
+
+  @override
+  String get confidenceAboutHalf => 'Примерно половину';
+
+  @override
+  String get confidenceCompletelyLost => 'Я ничего не понял(а)';
+
+  @override
+  String get blockSummary => 'Конспект';
+
+  @override
+  String get blockFlashcards => 'Карточки';
+
+  @override
+  String get blockQuiz => 'Тест';
+
+  @override
+  String get blockReviewMistakes => 'Повторение ошибок';
+
+  @override
+  String get blockSimpleExplanation => 'Простое объяснение';
+
+  @override
+  String get blockGuidedFlashcards => 'Карточки с подсказками';
+
+  @override
+  String get blockQuickQuiz => 'Короткий тест';
+
+  @override
+  String searchMaterialSubtitle(Object date, Object subject) {
+    return '$subject · $date';
+  }
+
+  @override
+  String searchFlashcardSubtitle(Object subject, Object topic) {
+    return '$subject · Карточка · $topic';
+  }
 }

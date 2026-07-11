@@ -8,6 +8,7 @@ import '../../core/models/study_time_block.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -115,7 +116,9 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
                                 : Icons.radio_button_unchecked,
                           ),
                           title: Text(item.title),
-                          subtitle: Text(item.createdLabel),
+                          subtitle: Text(
+                            LocalizedFormatters.materialDate(context.l10n, item),
+                          ),
                           selected: material?.id == item.id,
                           onTap: () => setState(() => selectedMaterial = item),
                         ),
@@ -132,7 +135,12 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
                     children: [
                       for (final option in LectureConfidence.values)
                         ChoiceChip(
-                          label: Text(option.label),
+                          label: Text(
+                            LocalizedFormatters.confidence(
+                              context.l10n,
+                              option,
+                            ),
+                          ),
                           selected: confidence == option,
                           onSelected: (_) =>
                               setState(() => confidence = option),
@@ -148,7 +156,12 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
                     children: [
                       for (final block in _blocksFor(confidence))
                         ListTile(
-                          title: Text(block.label),
+                          title: Text(
+                            LocalizedFormatters.studyBlock(
+                              context.l10n,
+                              block.label,
+                            ),
+                          ),
                           trailing: Text(context.l10n.studyMinutes(block.minutes)),
                         ),
                     ],

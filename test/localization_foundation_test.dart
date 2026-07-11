@@ -251,6 +251,41 @@ void main() {
     );
   });
 
+  testWidgets('localized settings are stable at 800px in every locale', (
+    tester,
+  ) async {
+    for (final entry in const [
+      ('en', 'Settings'),
+      ('de', 'Einstellungen'),
+      ('ru', 'Настройки'),
+    ]) {
+      await _expectLocalizedSettingsLayout(
+        tester,
+        localeCode: entry.$1,
+        size: const Size(800, 900),
+        expectedLabels: [entry.$2],
+      );
+    }
+  });
+
+  testWidgets('200 percent text remains usable in every locale', (
+    tester,
+  ) async {
+    for (final entry in const [
+      ('en', 'Display language'),
+      ('de', 'Anzeigesprache'),
+      ('ru', 'Язык интерфейса'),
+    ]) {
+      await _expectLocalizedSettingsLayout(
+        tester,
+        localeCode: entry.$1,
+        size: const Size(390, 844),
+        textScale: 2,
+        expectedLabels: [entry.$2],
+      );
+    }
+  });
+
   testWidgets('locale changes keep user and AI content unchanged', (
     tester,
   ) async {

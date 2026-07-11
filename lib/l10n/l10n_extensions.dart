@@ -16,6 +16,12 @@ extension AppLocalizationsX on BuildContext {
       );
       return l.authResetNotice(email);
     }
+    final uploadLimit = RegExp(
+      r'^The selected file exceeds ([0-9]+ (?:KiB|MiB|GiB))\.$',
+    ).firstMatch(message);
+    if (uploadLimit != null) {
+      return l.errorUploadTooLarge(uploadLimit.group(1)!);
+    }
     return switch (message) {
       'Enter your name.' => l.errorEnterName,
       'Enter a valid email address.' => l.errorEnterValidEmail,

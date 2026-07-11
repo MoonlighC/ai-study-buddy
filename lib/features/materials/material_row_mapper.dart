@@ -17,6 +17,7 @@ StudyMaterial mapMaterialRow(Map<String, dynamic> row) {
     },
     content: _string(row['content_text']) ?? '',
     createdLabel: _createdLabel(_string(row['created_at'])),
+    createdAt: DateTime.tryParse(_string(row['created_at']) ?? ''),
     summary: _string(row['summary']),
     sourceKind: switch (_string(row['source_kind'])) {
       'upload' => MaterialSourceKind.upload,

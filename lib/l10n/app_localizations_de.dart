@@ -582,7 +582,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get materialWaitingForProcessing => 'Wartet auf Verarbeitung';
 
   @override
-  String get materialUnknownSize => 'Unbekannte Größe';
+  String get materialUnknownSize => 'Unbekannt';
 
   @override
   String get materialSaveMaterial => 'Material speichern';
@@ -1897,7 +1897,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sessionFocusTopics => 'Themen zum Wiederholen';
 
   @override
-  String get sessionNoTopics => 'Keine Wiederholungsthemen erfasst.';
+  String get sessionNoTopics => 'Keine Themen zum Wiederholen erfasst.';
 
   @override
   String get sessionPrototypeExplanation => 'Prototyp-Erklärung';
@@ -1911,4 +1911,177 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get sessionAskTeacher => 'KI-Lehrkraft fragen';
+
+  @override
+  String get relativeJustNow => 'Gerade eben';
+
+  @override
+  String get relativeToday => 'Heute';
+
+  @override
+  String get relativeYesterday => 'Gestern';
+
+  @override
+  String get relativeSynced => 'Synchronisiert';
+
+  @override
+  String get relativeRecent => 'Kürzlich';
+
+  @override
+  String fileSizeBytes(Object value) {
+    return '$value B';
+  }
+
+  @override
+  String fileSizeKibibytes(Object value) {
+    return '$value KiB';
+  }
+
+  @override
+  String fileSizeMebibytes(Object value) {
+    return '$value MiB';
+  }
+
+  @override
+  String get favoriteAction => 'Zu Favoriten hinzufügen';
+
+  @override
+  String get unfavoriteAction => 'Aus Favoriten entfernen';
+
+  @override
+  String sessionTopic(Object topic) {
+    return 'Thema: $topic';
+  }
+
+  @override
+  String sessionCorrectOption(Object option) {
+    return '$option — richtig';
+  }
+
+  @override
+  String sessionIncorrectOption(Object option) {
+    return '$option — falsch';
+  }
+
+  @override
+  String sessionUnavailableForSubject(Object subject) {
+    return 'Füge dem Fach $subject ein bereites Material mit nutzbarem Inhalt hinzu, bevor du eine Lerneinheit erstellst.';
+  }
+
+  @override
+  String get examPrepRecommendation =>
+      'Empfohlen: zuerst Lernkarten, dann ein Kurzquiz.';
+
+  @override
+  String formattedMaterialSize(Object size) {
+    return 'Größe: $size';
+  }
+
+  @override
+  String materialKindDate(Object date, Object kind) {
+    return '$kind · $date';
+  }
+
+  @override
+  String materialPastedDate(Object date, Object kind) {
+    return '$date · $kind';
+  }
+
+  @override
+  String errorUploadTooLarge(Object size) {
+    return 'Die ausgewählte Datei ist zu groß. Maximale Größe: $size.';
+  }
+
+  @override
+  String get materialActionsTooltip => 'Materialaktionen';
+
+  @override
+  String get materialDetailsTitle => 'Details';
+
+  @override
+  String get materialDeleteDescription =>
+      'Diese Quelle und ihre materialspezifischen generierten Lerninhalte entfernen.';
+
+  @override
+  String get materialDeleting => 'Material wird gelöscht';
+
+  @override
+  String get generatedPreviewTitle => 'Prototyp-Vorschau';
+
+  @override
+  String generatedPreviewSubtitle(Object subject) {
+    return 'Generierte Beispielausgabe · $subject';
+  }
+
+  @override
+  String get generatedPreviewEmptyTitle => 'Keine Vorschau verfügbar';
+
+  @override
+  String get generatedPreviewEmptyMessage =>
+      'Generierte Lerninhalte werden hier angezeigt, sobald sie verfügbar sind.';
+
+  @override
+  String generatedCountPreview(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Lernkarten',
+      one: '1 Lernkarte',
+    );
+    return 'Erstellungsvorschau: $_temp0';
+  }
+
+  @override
+  String get generatedOpenFlashcards => 'Lernkarten öffnen';
+
+  @override
+  String generatedExplainMistake(Object explanation) {
+    return 'Erklärung: $explanation';
+  }
+
+  @override
+  String get generatedExamPlan => 'Prüfungsvorbereitungsplan';
+
+  @override
+  String get confidenceUnderstoodEverything => 'Ich habe alles verstanden';
+
+  @override
+  String get confidenceMostly => 'Größtenteils';
+
+  @override
+  String get confidenceAboutHalf => 'Etwa die Hälfte';
+
+  @override
+  String get confidenceCompletelyLost => 'Ich habe nichts verstanden';
+
+  @override
+  String get blockSummary => 'Zusammenfassung';
+
+  @override
+  String get blockFlashcards => 'Lernkarten';
+
+  @override
+  String get blockQuiz => 'Quiz';
+
+  @override
+  String get blockReviewMistakes => 'Fehler wiederholen';
+
+  @override
+  String get blockSimpleExplanation => 'Einfache Erklärung';
+
+  @override
+  String get blockGuidedFlashcards => 'Geführte Lernkarten';
+
+  @override
+  String get blockQuickQuiz => 'Kurzquiz';
+
+  @override
+  String searchMaterialSubtitle(Object date, Object subject) {
+    return '$subject · $date';
+  }
+
+  @override
+  String searchFlashcardSubtitle(Object subject, Object topic) {
+    return '$subject · Lernkarte · $topic';
+  }
 }

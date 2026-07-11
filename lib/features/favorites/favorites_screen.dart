@@ -4,6 +4,7 @@ import '../../app/app_config.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -39,7 +40,7 @@ class FavoritesScreen extends StatelessWidget {
                 ),
                 title: Text(material.title),
                 subtitle: Text(
-                  '${state.subjectFor(material.subjectId).name} · ${material.createdLabel} · ${material.kind.name}',
+                  '${state.subjectFor(material.subjectId).name} · ${LocalizedFormatters.materialDate(l10n, material)} · ${material.kind.name}',
                 ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.pushNamed(

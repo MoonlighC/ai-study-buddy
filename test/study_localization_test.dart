@@ -55,4 +55,53 @@ void main() {
       expect(find.text(lookupAppLocalizations(locale).studyQuestion), findsOneWidget);
     });
   }
+
+  testWidgets('semantic text updates when an open view changes locale', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+
+    Widget app(Locale locale) => MaterialApp(
+      locale: locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: Scaffold(
+        body: FlashcardSurface(
+          front: 'SOURCE FRONT Ω',
+          back: 'SOURCE BACK Ж',
+          isAnswerVisible: false,
+          onToggleAnswer: () {},
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(app(const Locale('en')));
+    await tester.pumpAndSettle();
+    expect(
+      find.bySemanticsLabel(
+        lookupAppLocalizations(
+          const Locale('en'),
+        ).studyFlashcardQuestionSemantics,
+      ),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(app(const Locale('ru')));
+    await tester.pumpAndSettle();
+    expect(
+      find.bySemanticsLabel(
+        lookupAppLocalizations(
+          const Locale('ru'),
+        ).studyFlashcardQuestionSemantics,
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('SOURCE FRONT Ω'), findsOneWidget);
+    semantics.dispose();
+  });
 }

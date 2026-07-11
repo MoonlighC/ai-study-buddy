@@ -2252,12 +2252,12 @@ void main() {
     expect(find.text('Summaries'), findsOneWidget);
     expect(find.text('Cloud lecture notes'), findsWidgets);
     expect(
-      find.textContaining('Synced - This summary explains'),
+      find.textContaining('Synced — This summary explains'),
       findsOneWidget,
     );
 
     final summaryTile = find.ancestor(
-      of: find.textContaining('Synced - This summary explains'),
+      of: find.textContaining('Synced — This summary explains'),
       matching: find.byType(AppListRow),
     );
     await tester.tap(summaryTile);
@@ -2699,7 +2699,7 @@ void main() {
     await tester.tap(find.text('A generic Biology fallback'));
     await tester.pumpAndSettle();
 
-    expect(find.text('A generic Biology fallback - incorrect'), findsOneWidget);
+    expect(find.text('A generic Biology fallback — incorrect'), findsOneWidget);
     expect(
       find.text(
         'Incorrect. Review the explanation, then retry the flashcards.',

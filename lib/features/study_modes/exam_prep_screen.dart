@@ -6,6 +6,7 @@ import '../../core/models/study_session.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -126,7 +127,7 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                           leading: const Icon(Icons.article_outlined),
                           title: Text(material.title),
                           subtitle: Text(
-                            '${material.createdLabel} · ${context.l10n.examPrepIncluded}',
+                            '${LocalizedFormatters.materialDate(context.l10n, material)} · ${context.l10n.examPrepIncluded}',
                           ),
                         ),
                   ],
@@ -161,9 +162,7 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                         child: Text(item),
                       ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Recommended: flashcards first, then quick quiz.',
-                    ),
+                    Text(context.l10n.examPrepRecommendation),
                   ],
                 ),
               ),

@@ -6,6 +6,7 @@ import '../../app/routes.dart';
 import '../../core/models/material.dart';
 import '../../core/models/study_session.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/section_card.dart';
@@ -15,7 +16,6 @@ import '../flashcards/flashcard_generation_dialog.dart';
 import '../flashcards/flashcards_screen.dart';
 import '../quizzes/quiz_repository.dart';
 import '../quizzes/quiz_taking_screen.dart';
-import 'material_upload.dart';
 import 'material_presentation.dart';
 
 class MaterialDetailScreen extends StatelessWidget {
@@ -119,7 +119,10 @@ class MaterialDetailScreen extends StatelessWidget {
                     l10n.materialSizeLabel,
                     freshMaterial.fileSizeBytes == null
                         ? l10n.commonUnknown
-                        : formatFileSize(freshMaterial.fileSizeBytes!),
+                        : LocalizedFormatters.fileSize(
+                            l10n,
+                            freshMaterial.fileSizeBytes!,
+                          ),
                   ),
                   (
                     l10n.materialMimeLabel,
@@ -191,7 +194,10 @@ class MaterialDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
             MaterialMetadata(
               rows: [
-                (l10n.materialCreatedLabel, freshMaterial.createdLabel),
+                (
+                  l10n.materialCreatedLabel,
+                  LocalizedFormatters.materialDate(l10n, freshMaterial),
+                ),
                 (
                   l10n.materialStatusLabel,
                   _materialStatus(context, freshMaterial),

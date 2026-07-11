@@ -1,55 +1,81 @@
-# Phase 10B Localization Notes
+# Phase 10B localization review
 
-Phase 10B.1 adds the localization foundation for English, German, and Russian.
-Phase 10B.2 migrates core workspace and utility UI chrome for Auth, Home, Subjects, Subject Detail, Material Detail, pasted-text entry, PDF/image upload, Favorites, Search, Settings/Profile, and Usage.
-Phase 10B.3 migrates Flashcards, Training, Quiz, Progress, After Lecture, Exam Prep, Continue Studying, AI Teacher, Study Session Result, and shared study components.
+Phase 10B supports English, German, and Russian. Locale changes update the open Flutter widget tree immediately and persist through the existing preference mechanism. Phase 10B.4 is a quality audit, not native-speaker certification.
 
-## 10B.3 study terminology and plurals
+## Terminology decisions
 
-German draft terms include **Lernkarten**, **Zum Wiederholen**, **Fällig zur Wiederholung**, **Nicht gewusst**, **Gewusst**, and **Themen zum Wiederholen**. Russian draft terms include **Карточки**, **Для повторения**, **По расписанию**, **Не знал**, **Знал**, **Тест**, and **Темы для повторения**.
+| Product concept | German | Russian |
+| --- | --- | --- |
+| Subjects | Fächer | Предметы |
+| Materials | Materialien | Материалы |
+| Favorites | Favoriten | Избранное |
+| Progress | Fortschritt | Прогресс |
+| Settings | Einstellungen | Настройки |
+| Study session | Lerneinheit | Занятие |
+| Flashcards | Lernkarten | Карточки |
+| Focus/review topics | Themen zum Wiederholen | Темы для повторения |
 
-Card, question, correct-answer, attempt, miss, review, topic, and session-item counts use ICU messages. Russian messages explicitly provide `one`, `few`, `many`, and `other`; 0, 1, 2, and 5 remain the required review cases.
+German review actions consistently use *wiederholen/Wiederholung*. Russian review actions consistently use *повторить/повторение*. Training language remains action-oriented and distinct from generated educational content.
 
-Native-speaker review candidates include the tone of German training actions, Russian wording for due/review scheduling, prototype disclaimers, and whether AI Teacher should use a more formal product term. Stored card/quiz/session/coaching content and subject, material, and topic names intentionally remain in their source language.
+## Formatting and plurals
 
-Deferred to 10B.4: repository-wide untranslated-string audit, final consistency review, and native-speaker approval of all German and Russian drafts.
+- Material timestamps are formatted at presentation time from `createdAt`. The compatible legacy `createdLabel` path recognizes only `Just now`, `Today`, `Yesterday`, `Synced`, `Not synced`, and ISO timestamps; unknown text becomes a localized neutral “recently” label.
+- Dates, date/times, decimals, percentages, and IEC file sizes use the active locale through `intl`. Stored scores, timestamps, and byte counts are unchanged. IEC symbols remain stable while decimal separators localize.
+- Whole ICU phrases cover material, page, summary, miss, card, question, attempt, training, generated-card, and selection counts. Tests exercise 0, 1, 2, 5, and 21. Russian messages use `one`, `few`, `many`, and `other` where Russian morphology requires them.
 
-The German and Russian ARB text is a reviewed draft prepared for implementation. It has not been approved by native-speaker review, and no legal, educational, or product-quality claim should be made from the draft translations alone.
+## Accessibility wording
 
-Phase 10B.4 should audit uncertain terminology before final localization completion, especially:
+Tooltips and semantic output use the active localization during `build`, including favorite/remove, delete, reveal/hide, correctness, progress, retry/recovery, and loading/error states. Correct and incorrect answer announcements frame the stored answer without translating it. Product names and source content remain unchanged when the locale switches.
 
-- authentication terminology
-- study workflow terminology
-- errors and destructive actions
-- plural messages and placeholders
-- any string where context affects the natural German or Russian phrasing
+## Intentionally untranslated boundaries
 
-## 10B.2 terminology choices
+The app does not translate subject names, material titles, user-entered text, OCR/extracted text, summaries, flashcard fronts/backs/topics, quiz questions/options/explanations, weak-topic names/reasons, generated coaching, or generated study-plan sentences. MIME types, file extensions, route names, payload/database keys, enum wire values, storage identifiers, logs, assertions, and test identifiers are technical data rather than UI translations.
 
-German draft terms:
+## Safe-message mapping
 
-- Subjects: Fächer
-- Materials: Materialien
-- Favorites: Favoriten
-- Progress: Fortschritt
-- Settings: Einstellungen
-- Study session: Lerneinheit
-- Focus topics: Themen zum Wiederholen
+`BuildContext.localizedSafeMessage` is the single bounded mapper. Unknown text always returns `genericLocalizedError`; backend text is never displayed directly.
 
-Russian draft terms:
+| Known source family | Localized destination |
+| --- | --- |
+| Name/email/password validation and password mismatch | Corresponding `error…` ARB validation message |
+| Reset notice `If an account exists for …` | Parameterized `authResetNotice` |
+| Profile, logout, and authentication requirements | Corresponding profile/authentication ARB error |
+| Subject/material/favorite synchronization and validation | Corresponding bounded synchronization ARB error |
+| File selection, empty/type mismatch, picker, upload, and `exceeds N KiB/MiB/GiB` | Corresponding file ARB error; size limit remains a parameter |
+| Material availability, deletion, and processing reset | Corresponding material lifecycle ARB error |
+| PDF/image extraction and OCR safe messages | Corresponding extraction/OCR ARB error |
+| Summary, flashcard, quiz generation, review saving, and quiz-attempt saving | Corresponding study-generation ARB error |
+| Any other value | `genericLocalizedError` |
 
-- Subjects: Предметы
-- Materials: Материалы
-- Favorites: Избранное
-- Progress: Прогресс
-- Settings: Настройки
-- Study session: Занятие
-- Focus topics: Темы для повторения
+The exact accepted literals remain in the single switch/parameter match in `lib/l10n/l10n_extensions.dart`; screens do not duplicate comparisons.
 
-## Review focus for 10B.4
+## Heuristic literal audit
 
-- Destructive-action wording: material deletion now explains removed and preserved data; confirm tone, legal clarity, and whether “preserved” is the right product term.
-- Auth wording: sign-in, reset, provider-placeholder, and validation strings are localized drafts; review for formal/informal voice consistency.
-- OCR and extraction statuses: German/Russian strings should be checked by native speakers with product context, especially OCR wording.
-- Deferred areas: Flashcards/Training/Quiz/Progress flows beyond shared Material Detail controls, After Lecture, Exam Prep, Continue Studying, AI Teacher, and Session Result remain for 10B.3/10B.4.
-- No claim is made that the German or Russian copy is native-speaker-approved.
+The deterministic test scans `lib/app`, `lib/shared`, and `lib/features` for string literals in high-confidence `Text`, `Tooltip`, `tooltip`, `semanticLabel`, `labelText`, `hintText`, `helperText`, and `errorText` contexts. It ignores comments and fails for both a new suspicious literal and a stale allowlist entry. This is conservative heuristic evidence, not mathematical proof or a full Dart parser.
+
+Current result: **5 findings, 5 explicitly allowlisted, 0 unallowlisted, 0 stale**.
+
+| Path/pattern | Category | Reason |
+| --- | --- | --- |
+| `study_components.dart`: `$current / $total` | Numeric presentation | Locale-neutral progress value; localized semantic label surrounds it |
+| `auth_layout.dart`: `AI Study Buddy` | Product name | Intentionally invariant registered product name |
+| `flashcards_screen.dart`: `$size` | Numeric presentation | Locale-neutral integer choice |
+| `flashcard_generation_dialog.dart`: `$count` | Numeric presentation | Locale-neutral integer choice |
+| `material_presentation.dart`: metadata label/value interpolation | Localized composition | Both components are already presentation/localized values |
+
+## Native-speaker review checklist
+
+- Confirm formal/informal voice across authentication, recovery, and destructive actions.
+- Review German training actions and the distinction between *Wiederholen* and *Training*.
+- Review Russian due/review scheduling and correctness announcements.
+- Review OCR/extraction terminology with actual PDF and image contexts.
+- Review destructive deletion wording for removed versus preserved study history.
+- Review plural phrasing at 0, 1, 2, 5, and 21, including generated-card counts.
+- Review semantic labels with VoiceOver/TalkBack in all three locales.
+
+## Remaining limitations
+
+- The literal audit intentionally does not parse arbitrary Dart expressions or prove complete localization.
+- Legacy material labels lack an exact timestamp and therefore use bounded relative/neutral fallbacks.
+- Mock/generated educational content remains in its stored source language by design.
+- German and Russian text is an implementation review draft and has not been certified by native speakers.

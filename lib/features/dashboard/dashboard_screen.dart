@@ -8,6 +8,7 @@ import '../../core/models/material.dart';
 import '../../core/models/quiz_attempt.dart';
 import '../../core/models/weak_topic.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -225,7 +226,9 @@ class _MaterialRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AppListRow(
     title: Text(material.title),
-    subtitle: Text('$subjectName · ${material.createdLabel}'),
+    subtitle: Text(
+      '$subjectName · ${LocalizedFormatters.materialDate(context.l10n, material)}',
+    ),
     leading: Icon(
       _iconFor(material.kind),
       color: Theme.of(context).colorScheme.primary,
@@ -269,7 +272,7 @@ class _LatestProgress extends StatelessWidget {
             )
           else ...[
             Text(
-              '${latest.score.round()}%',
+              LocalizedFormatters.percentage(context.l10n, latest.score),
               style: Theme.of(context).textTheme.displaySmall,
             ),
             const SizedBox(height: AppSpacing.xxs),

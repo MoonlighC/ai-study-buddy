@@ -575,7 +575,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialWaitingForProcessing => 'Waiting for processing';
 
   @override
-  String get materialUnknownSize => 'Unknown size';
+  String get materialUnknownSize => 'Unknown';
 
   @override
   String get materialSaveMaterial => 'Save material';
@@ -1872,4 +1872,177 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionAskTeacher => 'Ask AI Teacher';
+
+  @override
+  String get relativeJustNow => 'Just now';
+
+  @override
+  String get relativeToday => 'Today';
+
+  @override
+  String get relativeYesterday => 'Yesterday';
+
+  @override
+  String get relativeSynced => 'Synced';
+
+  @override
+  String get relativeRecent => 'Recently';
+
+  @override
+  String fileSizeBytes(Object value) {
+    return '$value B';
+  }
+
+  @override
+  String fileSizeKibibytes(Object value) {
+    return '$value KiB';
+  }
+
+  @override
+  String fileSizeMebibytes(Object value) {
+    return '$value MiB';
+  }
+
+  @override
+  String get favoriteAction => 'Favorite';
+
+  @override
+  String get unfavoriteAction => 'Remove from favorites';
+
+  @override
+  String sessionTopic(Object topic) {
+    return 'Topic: $topic';
+  }
+
+  @override
+  String sessionCorrectOption(Object option) {
+    return '$option — correct';
+  }
+
+  @override
+  String sessionIncorrectOption(Object option) {
+    return '$option — incorrect';
+  }
+
+  @override
+  String sessionUnavailableForSubject(Object subject) {
+    return 'Add a ready material with useful content to $subject before creating a study session.';
+  }
+
+  @override
+  String get examPrepRecommendation =>
+      'Recommended: flashcards first, then a quick quiz.';
+
+  @override
+  String formattedMaterialSize(Object size) {
+    return 'Size: $size';
+  }
+
+  @override
+  String materialKindDate(Object date, Object kind) {
+    return '$kind · $date';
+  }
+
+  @override
+  String materialPastedDate(Object date, Object kind) {
+    return '$date · $kind';
+  }
+
+  @override
+  String errorUploadTooLarge(Object size) {
+    return 'The selected file is too large. Maximum size: $size.';
+  }
+
+  @override
+  String get materialActionsTooltip => 'Material actions';
+
+  @override
+  String get materialDetailsTitle => 'Details';
+
+  @override
+  String get materialDeleteDescription =>
+      'Remove this source and its generated material-specific study content.';
+
+  @override
+  String get materialDeleting => 'Deleting material';
+
+  @override
+  String get generatedPreviewTitle => 'Prototype preview';
+
+  @override
+  String generatedPreviewSubtitle(Object subject) {
+    return 'Mock generated output · $subject';
+  }
+
+  @override
+  String get generatedPreviewEmptyTitle => 'No preview available';
+
+  @override
+  String get generatedPreviewEmptyMessage =>
+      'Generated study output will appear here when available.';
+
+  @override
+  String generatedCountPreview(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards',
+      one: '1 card',
+    );
+    return 'Generation preview: $_temp0';
+  }
+
+  @override
+  String get generatedOpenFlashcards => 'Open flashcards';
+
+  @override
+  String generatedExplainMistake(Object explanation) {
+    return 'Explanation: $explanation';
+  }
+
+  @override
+  String get generatedExamPlan => 'Exam preparation plan';
+
+  @override
+  String get confidenceUnderstoodEverything => 'I understood everything';
+
+  @override
+  String get confidenceMostly => 'Mostly';
+
+  @override
+  String get confidenceAboutHalf => 'About half';
+
+  @override
+  String get confidenceCompletelyLost => 'I am completely lost';
+
+  @override
+  String get blockSummary => 'Summary';
+
+  @override
+  String get blockFlashcards => 'Flashcards';
+
+  @override
+  String get blockQuiz => 'Quiz';
+
+  @override
+  String get blockReviewMistakes => 'Review mistakes';
+
+  @override
+  String get blockSimpleExplanation => 'Simple explanation';
+
+  @override
+  String get blockGuidedFlashcards => 'Guided flashcards';
+
+  @override
+  String get blockQuickQuiz => 'Quick quiz';
+
+  @override
+  String searchMaterialSubtitle(Object date, Object subject) {
+    return '$subject · $date';
+  }
+
+  @override
+  String searchFlashcardSubtitle(Object subject, Object topic) {
+    return '$subject · Flashcard · $topic';
+  }
 }

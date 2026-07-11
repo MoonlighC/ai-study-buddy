@@ -6,6 +6,7 @@ class StudyMaterial {
     required this.kind,
     required this.content,
     required this.createdLabel,
+    this.createdAt,
     this.summary,
     this.sourceKind = MaterialSourceKind.manual,
     this.storageBucket,
@@ -24,6 +25,7 @@ class StudyMaterial {
   final MaterialKind kind;
   final String content;
   final String createdLabel;
+  final DateTime? createdAt;
   final String? summary;
   final MaterialSourceKind sourceKind;
   final String? storageBucket;
@@ -44,6 +46,7 @@ class StudyMaterial {
     MaterialKind? kind,
     String? content,
     String? createdLabel,
+    DateTime? createdAt,
     String? summary,
     MaterialSourceKind? sourceKind,
     String? storageBucket,
@@ -62,6 +65,7 @@ class StudyMaterial {
       kind: kind ?? this.kind,
       content: content ?? this.content,
       createdLabel: createdLabel ?? this.createdLabel,
+      createdAt: createdAt ?? this.createdAt,
       summary: summary ?? this.summary,
       sourceKind: sourceKind ?? this.sourceKind,
       storageBucket: storageBucket ?? this.storageBucket,

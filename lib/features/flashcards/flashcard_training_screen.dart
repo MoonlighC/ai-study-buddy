@@ -5,6 +5,7 @@ import '../../core/models/flashcard.dart';
 import '../../core/models/material.dart';
 import '../../core/models/subject.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../../shared/widgets/study_components.dart';
@@ -108,7 +109,8 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
               front: card.front,
               back: card.back,
               isAnswerVisible: _isShowingAnswer,
-              metadata: '${card.topic} · ${card.difficulty.label}',
+              metadata:
+                  '${card.topic} · ${LocalizedFormatters.difficulty(context.l10n, card.difficulty)}',
               onToggleAnswer: () =>
                   setState(() => _isShowingAnswer = !_isShowingAnswer),
             ),

@@ -4,6 +4,7 @@ import '../../app/routes.dart';
 import '../flashcards/flashcards_screen.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -24,25 +25,24 @@ class GeneratedOutputsScreen extends StatelessWidget {
         quiz.isNotEmpty ||
         plan.isNotEmpty;
     return ResponsiveAppScaffold(
-      title: 'Prototype preview',
-      subtitle: 'Mock generated output · ${subject.name}',
+      title: context.l10n.generatedPreviewTitle,
+      subtitle: context.l10n.generatedPreviewSubtitle(subject.name),
       showBack: true,
       body: ResponsiveContent(
         width: ResponsiveContentWidth.reading,
         child: ListView(
           key: const ValueKey('generated-outputs-scroll-view'),
           children: [
-            const GlassStatusChip(
-              label: 'Prototype preview',
+            GlassStatusChip(
+              label: context.l10n.generatedPreviewTitle,
               icon: Icons.science_outlined,
             ),
             const SizedBox(height: 16),
             if (!hasContent)
-              const EmptyState(
+              EmptyState(
                 icon: Icons.auto_awesome_outlined,
-                title: 'No preview available',
-                message:
-                    'Generated study output will appear here when available.',
+                title: context.l10n.generatedPreviewEmptyTitle,
+                message: context.l10n.generatedPreviewEmptyMessage,
               )
             else ...[
               Text(
@@ -52,16 +52,16 @@ class GeneratedOutputsScreen extends StatelessWidget {
               const SizedBox(height: 12),
               _OutputSection(
                 icon: Icons.summarize_outlined,
-                title: 'Summary',
+                title: context.l10n.studySummary,
                 child: Text(ai.summaryFor(subject)),
               ),
               _OutputSection(
                 icon: Icons.style_outlined,
-                title: 'Flashcards',
+                title: context.l10n.flashcardsTitle,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Generation count preview: 5 cards'),
+                    Text(context.l10n.generatedCountPreview(5)),
                     const SizedBox(height: 8),
                     FilledButton.icon(
                       onPressed: () => Navigator.pushNamed(
@@ -70,14 +70,14 @@ class GeneratedOutputsScreen extends StatelessWidget {
                         arguments: FlashcardsRouteArgs(subject: subject),
                       ),
                       icon: const Icon(Icons.play_arrow_outlined),
-                      label: const Text('Open flashcards'),
+                      label: Text(context.l10n.generatedOpenFlashcards),
                     ),
                   ],
                 ),
               ),
               _OutputSection(
                 icon: Icons.quiz_outlined,
-                title: 'Quick quiz',
+                title: context.l10n.sessionQuickQuiz,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -94,13 +94,17 @@ class GeneratedOutputsScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                    Text('Explain mistake: ${quiz.first.explanation}'),
+                    Text(
+                      context.l10n.generatedExplainMistake(
+                        quiz.first.explanation,
+                      ),
+                    ),
                   ],
                 ),
               ),
               _OutputSection(
                 icon: Icons.calendar_month_outlined,
-                title: 'Exam preparation plan',
+                title: context.l10n.generatedExamPlan,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [for (final item in plan) Text(item)],

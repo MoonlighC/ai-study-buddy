@@ -6,6 +6,7 @@ import '../../app/routes.dart';
 import '../../core/models/flashcard.dart';
 import '../../core/models/subject.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -489,7 +490,10 @@ class _FlashcardListItem extends StatelessWidget {
         ? null
         : context.l10n.flashcardsReviewStats(card.correctCount, card.incorrectCount);
     final details = [
-      context.l10n.flashcardsTopicDifficulty(card.topic, card.difficulty.label),
+      context.l10n.flashcardsTopicDifficulty(
+        card.topic,
+        LocalizedFormatters.difficulty(context.l10n, card.difficulty),
+      ),
       ?reviewStats,
       if (isAnswerVisible) card.back,
     ].join('\n');
@@ -513,7 +517,9 @@ class _FlashcardListItem extends StatelessWidget {
           ),
           if (!isSupabaseMode)
             IconButton(
-              tooltip: card.isFavorite ? 'Unfavorite' : 'Favorite',
+              tooltip: card.isFavorite
+                  ? context.l10n.unfavoriteAction
+                  : context.l10n.favoriteAction,
               icon: Icon(card.isFavorite ? Icons.star : Icons.star_border),
               onPressed: onToggleFavorite,
             ),

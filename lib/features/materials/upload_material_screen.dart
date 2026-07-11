@@ -4,6 +4,7 @@ import '../../app/app_state.dart';
 import '../../core/models/material.dart';
 import '../../core/models/subject.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../auth/auth_controller.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
@@ -91,7 +92,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                   ),
                   title: Text(selected.name),
                   subtitle: Text(
-                    '${isPdf ? l10n.uploadPdfKind : l10n.uploadImageKind} · ${formatFileSize(selected.reportedSizeBytes)}',
+                    '${isPdf ? l10n.uploadPdfKind : l10n.uploadImageKind} · ${LocalizedFormatters.fileSize(l10n, selected.reportedSizeBytes)}',
                   ),
                   showDivider: false,
                 ),

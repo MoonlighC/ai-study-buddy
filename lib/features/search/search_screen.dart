@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../flashcards/flashcards_screen.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
@@ -193,7 +194,7 @@ class _SearchGroup extends StatelessWidget {
             AppListRow(
               leading: Icon(iconFor(kind)),
               title: Text(result.title),
-              subtitle: Text(result.subtitle),
+              subtitle: Text(_localizedSubtitle(context, result)),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => open(result),
               showDivider: result != results.last,
@@ -201,5 +202,23 @@ class _SearchGroup extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _localizedSubtitle(BuildContext context, LocalSearchResult result) {
+    if (result.kind == LocalSearchResultKind.material &&
+        result.material != null) {
+      return context.l10n.searchMaterialSubtitle(
+        result.subject.name,
+        LocalizedFormatters.materialDate(context.l10n, result.material!),
+      );
+    }
+    if (result.kind == LocalSearchResultKind.flashcard) {
+      final separator = result.subtitle.lastIndexOf(' - ');
+      final topic = separator < 0
+          ? context.l10n.relativeRecent
+          : result.subtitle.substring(separator + 3);
+      return context.l10n.searchFlashcardSubtitle(result.subject.name, topic);
+    }
+    return result.subtitle;
   }
 }

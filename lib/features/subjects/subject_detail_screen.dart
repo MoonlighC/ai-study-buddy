@@ -10,11 +10,11 @@ import '../../core/models/subject.dart';
 import '../../core/models/study_session.dart';
 import '../../core/models/weak_topic.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../auth/auth_controller.dart';
-import '../materials/material_upload.dart';
 import '../materials/upload_material_screen.dart';
 
 class SubjectDetailScreen extends StatelessWidget {
@@ -446,7 +446,7 @@ class _SummariesList extends StatelessWidget {
             key: ValueKey('summary-${materials[index].id}'),
             title: Text(materials[index].title),
             subtitle: Text(
-              '${materials[index].createdLabel} - ${materials[index].summary!.trim()}',
+              '${LocalizedFormatters.materialDate(context.l10n, materials[index])} — ${materials[index].summary!.trim()}',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -492,14 +492,17 @@ IconData _materialIcon(StudyMaterial material) => switch (material.kind) {
 String _materialSubtitle(BuildContext context, StudyMaterial material) {
   final l10n = context.l10n;
   if (material.sourceKind != MaterialSourceKind.upload) {
-    return '${material.createdLabel} · ${l10n.materialPastedTextKind}';
+    return l10n.materialPastedDate(
+      LocalizedFormatters.materialDate(l10n, material),
+      l10n.materialPastedTextKind,
+    );
   }
   final type = material.kind == MaterialKind.pdf
       ? l10n.uploadPdfKind
       : l10n.uploadImageKind;
   final size = material.fileSizeBytes == null
       ? l10n.materialUnknownSize
-      : formatFileSize(material.fileSizeBytes!);
+      : LocalizedFormatters.fileSize(l10n, material.fileSizeBytes!);
   final status = material.processingStatus == MaterialProcessingStatus.pending
       ? '${l10n.materialUploadedStatus} · ${l10n.materialWaitingForProcessing}'
       : l10n.materialUploadedStatus;

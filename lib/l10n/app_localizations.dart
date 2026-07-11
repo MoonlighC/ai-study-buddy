@@ -1087,7 +1087,7 @@ abstract class AppLocalizations {
   /// Fallback file size label.
   ///
   /// In en, this message translates to:
-  /// **'Unknown size'**
+  /// **'Unknown'**
   String get materialUnknownSize;
 
   /// Save pasted material action.
@@ -3171,6 +3171,270 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ask AI Teacher'**
   String get sessionAskTeacher;
+
+  /// No description provided for @relativeJustNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Just now'**
+  String get relativeJustNow;
+
+  /// No description provided for @relativeToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get relativeToday;
+
+  /// No description provided for @relativeYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get relativeYesterday;
+
+  /// No description provided for @relativeSynced.
+  ///
+  /// In en, this message translates to:
+  /// **'Synced'**
+  String get relativeSynced;
+
+  /// No description provided for @relativeRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently'**
+  String get relativeRecent;
+
+  /// No description provided for @fileSizeBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} B'**
+  String fileSizeBytes(Object value);
+
+  /// No description provided for @fileSizeKibibytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} KiB'**
+  String fileSizeKibibytes(Object value);
+
+  /// No description provided for @fileSizeMebibytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} MiB'**
+  String fileSizeMebibytes(Object value);
+
+  /// No description provided for @favoriteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite'**
+  String get favoriteAction;
+
+  /// No description provided for @unfavoriteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from favorites'**
+  String get unfavoriteAction;
+
+  /// No description provided for @sessionTopic.
+  ///
+  /// In en, this message translates to:
+  /// **'Topic: {topic}'**
+  String sessionTopic(Object topic);
+
+  /// No description provided for @sessionCorrectOption.
+  ///
+  /// In en, this message translates to:
+  /// **'{option} — correct'**
+  String sessionCorrectOption(Object option);
+
+  /// No description provided for @sessionIncorrectOption.
+  ///
+  /// In en, this message translates to:
+  /// **'{option} — incorrect'**
+  String sessionIncorrectOption(Object option);
+
+  /// No description provided for @sessionUnavailableForSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a ready material with useful content to {subject} before creating a study session.'**
+  String sessionUnavailableForSubject(Object subject);
+
+  /// No description provided for @examPrepRecommendation.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended: flashcards first, then a quick quiz.'**
+  String get examPrepRecommendation;
+
+  /// No description provided for @formattedMaterialSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size: {size}'**
+  String formattedMaterialSize(Object size);
+
+  /// No description provided for @materialKindDate.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind} · {date}'**
+  String materialKindDate(Object date, Object kind);
+
+  /// No description provided for @materialPastedDate.
+  ///
+  /// In en, this message translates to:
+  /// **'{date} · {kind}'**
+  String materialPastedDate(Object date, Object kind);
+
+  /// No description provided for @errorUploadTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected file is too large. Maximum size: {size}.'**
+  String errorUploadTooLarge(Object size);
+
+  /// No description provided for @materialActionsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Material actions'**
+  String get materialActionsTooltip;
+
+  /// No description provided for @materialDetailsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get materialDetailsTitle;
+
+  /// No description provided for @materialDeleteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this source and its generated material-specific study content.'**
+  String get materialDeleteDescription;
+
+  /// No description provided for @materialDeleting.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting material'**
+  String get materialDeleting;
+
+  /// No description provided for @generatedPreviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Prototype preview'**
+  String get generatedPreviewTitle;
+
+  /// No description provided for @generatedPreviewSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mock generated output · {subject}'**
+  String generatedPreviewSubtitle(Object subject);
+
+  /// No description provided for @generatedPreviewEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No preview available'**
+  String get generatedPreviewEmptyTitle;
+
+  /// No description provided for @generatedPreviewEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated study output will appear here when available.'**
+  String get generatedPreviewEmptyMessage;
+
+  /// No description provided for @generatedCountPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Generation preview: {count, plural, one {1 card} other {{count} cards}}'**
+  String generatedCountPreview(num count);
+
+  /// No description provided for @generatedOpenFlashcards.
+  ///
+  /// In en, this message translates to:
+  /// **'Open flashcards'**
+  String get generatedOpenFlashcards;
+
+  /// No description provided for @generatedExplainMistake.
+  ///
+  /// In en, this message translates to:
+  /// **'Explanation: {explanation}'**
+  String generatedExplainMistake(Object explanation);
+
+  /// No description provided for @generatedExamPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Exam preparation plan'**
+  String get generatedExamPlan;
+
+  /// No description provided for @confidenceUnderstoodEverything.
+  ///
+  /// In en, this message translates to:
+  /// **'I understood everything'**
+  String get confidenceUnderstoodEverything;
+
+  /// No description provided for @confidenceMostly.
+  ///
+  /// In en, this message translates to:
+  /// **'Mostly'**
+  String get confidenceMostly;
+
+  /// No description provided for @confidenceAboutHalf.
+  ///
+  /// In en, this message translates to:
+  /// **'About half'**
+  String get confidenceAboutHalf;
+
+  /// No description provided for @confidenceCompletelyLost.
+  ///
+  /// In en, this message translates to:
+  /// **'I am completely lost'**
+  String get confidenceCompletelyLost;
+
+  /// No description provided for @blockSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get blockSummary;
+
+  /// No description provided for @blockFlashcards.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards'**
+  String get blockFlashcards;
+
+  /// No description provided for @blockQuiz.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiz'**
+  String get blockQuiz;
+
+  /// No description provided for @blockReviewMistakes.
+  ///
+  /// In en, this message translates to:
+  /// **'Review mistakes'**
+  String get blockReviewMistakes;
+
+  /// No description provided for @blockSimpleExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Simple explanation'**
+  String get blockSimpleExplanation;
+
+  /// No description provided for @blockGuidedFlashcards.
+  ///
+  /// In en, this message translates to:
+  /// **'Guided flashcards'**
+  String get blockGuidedFlashcards;
+
+  /// No description provided for @blockQuickQuiz.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick quiz'**
+  String get blockQuickQuiz;
+
+  /// No description provided for @searchMaterialSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{subject} · {date}'**
+  String searchMaterialSubtitle(Object date, Object subject);
+
+  /// No description provided for @searchFlashcardSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{subject} · Flashcard · {topic}'**
+  String searchFlashcardSubtitle(Object subject, Object topic);
 }
 
 class _AppLocalizationsDelegate

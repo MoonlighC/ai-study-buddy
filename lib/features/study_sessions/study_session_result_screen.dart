@@ -6,6 +6,7 @@ import '../../core/models/study_session.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
 import '../../l10n/l10n_extensions.dart';
+import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../../shared/widgets/study_components.dart';
@@ -44,8 +45,7 @@ class StudySessionResultScreen extends StatelessWidget {
               EmptyState(
                 key: const ValueKey('study-session-unavailable'),
                 title: context.l10n.studyUnavailableTitle,
-                message:
-                    'Add a ready material with useful content to ${subject.name} before creating a study session.',
+                message: context.l10n.sessionUnavailableForSubject(subject.name),
                 icon: Icons.article_outlined,
                 action: OutlinedButton.icon(
                   onPressed: () => Navigator.maybePop(context),
@@ -69,7 +69,10 @@ class StudySessionResultScreen extends StatelessWidget {
                     trailing: Text(
                       session.quizScorePercent == null
                           ? context.l10n.studyNotCompleted
-                          : '${session.quizScorePercent}%',
+                          : LocalizedFormatters.percentage(
+                              context.l10n,
+                              session.quizScorePercent!,
+                            ),
                     ),
                   ),
                   if (session.quizScorePercent == null)
@@ -100,7 +103,7 @@ class StudySessionResultScreen extends StatelessWidget {
                           for (final card in session.flashcards)
                             ListTile(
                               title: Text(card.front),
-                              subtitle: Text('Topic: ${card.topic}'),
+                              subtitle: Text(context.l10n.sessionTopic(card.topic)),
                             ),
                         ],
                       ),
@@ -124,7 +127,7 @@ class StudySessionResultScreen extends StatelessWidget {
                           ),
                           child: Align(
                             alignment: Alignment.centerLeft,
-                            child: Text(_answerLabel(session, option)),
+                            child: Text(_answerLabel(context, session, option)),
                           ),
                         ),
                       ),
@@ -187,10 +190,14 @@ class StudySessionResultScreen extends StatelessWidget {
     );
   }
 
-  String _answerLabel(StudySession session, String option) {
+  String _answerLabel(
+    BuildContext context,
+    StudySession session,
+    String option,
+  ) {
     if (session.selectedAnswer != option) return option;
     return session.answeredCorrectly == true
-        ? '$option - correct'
-        : '$option - incorrect';
+        ? context.l10n.sessionCorrectOption(option)
+        : context.l10n.sessionIncorrectOption(option);
   }
 }
