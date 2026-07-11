@@ -175,7 +175,7 @@ AppConfig _supabaseConfig() {
   return AppConfig.fromValues(
     backendModeValue: 'supabase',
     supabaseUrl: 'https://example.supabase.co',
-    supabaseAnonKey: 'placeholder-anon-key',
+    supabaseAnonKey: 'sb_publishable_test-client-key',
   );
 }
 

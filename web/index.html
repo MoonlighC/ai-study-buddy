@@ -18,21 +18,34 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="AI-powered study materials, summaries, flashcards, quizzes, and guided learning.">
+  <meta name="theme-color" content="#111A33">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="ai_study_buddy">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-title" content="AI Study Buddy">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 
-  <title>ai_study_buddy</title>
+  <title>AI Study Buddy</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <div id="app-loading" aria-label="AI Study Buddy is loading">
+    <img src="icons/Icon-192.png" alt="" width="96" height="96">
+  </div>
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #e8eef7; }
+    #app-loading { position: fixed; inset: 0; display: grid; place-items: center; background: #e8eef7; }
+    #app-loading img { border-radius: 22%; }
+    @media (prefers-color-scheme: dark) {
+      html, body, #app-loading { background: #111521; }
+    }
+  </style>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -41,6 +54,11 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      document.getElementById('app-loading')?.remove();
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -1,11 +1,11 @@
 {
-    "name": "ai_study_buddy",
-    "short_name": "ai_study_buddy",
+    "name": "AI Study Buddy",
+    "short_name": "Study Buddy",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#E8EEF7",
+    "theme_color": "#111A33",
+    "description": "AI-powered study materials, summaries, flashcards, quizzes, and guided learning.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

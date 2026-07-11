@@ -1,49 +1,32 @@
-# ai_study_buddy
+# AI Study Buddy
 
-A new Flutter project.
+AI Study Buddy is a Flutter study workspace for Android, iOS, web, and Windows.
+The Dart package name and internal executable slug remain `ai_study_buddy`.
 
-## Backend Modes
+## Local development
 
-The app defaults to the local in-memory mock backend. No Supabase values are
-required for normal local development:
+Local development defaults to the in-memory backend:
 
 ```powershell
 flutter run
 flutter test
 ```
 
-To verify the optional Supabase client connection path, pass public runtime
-configuration with `--dart-define`:
+To use a Supabase client explicitly, provide public client configuration at
+compile time:
 
 ```powershell
 flutter run `
+  --dart-define=APP_ENV=local `
   --dart-define=APP_BACKEND_MODE=supabase `
-  --dart-define=SUPABASE_URL=https://YOUR-PROJECT.supabase.co `
-  --dart-define=SUPABASE_ANON_KEY=YOUR-PUBLISHABLE-OR-ANON-KEY
+  --dart-define=SUPABASE_URL=https://PROJECT.supabase.co `
+  --dart-define=SUPABASE_ANON_KEY=PUBLIC_CLIENT_KEY
 ```
 
-Only the exact value `APP_BACKEND_MODE=supabase` enables Supabase mode. If the
-URL or publishable/anon key is missing, the app continues in mock mode and logs
-a sanitized debug message.
+`SUPABASE_ANON_KEY` may contain a Supabase legacy anon key or current
+publishable client key. It is public client configuration, not a server secret.
+Service-role, database, and OpenAI credentials must remain server-side.
 
-Supabase mode supports email/password login, signup, password reset email, and
-logout. On login or signup with an active session, the app upserts the signed-in
-user's `public.profiles` row using the authenticated client.
-
-Do not commit real Supabase keys, server-only keys, OpenAI keys, or local
-`.env` files. The app still does not add data sync, file uploads, Edge
-Functions, or AI calls.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+See [Phase 11.1 release foundation](docs/release-foundation-phase-11-1.md) for
+the environment matrix, platform identifiers, build commands, deployment
+checklists, and distribution limitations.

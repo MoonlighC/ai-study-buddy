@@ -47,3 +47,30 @@ app.*.map.json
 supabase/.temp/
 .flutter/
 .flutter_tool_state/
+
+# Local build-time configuration (placeholder examples remain tracked)
+*.dart-defines.json
+*.dart-defines.env
+!*.example.dart-defines.json
+.env
+.env.*
+!.env.example
+
+# Signing and provisioning material
+*.jks
+*.keystore
+key.properties
+signing.properties
+*.p12
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.xcarchive
+*.ipa
+
+# Release artifacts
+release-artifacts/
+*.apk
+*.aab
+*.appx
+*.msix

@@ -382,7 +382,7 @@ const _user = AuthUser(id: 'user-1', email: 'learner@example.test');
 final _supabaseConfig = AppConfig.fromValues(
   backendModeValue: 'supabase',
   supabaseUrl: 'https://example.supabase.co',
-  supabaseAnonKey: 'placeholder-anon-key',
+  supabaseAnonKey: 'sb_publishable_test-client-key',
 );
 
 final _serverCompletedAt = DateTime.utc(2026, 7, 10, 10, 5);

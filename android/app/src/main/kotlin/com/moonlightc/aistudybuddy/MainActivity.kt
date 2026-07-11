@@ -1,4 +1,4 @@
-package com.moonlightc.ai_study_buddy
+package com.moonlightc.aistudybuddy
 
 import io.flutter.embedding.android.FlutterActivity
 

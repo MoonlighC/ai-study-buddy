@@ -262,7 +262,7 @@ void main() {
       config: const AppConfig(
         backendMode: AppBackendMode.supabase,
         supabaseUrl: 'https://example.supabase.co',
-        supabaseAnonKey: 'public-placeholder',
+        supabaseAnonKey: 'sb_publishable_test-client-key',
       ),
     );
     expect(state.materials, isEmpty);
