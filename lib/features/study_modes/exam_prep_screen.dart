@@ -5,6 +5,7 @@ import '../../app/routes.dart';
 import '../../core/models/study_session.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -37,42 +38,42 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
         : ai.examPlanFor(effectiveSubject);
 
     return ResponsiveAppScaffold(
-      title: 'Exam Prep',
+      title: context.l10n.examPrepTitle,
       showBack: true,
       showNavigation: false,
       body: ResponsiveContent(
         width: ResponsiveContentWidth.reading,
         child: ListView(
           children: [
-            const GlassStatusChip(
-              label: 'Local prototype plan',
+            GlassStatusChip(
+              label: context.l10n.examPrepPrototype,
               icon: Icons.science_outlined,
             ),
             const SizedBox(height: 12),
             Text(
-              'Prepare for an exam',
+              context.l10n.examPrepHeading,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 4),
             Text(
-              'Create a local study plan from a subject, materials, and weak topics.',
+              context.l10n.examPrepHelp,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
             if (effectiveSubject == null) ...[
               EmptyState(
-                title: 'No subjects yet',
-                message: 'Create a subject before preparing an exam plan.',
+                title: context.l10n.studyNoSubjectsTitle,
+                message: context.l10n.examPrepNoSubjectsMessage,
                 icon: Icons.folder_open_outlined,
                 action: FilledButton(
                   onPressed: () =>
                       Navigator.pushNamed(context, AppRoutes.subjects),
-                  child: const Text('Open Subjects'),
+                  child: Text(context.l10n.studyOpenSubjects),
                 ),
               ),
             ] else ...[
               StudyModeCard(
-                title: 'Choose subject',
+                title: context.l10n.studyChooseSubject,
                 icon: Icons.folder_outlined,
                 child: Wrap(
                   spacing: 8,
@@ -89,17 +90,17 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                 ),
               ),
               StudyModeCard(
-                title: 'Exam date preview',
+                title: context.l10n.examPrepDatePreview,
                 icon: Icons.event_outlined,
-                subtitle: 'Date selection is not available in this prototype.',
+                subtitle: context.l10n.examPrepDateUnavailable,
                 child: TextField(
                   readOnly: true,
                   decoration: InputDecoration(
-                    labelText: 'Exam date',
-                    hintText: 'Mock date: 2 weeks from now',
+                    labelText: context.l10n.examPrepDate,
+                    hintText: context.l10n.examPrepMockDate,
                     enabled: false,
                     suffixIcon: IconButton(
-                      tooltip: 'Date selection unavailable',
+                      tooltip: context.l10n.examPrepDateUnavailable,
                       onPressed: null,
                       icon: const Icon(Icons.calendar_today_outlined),
                     ),
@@ -107,18 +108,16 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                 ),
               ),
               StudyModeCard(
-                title: 'Selected materials preview',
+                title: context.l10n.examPrepMaterialsPreview,
                 icon: Icons.article_outlined,
                 child: Column(
                   children: [
                     if (materials.isEmpty)
-                      const ListTile(
+                      ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(Icons.article_outlined),
-                        title: Text('No materials yet'),
-                        subtitle: Text(
-                          'The plan can still start from the selected subject.',
-                        ),
+                        title: Text(context.l10n.studyNoMaterialsTitle),
+                        subtitle: Text(context.l10n.examPrepMaterialsEmptyHelp),
                       )
                     else
                       for (final material in materials)
@@ -127,17 +126,16 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                           leading: const Icon(Icons.article_outlined),
                           title: Text(material.title),
                           subtitle: Text(
-                            '${material.createdLabel} - included in plan',
+                            '${material.createdLabel} · ${context.l10n.examPrepIncluded}',
                           ),
                         ),
                   ],
                 ),
               ),
               StudyModeCard(
-                title: 'Preview focus topics',
+                title: context.l10n.examPrepTopicsPreview,
                 icon: Icons.flag_outlined,
-                subtitle:
-                    'Locally generated prototype guidance; not a mastery score.',
+                subtitle: context.l10n.examPrepTopicsHelp,
                 child: Column(
                   children: [
                     for (final topic in weakTopics)
@@ -151,9 +149,9 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                 ),
               ),
               StudyModeCard(
-                title: 'Preview preparation plan',
+                title: context.l10n.examPrepPlanPreview,
                 icon: Icons.calendar_month_outlined,
-                subtitle: 'Locally generated prototype guidance.',
+                subtitle: context.l10n.examPrepPlanHelp,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -183,7 +181,7 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                   );
                 },
                 icon: const Icon(Icons.auto_awesome_outlined),
-                label: const Text('Create study session'),
+                label: Text(context.l10n.studyCreateSession),
               ),
             ],
           ],

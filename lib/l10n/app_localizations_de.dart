@@ -1194,4 +1194,721 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get errorCouldNotGenerateQuiz =>
       'Quiz konnte nicht erstellt werden. Versuche es erneut.';
+
+  @override
+  String studyCards(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten',
+      one: '1 Karte',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String studyQuestions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Fragen',
+      one: '1 Frage',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String studyAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Versuche',
+      one: '1 Versuch',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String studyMisses(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Fehler',
+      one: '1 Fehler',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get studyProgress => 'Lernfortschritt';
+
+  @override
+  String studyProgressValue(int current, int total) {
+    return '$current von $total';
+  }
+
+  @override
+  String get studyQuestion => 'Frage';
+
+  @override
+  String get studyAnswer => 'Antwort';
+
+  @override
+  String get studyShowAnswer => 'Antwort anzeigen';
+
+  @override
+  String get studyHideAnswer => 'Antwort ausblenden';
+
+  @override
+  String get studyFlashcardQuestionSemantics =>
+      'Lernkartenfrage. Aktivieren, um die Antwort anzuzeigen.';
+
+  @override
+  String get studyFlashcardAnswerSemantics =>
+      'Lernkartenantwort. Aktivieren, um die Antwort auszublenden.';
+
+  @override
+  String get studyMissedAction => 'Nicht gewusst';
+
+  @override
+  String get studyKnownAction => 'Gewusst';
+
+  @override
+  String get studyCorrect => 'Richtig';
+
+  @override
+  String get studyIncorrect => 'Falsch';
+
+  @override
+  String studyCorrectAnswer(String answer) {
+    return 'Richtige Antwort: $answer';
+  }
+
+  @override
+  String studyChoiceCorrectSemantics(String choice) {
+    return '$choice, richtige Antwort';
+  }
+
+  @override
+  String studyChoiceIncorrectSemantics(String choice) {
+    return '$choice, falsche Antwort';
+  }
+
+  @override
+  String get commonCancel => 'Abbrechen';
+
+  @override
+  String get commonSave => 'Speichern';
+
+  @override
+  String get commonReturn => 'Zurück';
+
+  @override
+  String get commonNext => 'Weiter';
+
+  @override
+  String get commonCustom => 'Benutzerdefiniert';
+
+  @override
+  String get commonPrototype => 'Prototyp';
+
+  @override
+  String get commonGenerate => 'Erstellen';
+
+  @override
+  String get flashcardsTitle => 'Lernkarten';
+
+  @override
+  String flashcardsAllTitle(Object subject) {
+    return 'Alle Lernkarten — $subject';
+  }
+
+  @override
+  String flashcardsMaterialTitle(Object material) {
+    return 'Lernkarten — $material';
+  }
+
+  @override
+  String flashcardsScopeMaterial(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten aus diesem Material',
+      one: '1 Karte aus diesem Material',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String flashcardsScopeSubject(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten in diesem Fach',
+      one: '1 Karte in diesem Fach',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get flashcardsSessionSize => 'Größe der Lerneinheit';
+
+  @override
+  String flashcardsAvailable(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten sind für diese Auswahl verfügbar.',
+      one: '1 Karte ist für diese Auswahl verfügbar.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get flashcardsGenerateMoreGuidance =>
+      'Erstelle weitere Lernkarten aus einem Material, um größere Einheiten freizuschalten.';
+
+  @override
+  String get flashcardsLoading => 'Synchronisierte Lernkarten werden geladen';
+
+  @override
+  String get flashcardsEmptyTitle => 'Noch keine Lernkarten';
+
+  @override
+  String get flashcardsEmptyMessage =>
+      'Füge Karten hinzu oder erstelle sie, um mit dem Wiederholen zu beginnen.';
+
+  @override
+  String get flashcardsEmptyCloudMessage =>
+      'Erstelle sie aus einem Material mit eingefügtem Text.';
+
+  @override
+  String get flashcardsReviewFocus => 'Wiederholungsfokus';
+
+  @override
+  String get flashcardsFilterSemantics => 'Lernkartenfilter';
+
+  @override
+  String get flashcardsFilterAll => 'Alle';
+
+  @override
+  String get flashcardsFilterWeak => 'Zum Wiederholen';
+
+  @override
+  String get flashcardsFilterDue => 'Fällig zur Wiederholung';
+
+  @override
+  String flashcardsStartTrainingCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten',
+      one: '1 Karte',
+    );
+    return 'Training starten ($_temp0)';
+  }
+
+  @override
+  String get flashcardsTrainWeak => 'Karten zum Wiederholen trainieren';
+
+  @override
+  String get flashcardsReviewDue => 'Fällige Karten wiederholen';
+
+  @override
+  String get flashcardsNoWeak =>
+      'Derzeit müssen keine Karten zusätzlich wiederholt werden.';
+
+  @override
+  String get flashcardsNoDue => 'Derzeit sind keine Karten fällig.';
+
+  @override
+  String get flashcardsCustomSessionTitle => 'Benutzerdefinierte Einheit';
+
+  @override
+  String get flashcardsCardsField => 'Karten';
+
+  @override
+  String flashcardsMaximum(Object count) {
+    return 'Maximum: $count';
+  }
+
+  @override
+  String get flashcardsChooseAtLeastOne => 'Wähle mindestens 1 Karte.';
+
+  @override
+  String flashcardsOnlyAvailable(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'sind nur $count Karten verfügbar',
+      one: 'ist nur 1 Karte verfügbar',
+    );
+    return 'Für diese Auswahl $_temp0.';
+  }
+
+  @override
+  String flashcardsTopicDifficulty(String topic, String difficulty) {
+    return 'Thema: $topic · $difficulty';
+  }
+
+  @override
+  String flashcardsReviewStats(Object known, Object missed) {
+    return 'Gewusst $known · Nicht gewusst $missed';
+  }
+
+  @override
+  String get flashcardGenerationTitle => 'Neue Lernkarten erstellen';
+
+  @override
+  String get flashcardGenerationGuidance =>
+      'Wähle, wie viele neue Lernkarten hinzugefügt werden sollen.';
+
+  @override
+  String flashcardGenerationCurrent(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten',
+      one: '1 Karte',
+    );
+    return 'Aktuell: $_temp0';
+  }
+
+  @override
+  String flashcardGenerationAdd(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten',
+      one: '1 Karte',
+    );
+    return 'Hinzufügen: $_temp0';
+  }
+
+  @override
+  String flashcardGenerationProjected(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten',
+      one: '1 Karte',
+    );
+    return 'Voraussichtlich insgesamt: $_temp0';
+  }
+
+  @override
+  String get flashcardGenerationNewField => 'Neue Lernkarten';
+
+  @override
+  String get flashcardGenerationRangeError =>
+      'Wähle zwischen 1 und 30 neuen Lernkarten.';
+
+  @override
+  String get flashcardGenerationMaxError => 'Wähle höchstens 30 Lernkarten.';
+
+  @override
+  String get trainingTitle => 'Lernkartentraining';
+
+  @override
+  String get trainingEmptyTitle => 'Keine Lernkarten zum Trainieren';
+
+  @override
+  String get trainingEmptyMessage => 'Erstelle zuerst Lernkarten.';
+
+  @override
+  String get trainingProgress => 'Lernkartenfortschritt';
+
+  @override
+  String get trainingComplete => 'Training abgeschlossen';
+
+  @override
+  String trainingReviewed(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten wiederholt',
+      one: '1 Karte wiederholt',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trainingKnown(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten gewusst',
+      one: '1 Karte gewusst',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trainingMissed(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Karten nicht gewusst',
+      one: '1 Karte nicht gewusst',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get trainingReviewMissed => 'Nicht gewusste Karten wiederholen';
+
+  @override
+  String get trainingReviewAgain => 'Erneut wiederholen';
+
+  @override
+  String get errorCouldNotSaveReview =>
+      'Wiederholungsfortschritt konnte nicht gespeichert werden.';
+
+  @override
+  String get quizUiTitle => 'Quiz';
+
+  @override
+  String get quizEmptyTitle => 'Keine Fragen verfügbar';
+
+  @override
+  String get quizEmptyMessage =>
+      'Kehre zum Material zurück und erstelle zuerst ein Quiz.';
+
+  @override
+  String get quizProgress => 'Fragenfortschritt';
+
+  @override
+  String get quizShowScore => 'Ergebnis anzeigen';
+
+  @override
+  String get quizMissedReview => 'Falsch beantwortete Fragen wiederholen';
+
+  @override
+  String get quizFinishReview => 'Wiederholung beenden';
+
+  @override
+  String get quizResult => 'Ergebnis';
+
+  @override
+  String quizScore(Object percent) {
+    return 'Ergebnis: $percent%';
+  }
+
+  @override
+  String quizCorrectCount(num correct, Object total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      correct,
+      locale: localeName,
+      other: '$correct richtige Antworten von $total',
+      one: '1 richtige Antwort von $total',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get quizMissedTopics => 'Themen zum Wiederholen';
+
+  @override
+  String get quizNoMissedTopics => 'Keine Themen zum Wiederholen. Sehr gut!';
+
+  @override
+  String get quizSaving => 'Quizversuch wird gespeichert…';
+
+  @override
+  String get quizUnsyncedWarning =>
+      'Dieses Ergebnis wurde lokal berechnet und nicht synchronisiert.';
+
+  @override
+  String get quizReviewMissed => 'Falsch beantwortete Fragen wiederholen';
+
+  @override
+  String get quizReviewMaterial => 'Material wiederholen';
+
+  @override
+  String get quizRetry => 'Quiz wiederholen';
+
+  @override
+  String get errorCouldNotSaveQuizAttempt =>
+      'Dieser Quizversuch konnte nicht gespeichert werden.';
+
+  @override
+  String get progressLatestQuiz => 'Letztes Quiz';
+
+  @override
+  String get progressAttemptsCompleted => 'Abgeschlossene Versuche';
+
+  @override
+  String get progressFocusTopics => 'Themen zum Wiederholen';
+
+  @override
+  String get progressHistoryExplanation =>
+      'Gesammelte Fehler aus abgeschlossenen Quizzen.';
+
+  @override
+  String get progressNoAttempts =>
+      'Schließe ein Quiz ab, um hier Ergebnisse zu sehen.';
+
+  @override
+  String get progressLoading => 'Fortschritt wird geladen';
+
+  @override
+  String get progressEmptyTitle => 'Noch keine Quizversuche';
+
+  @override
+  String get progressEmptyMessage =>
+      'Schließe ein Quiz ab, um deinen Fortschrittsverlauf aufzubauen.';
+
+  @override
+  String get afterLectureTitle => 'Nach der Vorlesung';
+
+  @override
+  String get examPrepTitle => 'Prüfungsvorbereitung';
+
+  @override
+  String get continueStudyingTitle => 'Weiterlernen';
+
+  @override
+  String get aiTeacherTitle => 'KI-Lehrkraft';
+
+  @override
+  String get studySessionTitle => 'Lerneinheit';
+
+  @override
+  String get studyLocalPrototype => 'Lokaler Prototyp';
+
+  @override
+  String get studyLocalMockCoaching => 'Lokales Probe-Coaching';
+
+  @override
+  String get studyChooseSubject => 'Fach auswählen';
+
+  @override
+  String get studyChooseMaterial => 'Material auswählen';
+
+  @override
+  String get studyCreateSession => 'Lerneinheit erstellen';
+
+  @override
+  String get studyNoSubjectsTitle => 'Noch keine Fächer';
+
+  @override
+  String get studyOpenSubjects => 'Fächer öffnen';
+
+  @override
+  String get studyNoMaterialsTitle => 'Noch keine Materialien';
+
+  @override
+  String get studyContinueSession => 'Lerneinheit fortsetzen';
+
+  @override
+  String get studyNotCompleted => 'Nicht abgeschlossen';
+
+  @override
+  String get studyBackToSubject => 'Zurück zum Fach';
+
+  @override
+  String get studyUnavailableTitle => 'Kein Lernmaterial verfügbar';
+
+  @override
+  String get studySessionOverview => 'Übersicht der Lerneinheit';
+
+  @override
+  String get studyEstimatedTime => 'Geschätzte Lernzeit';
+
+  @override
+  String get studySummary => 'Zusammenfassung';
+
+  @override
+  String get studyFlashcardsAction => 'Lernkarten';
+
+  @override
+  String get studyAiTeacherAction => 'KI-Lehrkraft';
+
+  @override
+  String studyMinutes(Object count) {
+    return '$count Min.';
+  }
+
+  @override
+  String get studySelectSubject => 'Fach auswählen';
+
+  @override
+  String get studySelectSubjectMessage =>
+      'Wähle das Fach der Vorlesung aus, um fortzufahren.';
+
+  @override
+  String get studyNoMaterialsMessage =>
+      'Füge ein nutzbares Material hinzu, bevor du diese Lerneinheit erstellst.';
+
+  @override
+  String get afterLecturePrototype => 'Lokale Prototyp-Anleitung';
+
+  @override
+  String get afterLectureNoSubjectsMessage =>
+      'Erstelle ein Fach, bevor du eine Einheit nach der Vorlesung startest.';
+
+  @override
+  String get afterLectureConfidence => 'Wie sicher fühlst du dich?';
+
+  @override
+  String get afterLectureSchedule => 'Prototyp-Lernplan';
+
+  @override
+  String get afterLectureScheduleHelp =>
+      'Lokal geschätzt; dies ist keine erfasste Lernzeit.';
+
+  @override
+  String get examPrepPrototype => 'Lokaler Prototyp-Plan';
+
+  @override
+  String get examPrepHeading => 'Auf eine Prüfung vorbereiten';
+
+  @override
+  String get examPrepHelp =>
+      'Erstelle aus Fach, Materialien und Wiederholungsthemen einen lokalen Lernplan.';
+
+  @override
+  String get examPrepNoSubjectsMessage =>
+      'Erstelle ein Fach, bevor du einen Prüfungsplan vorbereitest.';
+
+  @override
+  String get examPrepDatePreview => 'Vorschau des Prüfungstermins';
+
+  @override
+  String get examPrepDateUnavailable =>
+      'Die Datumsauswahl ist in diesem Prototyp nicht verfügbar.';
+
+  @override
+  String get examPrepDate => 'Prüfungstermin';
+
+  @override
+  String get examPrepMockDate => 'Beispieldatum: in 2 Wochen';
+
+  @override
+  String get examPrepMaterialsPreview => 'Vorschau ausgewählter Materialien';
+
+  @override
+  String get examPrepMaterialsEmptyHelp =>
+      'Der Plan kann trotzdem mit dem gewählten Fach beginnen.';
+
+  @override
+  String get examPrepIncluded => 'Im Plan enthalten';
+
+  @override
+  String get examPrepTopicsPreview => 'Vorschau der Wiederholungsthemen';
+
+  @override
+  String get examPrepTopicsHelp =>
+      'Lokal erstellte Prototyp-Anleitung; kein Beherrschungswert.';
+
+  @override
+  String get examPrepPlanPreview => 'Vorschau des Vorbereitungsplans';
+
+  @override
+  String get examPrepPlanHelp => 'Lokal erstellte Prototyp-Anleitung.';
+
+  @override
+  String get continueEmptyTitle => 'Nichts zum Fortsetzen';
+
+  @override
+  String get continueEmptyMessage =>
+      'Starte eine Lerneinheit in einem deiner Fächer.';
+
+  @override
+  String get continueUnavailableMessage =>
+      'Das Fach oder die Quelle der letzten Lerneinheit ist nicht mehr verfügbar.';
+
+  @override
+  String continueFrom(Object material) {
+    return 'Fortsetzen mit $material';
+  }
+
+  @override
+  String get continueLatest => 'Letzte Lerneinheit';
+
+  @override
+  String get continueSummary => 'Zusammenfassung der Lerneinheit';
+
+  @override
+  String get continueQuickQuiz => 'Kurzquiz';
+
+  @override
+  String continueLastScore(Object percent) {
+    return 'Letztes Ergebnis: $percent%';
+  }
+
+  @override
+  String get continueNoTopics =>
+      'Für diese Lerneinheit wurden keine Wiederholungsthemen erfasst.';
+
+  @override
+  String get aiTeacherStatus => 'Lokales Probe-Coaching · Prototyp';
+
+  @override
+  String get aiTeacherNoLive =>
+      'Vorgefertigte lokale Antworten; keine Live-KI-Verbindung.';
+
+  @override
+  String get aiTeacherHelp =>
+      'Wähle einen Coaching-Stil. Die Antwort bleibt vollständig lokal und verwendet Beispieltext.';
+
+  @override
+  String get aiTeacherPrompt => 'Coaching-Anweisung';
+
+  @override
+  String get aiTeacherPromptSimple => 'Einfacher erklären';
+
+  @override
+  String get aiTeacherPromptExample => 'Weiteres Beispiel geben';
+
+  @override
+  String get aiTeacherPromptQuestion => 'Frage stellen';
+
+  @override
+  String get aiTeacherAnswer => 'Prototyp-Antwort';
+
+  @override
+  String get aiTeacherTryNext => 'Als Nächstes';
+
+  @override
+  String get aiTeacherAnotherExample => 'Weiteres Beispiel anzeigen';
+
+  @override
+  String get aiTeacherQuizMe => 'Dazu abfragen';
+
+  @override
+  String sessionGeneratedFrom(Object material) {
+    return 'Erstellt aus: $material';
+  }
+
+  @override
+  String get sessionLocal => 'Lokale Lerneinheit';
+
+  @override
+  String get sessionNoAnswer => 'Keine Antwort abgegeben.';
+
+  @override
+  String get sessionNoFlashcards => 'Keine Lernkarten in dieser Einheit.';
+
+  @override
+  String get sessionQuickQuiz => 'Kurzquiz';
+
+  @override
+  String get sessionFocusTopics => 'Themen zum Wiederholen';
+
+  @override
+  String get sessionNoTopics => 'Keine Wiederholungsthemen erfasst.';
+
+  @override
+  String get sessionPrototypeExplanation => 'Prototyp-Erklärung';
+
+  @override
+  String get sessionPrototypeHelp =>
+      'Lokale Beispielhilfe; keine Live-KI-Antwort.';
+
+  @override
+  String get sessionMoreFlashcards => 'Weitere Lernkarten erstellen';
+
+  @override
+  String get sessionAskTeacher => 'KI-Lehrkraft fragen';
 }

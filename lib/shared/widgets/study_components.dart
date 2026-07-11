@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/design_system/tokens.dart';
+import '../../l10n/l10n_extensions.dart';
 import 'glass_components.dart';
 
 class StudyContextHeader extends StatelessWidget {
@@ -35,25 +36,26 @@ class StudyProgressHeader extends StatelessWidget {
   const StudyProgressHeader({
     required this.current,
     required this.total,
-    this.label = 'Study progress',
+    this.label,
     super.key,
   });
   final int current;
   final int total;
-  final String label;
+  final String? label;
   @override
   Widget build(BuildContext context) {
     final value = total == 0 ? 0.0 : current / total;
+    final resolvedLabel = label ?? context.l10n.studyProgress;
     return Semantics(
       key: const ValueKey('study-progress'),
-      label: label,
-      value: '$current of $total',
+      label: resolvedLabel,
+      value: context.l10n.studyProgressValue(current, total),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(child: Text(label)),
+              Expanded(child: Text(resolvedLabel)),
               Text('$current / $total'),
             ],
           ),
@@ -89,8 +91,8 @@ class FlashcardSurface extends StatelessWidget {
       key: ValueKey('flashcard-${isAnswerVisible ? 'back' : 'front'}'),
       button: true,
       label: isAnswerVisible
-          ? 'Flashcard answer. Activate to hide answer.'
-          : 'Flashcard question. Activate to show answer.',
+          ? context.l10n.studyFlashcardAnswerSemantics
+          : context.l10n.studyFlashcardQuestionSemantics,
       child: FocusableActionDetector(
         shortcuts: const {
           SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
@@ -118,7 +120,9 @@ class FlashcardSurface extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          isAnswerVisible ? 'Answer' : 'Question',
+                          isAnswerVisible
+                              ? context.l10n.studyAnswer
+                              : context.l10n.studyQuestion,
                           style: Theme.of(context).textTheme.labelLarge,
                         ),
                       ),
@@ -164,13 +168,13 @@ class RatingActionRow extends StatelessWidget {
         key: const ValueKey('rating-missed'),
         onPressed: onMissed,
         icon: const Icon(Icons.refresh_outlined),
-        label: const Text('I missed it'),
+        label: Text(context.l10n.studyMissedAction),
       ),
       FilledButton.icon(
         key: const ValueKey('rating-known'),
         onPressed: onKnown,
         icon: const Icon(Icons.check_circle_outline),
-        label: const Text('I knew it'),
+        label: Text(context.l10n.studyKnownAction),
       ),
     ],
   );
@@ -211,12 +215,11 @@ class QuizChoiceTile extends StatelessWidget {
       button: true,
       selected: selected,
       enabled: onPressed != null,
-      label:
-          '$label${correct
-              ? ', correct answer'
-              : incorrect
-              ? ', incorrect answer'
-              : ''}',
+      label: correct
+          ? context.l10n.studyChoiceCorrectSemantics(label)
+          : incorrect
+          ? context.l10n.studyChoiceIncorrectSemantics(label)
+          : label,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 48),
         child: OutlinedButton.icon(
@@ -278,7 +281,7 @@ class FocusTopicRow extends StatelessWidget {
     leading: const Icon(Icons.flag_outlined),
     title: Text(topic),
     subtitle: Text(subject),
-    trailing: Text(missCount == 1 ? '1 miss' : '$missCount misses'),
+    trailing: Text(context.l10n.studyMisses(missCount)),
   );
 }
 
@@ -301,16 +304,15 @@ class AttemptSummaryCard extends StatelessWidget {
       children: [
         Text(
           score == null
-              ? 'Complete a quiz to see results here.'
-              : 'Score: ${score!.round()}%',
+              ? context.l10n.progressNoAttempts
+              : context.l10n.quizScore(score!.round()),
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        if (correct != null && total != null) Text('$correct / $total correct'),
+        if (correct != null && total != null)
+          Text(context.l10n.quizCorrectCount(correct!, total!)),
         const SizedBox(height: AppSpacing.sm),
-        const Text('Attempts completed'),
-        Text(
-          '$attemptCount ${attemptCount == 1 ? 'attempt' : 'attempts'} completed',
-        ),
+        Text(context.l10n.progressAttemptsCompleted),
+        Text(context.l10n.studyAttempts(attemptCount)),
       ],
     ),
   );

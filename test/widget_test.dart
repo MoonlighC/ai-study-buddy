@@ -561,14 +561,14 @@ void main() {
     await tester.tap(find.text('The core idea'));
     await tester.pumpAndSettle();
 
-    expect(find.text('The core idea - correct'), findsOneWidget);
+    expect(find.text('The core idea'), findsOneWidget);
     expect(find.text('Correct'), findsOneWidget);
     expect(find.text('The material supports the core idea.'), findsOneWidget);
 
     await tester.tap(find.text('Show score'));
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 1 correct'), findsOneWidget);
+    expect(find.text('1 correct answer out of 1'), findsOneWidget);
     expect(find.text('Score: 100%'), findsOneWidget);
     expect(find.text('No missed topics. Great work!'), findsOneWidget);
     expect(find.text('Review missed questions'), findsNothing);
@@ -578,7 +578,7 @@ void main() {
     await tester.tap(find.text('Retry quiz'));
     await tester.pumpAndSettle();
     expect(find.text('What does this material explain?'), findsOneWidget);
-    expect(find.text('The core idea - correct'), findsNothing);
+    expect(find.text('The core idea'), findsOneWidget);
 
     await tester.tap(find.text('The core idea'));
     await tester.pumpAndSettle();
@@ -615,7 +615,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Score: 0%'), findsOneWidget);
-    expect(find.text('0 / 1 correct'), findsOneWidget);
+    expect(find.text('0 correct answers out of 1'), findsOneWidget);
     expect(find.text('Core idea'), findsOneWidget);
     expect(find.text('Could not save this quiz attempt.'), findsWidgets);
     expect(find.text('Review material'), findsOneWidget);
@@ -805,7 +805,7 @@ void main() {
     await _pushRoute(tester, AppRoutes.progress);
 
     expect(find.text('Score: 50%'), findsOneWidget);
-    expect(find.text('1 / 2 correct'), findsOneWidget);
+    expect(find.text('1 correct answer out of 2'), findsOneWidget);
     await _scrollTo(tester, find.text('Cell division'));
     expect(find.text('Cell division'), findsOneWidget);
     expect(find.text('1 miss'), findsOneWidget);
@@ -818,10 +818,10 @@ void main() {
     expect(find.text('Complete a quiz to see results here.'), findsOneWidget);
     await _scrollTo(
       tester,
-      find.text('Complete quizzes to discover topics that need more practice.'),
+      find.text('Complete a quiz to build your progress history.'),
     );
     expect(
-      find.text('Complete quizzes to discover topics that need more practice.'),
+      find.text('Complete a quiz to build your progress history.'),
       findsOneWidget,
     );
   });
@@ -881,7 +881,7 @@ void main() {
     await _pushRoute(tester, AppRoutes.progress);
 
     expect(
-      find.text('Complete quizzes to discover topics that need more practice.'),
+      find.text('Complete a quiz to build your progress history.'),
       findsOneWidget,
     );
     expect(find.text('Knowledge scores'), findsNothing);
@@ -936,7 +936,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Only 5 cards available for this selection.'),
+      find.text('Only 5 cards are available for this selection.'),
       findsOneWidget,
     );
     expect(
@@ -977,17 +977,17 @@ void main() {
 
     expect(find.text('5 cards available for this selection.'), findsOneWidget);
 
-    await tester.tap(find.text('Weak'));
+    await tester.tap(find.text('For review'));
     await tester.pumpAndSettle();
 
     expect(find.text('2 cards available for this selection.'), findsOneWidget);
     expect(find.text('Start training (2 cards)'), findsOneWidget);
 
-    await tester.tap(find.text('Due'));
+    await tester.tap(find.text('Due for review'));
     await tester.pumpAndSettle();
 
     expect(find.text('0 cards available for this selection.'), findsOneWidget);
-    expect(find.text('No due cards'), findsOneWidget);
+    expect(find.text('No cards are due right now.'), findsWidgets);
     expect(find.textContaining('Start training'), findsNothing);
     _expectChoiceDisabled(tester, 'Custom');
   });
@@ -1082,7 +1082,7 @@ void main() {
       _dueReviewCard,
     ]);
 
-    await tester.tap(find.text('Weak'));
+    await tester.tap(find.text('For review'));
     await tester.pumpAndSettle();
 
     expect(find.text('Weak front'), findsOneWidget);
@@ -1098,7 +1098,7 @@ void main() {
       _futureReviewCard,
     ]);
 
-    await tester.tap(find.text('Due'));
+    await tester.tap(find.text('Due for review'));
     await tester.pumpAndSettle();
 
     expect(find.text('Due front'), findsOneWidget);
@@ -1106,13 +1106,13 @@ void main() {
     expect(find.text('Weak front'), findsNothing);
   });
 
-  testWidgets('Train weak cards starts training with weak cards only', (
+  testWidgets('review-focus action starts training with weak cards only', (
     tester,
   ) async {
     await _pumpFlashcardsHarness(tester, [_weakReviewCard, _knownReviewCard]);
 
-    await tester.ensureVisible(find.text('Train weak cards'));
-    await tester.tap(find.text('Train weak cards'));
+    await tester.ensureVisible(find.text('Train cards for review'));
+    await tester.tap(find.text('Train cards for review'));
     await tester.pumpAndSettle();
 
     expect(find.text('1 / 1'), findsOneWidget);
@@ -1202,9 +1202,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Training complete'), findsWidgets);
-    expect(find.text('Cards reviewed'), findsOneWidget);
-    expect(find.text('Known'), findsOneWidget);
-    expect(find.text('Missed'), findsOneWidget);
+    expect(find.text('2 cards reviewed'), findsOneWidget);
+    expect(find.text('1 card known'), findsOneWidget);
+    expect(find.text('1 card missed'), findsOneWidget);
 
     await tester.tap(find.text('Review again'));
     await tester.pumpAndSettle();
@@ -1233,9 +1233,9 @@ void main() {
     await tester.tap(find.text('I missed it'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Review missed again'), findsOneWidget);
+    expect(find.text('Review missed cards again'), findsOneWidget);
 
-    await tester.tap(find.text('Review missed again'));
+    await tester.tap(find.text('Review missed cards again'));
     await tester.pumpAndSettle();
 
     expect(find.text('1 / 1'), findsOneWidget);
@@ -2470,7 +2470,7 @@ void main() {
     await _pushRoute(tester, AppRoutes.flashcards, arguments: subject);
 
     expect(find.text('Cloud generated front'), findsOneWidget);
-    expect(find.textContaining('Cloud topic - exam'), findsOneWidget);
+    expect(find.textContaining('Cloud topic · exam'), findsOneWidget);
     expect(find.byTooltip('Favorite'), findsNothing);
   });
 
@@ -2730,7 +2730,7 @@ void main() {
 
     await _pushRoute(tester, AppRoutes.continueStudying);
 
-    expect(find.text('Biology review'), findsOneWidget);
+    expect(find.text('Biology'), findsOneWidget);
     expect(find.textContaining('Simple explanation'), findsOneWidget);
     expect(find.text('Last score: 0%'), findsOneWidget);
   });

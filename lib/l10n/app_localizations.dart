@@ -2109,6 +2109,1068 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not generate quiz. Try again.'**
   String get errorCouldNotGenerateQuiz;
+
+  /// Generic flashcard count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 card} other {{count} cards}}'**
+  String studyCards(int count);
+
+  /// Generic question count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 question} other {{count} questions}}'**
+  String studyQuestions(int count);
+
+  /// Completed attempt count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 attempt} other {{count} attempts}}'**
+  String studyAttempts(int count);
+
+  /// Incorrect-answer count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 miss} other {{count} misses}}'**
+  String studyMisses(int count);
+
+  /// No description provided for @studyProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Study progress'**
+  String get studyProgress;
+
+  /// Accessible study progress value.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} of {total}'**
+  String studyProgressValue(int current, int total);
+
+  /// No description provided for @studyQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Question'**
+  String get studyQuestion;
+
+  /// No description provided for @studyAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer'**
+  String get studyAnswer;
+
+  /// No description provided for @studyShowAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Show answer'**
+  String get studyShowAnswer;
+
+  /// No description provided for @studyHideAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide answer'**
+  String get studyHideAnswer;
+
+  /// No description provided for @studyFlashcardQuestionSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcard question. Activate to show answer.'**
+  String get studyFlashcardQuestionSemantics;
+
+  /// No description provided for @studyFlashcardAnswerSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcard answer. Activate to hide answer.'**
+  String get studyFlashcardAnswerSemantics;
+
+  /// No description provided for @studyMissedAction.
+  ///
+  /// In en, this message translates to:
+  /// **'I missed it'**
+  String get studyMissedAction;
+
+  /// No description provided for @studyKnownAction.
+  ///
+  /// In en, this message translates to:
+  /// **'I knew it'**
+  String get studyKnownAction;
+
+  /// No description provided for @studyCorrect.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct'**
+  String get studyCorrect;
+
+  /// No description provided for @studyIncorrect.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect'**
+  String get studyIncorrect;
+
+  /// Correct answer label; answer is generated content.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct answer: {answer}'**
+  String studyCorrectAnswer(String answer);
+
+  /// Accessible correctness for a generated answer choice.
+  ///
+  /// In en, this message translates to:
+  /// **'{choice}, correct answer'**
+  String studyChoiceCorrectSemantics(String choice);
+
+  /// Accessible incorrect state for a generated answer choice.
+  ///
+  /// In en, this message translates to:
+  /// **'{choice}, incorrect answer'**
+  String studyChoiceIncorrectSemantics(String choice);
+
+  /// No description provided for @commonCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get commonCancel;
+
+  /// No description provided for @commonSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get commonSave;
+
+  /// No description provided for @commonReturn.
+  ///
+  /// In en, this message translates to:
+  /// **'Return'**
+  String get commonReturn;
+
+  /// No description provided for @commonNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get commonNext;
+
+  /// No description provided for @commonCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get commonCustom;
+
+  /// No description provided for @commonPrototype.
+  ///
+  /// In en, this message translates to:
+  /// **'Prototype'**
+  String get commonPrototype;
+
+  /// No description provided for @commonGenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate'**
+  String get commonGenerate;
+
+  /// No description provided for @flashcardsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards'**
+  String get flashcardsTitle;
+
+  /// No description provided for @flashcardsAllTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'All flashcards — {subject}'**
+  String flashcardsAllTitle(Object subject);
+
+  /// No description provided for @flashcardsMaterialTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards — {material}'**
+  String flashcardsMaterialTitle(Object material);
+
+  /// No description provided for @flashcardsScopeMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 card from this material} other {{count} cards from this material}}'**
+  String flashcardsScopeMaterial(num count);
+
+  /// No description provided for @flashcardsScopeSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 card across this subject} other {{count} cards across this subject}}'**
+  String flashcardsScopeSubject(num count);
+
+  /// No description provided for @flashcardsSessionSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Study session size'**
+  String get flashcardsSessionSize;
+
+  /// No description provided for @flashcardsAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 card available for this selection.} other {{count} cards available for this selection.}}'**
+  String flashcardsAvailable(num count);
+
+  /// No description provided for @flashcardsGenerateMoreGuidance.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate more flashcards from a material to unlock larger sessions.'**
+  String get flashcardsGenerateMoreGuidance;
+
+  /// No description provided for @flashcardsLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading synced flashcards'**
+  String get flashcardsLoading;
+
+  /// No description provided for @flashcardsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No flashcards yet'**
+  String get flashcardsEmptyTitle;
+
+  /// No description provided for @flashcardsEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add or generate cards to start reviewing.'**
+  String get flashcardsEmptyMessage;
+
+  /// No description provided for @flashcardsEmptyCloudMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate them from a pasted-text material.'**
+  String get flashcardsEmptyCloudMessage;
+
+  /// No description provided for @flashcardsReviewFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Review focus'**
+  String get flashcardsReviewFocus;
+
+  /// No description provided for @flashcardsFilterSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcard filter'**
+  String get flashcardsFilterSemantics;
+
+  /// No description provided for @flashcardsFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get flashcardsFilterAll;
+
+  /// No description provided for @flashcardsFilterWeak.
+  ///
+  /// In en, this message translates to:
+  /// **'For review'**
+  String get flashcardsFilterWeak;
+
+  /// No description provided for @flashcardsFilterDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Due for review'**
+  String get flashcardsFilterDue;
+
+  /// No description provided for @flashcardsStartTrainingCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Start training ({count, plural, one {1 card} other {{count} cards}})'**
+  String flashcardsStartTrainingCount(num count);
+
+  /// No description provided for @flashcardsTrainWeak.
+  ///
+  /// In en, this message translates to:
+  /// **'Train cards for review'**
+  String get flashcardsTrainWeak;
+
+  /// No description provided for @flashcardsReviewDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Review due cards'**
+  String get flashcardsReviewDue;
+
+  /// No description provided for @flashcardsNoWeak.
+  ///
+  /// In en, this message translates to:
+  /// **'No cards need extra review right now.'**
+  String get flashcardsNoWeak;
+
+  /// No description provided for @flashcardsNoDue.
+  ///
+  /// In en, this message translates to:
+  /// **'No cards are due right now.'**
+  String get flashcardsNoDue;
+
+  /// No description provided for @flashcardsCustomSessionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom session size'**
+  String get flashcardsCustomSessionTitle;
+
+  /// No description provided for @flashcardsCardsField.
+  ///
+  /// In en, this message translates to:
+  /// **'Cards'**
+  String get flashcardsCardsField;
+
+  /// No description provided for @flashcardsMaximum.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum: {count}'**
+  String flashcardsMaximum(Object count);
+
+  /// No description provided for @flashcardsChooseAtLeastOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at least 1 card.'**
+  String get flashcardsChooseAtLeastOne;
+
+  /// No description provided for @flashcardsOnlyAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Only {count, plural, one {1 card is available} other {{count} cards are available}} for this selection.'**
+  String flashcardsOnlyAvailable(num count);
+
+  /// Metadata framing source-language topic and difficulty.
+  ///
+  /// In en, this message translates to:
+  /// **'Topic: {topic} · {difficulty}'**
+  String flashcardsTopicDifficulty(String topic, String difficulty);
+
+  /// No description provided for @flashcardsReviewStats.
+  ///
+  /// In en, this message translates to:
+  /// **'Known {known} · Missed {missed}'**
+  String flashcardsReviewStats(Object known, Object missed);
+
+  /// No description provided for @flashcardGenerationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate new flashcards'**
+  String get flashcardGenerationTitle;
+
+  /// No description provided for @flashcardGenerationGuidance.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how many new flashcards to add.'**
+  String get flashcardGenerationGuidance;
+
+  /// No description provided for @flashcardGenerationCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current: {count, plural, one {1 card} other {{count} cards}}'**
+  String flashcardGenerationCurrent(num count);
+
+  /// No description provided for @flashcardGenerationAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add: {count, plural, one {1 card} other {{count} cards}}'**
+  String flashcardGenerationAdd(num count);
+
+  /// No description provided for @flashcardGenerationProjected.
+  ///
+  /// In en, this message translates to:
+  /// **'Projected total: {count, plural, one {1 card} other {{count} cards}}'**
+  String flashcardGenerationProjected(num count);
+
+  /// No description provided for @flashcardGenerationNewField.
+  ///
+  /// In en, this message translates to:
+  /// **'New flashcards'**
+  String get flashcardGenerationNewField;
+
+  /// No description provided for @flashcardGenerationRangeError.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose between 1 and 30 new flashcards.'**
+  String get flashcardGenerationRangeError;
+
+  /// No description provided for @flashcardGenerationMaxError.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose no more than 30 flashcards.'**
+  String get flashcardGenerationMaxError;
+
+  /// No description provided for @trainingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcard training'**
+  String get trainingTitle;
+
+  /// No description provided for @trainingEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No flashcards to train'**
+  String get trainingEmptyTitle;
+
+  /// No description provided for @trainingEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate flashcards first.'**
+  String get trainingEmptyMessage;
+
+  /// No description provided for @trainingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcard progress'**
+  String get trainingProgress;
+
+  /// No description provided for @trainingComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Training complete'**
+  String get trainingComplete;
+
+  /// No description provided for @trainingReviewed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 card reviewed} other {{count} cards reviewed}}'**
+  String trainingReviewed(num count);
+
+  /// No description provided for @trainingKnown.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 card known} other {{count} cards known}}'**
+  String trainingKnown(num count);
+
+  /// No description provided for @trainingMissed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 card missed} other {{count} cards missed}}'**
+  String trainingMissed(num count);
+
+  /// No description provided for @trainingReviewMissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Review missed cards again'**
+  String get trainingReviewMissed;
+
+  /// No description provided for @trainingReviewAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Review again'**
+  String get trainingReviewAgain;
+
+  /// No description provided for @errorCouldNotSaveReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save review progress.'**
+  String get errorCouldNotSaveReview;
+
+  /// No description provided for @quizUiTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiz'**
+  String get quizUiTitle;
+
+  /// No description provided for @quizEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No questions available'**
+  String get quizEmptyTitle;
+
+  /// No description provided for @quizEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Return to the material and generate a quiz first.'**
+  String get quizEmptyMessage;
+
+  /// No description provided for @quizProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Question progress'**
+  String get quizProgress;
+
+  /// No description provided for @quizShowScore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show score'**
+  String get quizShowScore;
+
+  /// No description provided for @quizMissedReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed question review'**
+  String get quizMissedReview;
+
+  /// No description provided for @quizFinishReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish review'**
+  String get quizFinishReview;
+
+  /// No description provided for @quizResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Result'**
+  String get quizResult;
+
+  /// No description provided for @quizScore.
+  ///
+  /// In en, this message translates to:
+  /// **'Score: {percent}%'**
+  String quizScore(Object percent);
+
+  /// No description provided for @quizCorrectCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{correct, plural, one {1 correct answer out of {total}} other {{correct} correct answers out of {total}}}'**
+  String quizCorrectCount(num correct, Object total);
+
+  /// No description provided for @quizMissedTopics.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed topics'**
+  String get quizMissedTopics;
+
+  /// No description provided for @quizNoMissedTopics.
+  ///
+  /// In en, this message translates to:
+  /// **'No missed topics. Great work!'**
+  String get quizNoMissedTopics;
+
+  /// No description provided for @quizSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving quiz attempt…'**
+  String get quizSaving;
+
+  /// No description provided for @quizUnsyncedWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This score was calculated locally and was not synchronized.'**
+  String get quizUnsyncedWarning;
+
+  /// No description provided for @quizReviewMissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Review missed questions'**
+  String get quizReviewMissed;
+
+  /// No description provided for @quizReviewMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Review material'**
+  String get quizReviewMaterial;
+
+  /// No description provided for @quizRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry quiz'**
+  String get quizRetry;
+
+  /// No description provided for @errorCouldNotSaveQuizAttempt.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save this quiz attempt.'**
+  String get errorCouldNotSaveQuizAttempt;
+
+  /// No description provided for @progressLatestQuiz.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest quiz'**
+  String get progressLatestQuiz;
+
+  /// No description provided for @progressAttemptsCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Attempts completed'**
+  String get progressAttemptsCompleted;
+
+  /// No description provided for @progressFocusTopics.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus topics'**
+  String get progressFocusTopics;
+
+  /// No description provided for @progressHistoryExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Miss counts are cumulative quiz history, not a mastery score.'**
+  String get progressHistoryExplanation;
+
+  /// No description provided for @progressNoAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete a quiz to see results here.'**
+  String get progressNoAttempts;
+
+  /// No description provided for @progressLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading progress'**
+  String get progressLoading;
+
+  /// No description provided for @progressEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No quiz attempts yet'**
+  String get progressEmptyTitle;
+
+  /// No description provided for @progressEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete a quiz to build your progress history.'**
+  String get progressEmptyMessage;
+
+  /// No description provided for @afterLectureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'After Lecture'**
+  String get afterLectureTitle;
+
+  /// No description provided for @examPrepTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Exam Prep'**
+  String get examPrepTitle;
+
+  /// No description provided for @continueStudyingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue Studying'**
+  String get continueStudyingTitle;
+
+  /// No description provided for @aiTeacherTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Teacher'**
+  String get aiTeacherTitle;
+
+  /// No description provided for @studySessionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Study Session'**
+  String get studySessionTitle;
+
+  /// No description provided for @studyLocalPrototype.
+  ///
+  /// In en, this message translates to:
+  /// **'Local prototype'**
+  String get studyLocalPrototype;
+
+  /// No description provided for @studyLocalMockCoaching.
+  ///
+  /// In en, this message translates to:
+  /// **'Local mock coaching'**
+  String get studyLocalMockCoaching;
+
+  /// No description provided for @studyChooseSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose subject'**
+  String get studyChooseSubject;
+
+  /// No description provided for @studyChooseMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose material'**
+  String get studyChooseMaterial;
+
+  /// No description provided for @studyCreateSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Create study session'**
+  String get studyCreateSession;
+
+  /// No description provided for @studyNoSubjectsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No subjects yet'**
+  String get studyNoSubjectsTitle;
+
+  /// No description provided for @studyOpenSubjects.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Subjects'**
+  String get studyOpenSubjects;
+
+  /// No description provided for @studyNoMaterialsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No materials yet'**
+  String get studyNoMaterialsTitle;
+
+  /// No description provided for @studyContinueSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue session'**
+  String get studyContinueSession;
+
+  /// No description provided for @studyNotCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Not completed'**
+  String get studyNotCompleted;
+
+  /// No description provided for @studyBackToSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to subject'**
+  String get studyBackToSubject;
+
+  /// No description provided for @studyUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No study material available'**
+  String get studyUnavailableTitle;
+
+  /// No description provided for @studySessionOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Session overview'**
+  String get studySessionOverview;
+
+  /// No description provided for @studyEstimatedTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated study time'**
+  String get studyEstimatedTime;
+
+  /// No description provided for @studySummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get studySummary;
+
+  /// No description provided for @studyFlashcardsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards'**
+  String get studyFlashcardsAction;
+
+  /// No description provided for @studyAiTeacherAction.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Teacher'**
+  String get studyAiTeacherAction;
+
+  /// No description provided for @studyMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} min'**
+  String studyMinutes(Object count);
+
+  /// No description provided for @studySelectSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a subject'**
+  String get studySelectSubject;
+
+  /// No description provided for @studySelectSubjectMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the lecture subject to continue.'**
+  String get studySelectSubjectMessage;
+
+  /// No description provided for @studyNoMaterialsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a usable material before creating this study session.'**
+  String get studyNoMaterialsMessage;
+
+  /// No description provided for @afterLecturePrototype.
+  ///
+  /// In en, this message translates to:
+  /// **'Local prototype guidance'**
+  String get afterLecturePrototype;
+
+  /// No description provided for @afterLectureNoSubjectsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a subject before starting an after-lecture session.'**
+  String get afterLectureNoSubjectsMessage;
+
+  /// No description provided for @afterLectureConfidence.
+  ///
+  /// In en, this message translates to:
+  /// **'How confident do you feel?'**
+  String get afterLectureConfidence;
+
+  /// No description provided for @afterLectureSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Prototype study schedule'**
+  String get afterLectureSchedule;
+
+  /// No description provided for @afterLectureScheduleHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated locally; this is not tracked study time.'**
+  String get afterLectureScheduleHelp;
+
+  /// No description provided for @examPrepPrototype.
+  ///
+  /// In en, this message translates to:
+  /// **'Local prototype plan'**
+  String get examPrepPrototype;
+
+  /// No description provided for @examPrepHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'Prepare for an exam'**
+  String get examPrepHeading;
+
+  /// No description provided for @examPrepHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a local study plan from a subject, materials, and weak topics.'**
+  String get examPrepHelp;
+
+  /// No description provided for @examPrepNoSubjectsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a subject before preparing an exam plan.'**
+  String get examPrepNoSubjectsMessage;
+
+  /// No description provided for @examPrepDatePreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Exam date preview'**
+  String get examPrepDatePreview;
+
+  /// No description provided for @examPrepDateUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Date selection is not available in this prototype.'**
+  String get examPrepDateUnavailable;
+
+  /// No description provided for @examPrepDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Exam date'**
+  String get examPrepDate;
+
+  /// No description provided for @examPrepMockDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Mock date: 2 weeks from now'**
+  String get examPrepMockDate;
+
+  /// No description provided for @examPrepMaterialsPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected materials preview'**
+  String get examPrepMaterialsPreview;
+
+  /// No description provided for @examPrepMaterialsEmptyHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'The plan can still start from the selected subject.'**
+  String get examPrepMaterialsEmptyHelp;
+
+  /// No description provided for @examPrepIncluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Included in plan'**
+  String get examPrepIncluded;
+
+  /// No description provided for @examPrepTopicsPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview focus topics'**
+  String get examPrepTopicsPreview;
+
+  /// No description provided for @examPrepTopicsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Locally generated prototype guidance; not a mastery score.'**
+  String get examPrepTopicsHelp;
+
+  /// No description provided for @examPrepPlanPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview preparation plan'**
+  String get examPrepPlanPreview;
+
+  /// No description provided for @examPrepPlanHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Locally generated prototype guidance.'**
+  String get examPrepPlanHelp;
+
+  /// No description provided for @continueEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to continue'**
+  String get continueEmptyTitle;
+
+  /// No description provided for @continueEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a study session from one of your subjects.'**
+  String get continueEmptyMessage;
+
+  /// No description provided for @continueUnavailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The subject or source for your latest session is no longer available.'**
+  String get continueUnavailableMessage;
+
+  /// No description provided for @continueFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue from {material}'**
+  String continueFrom(Object material);
+
+  /// No description provided for @continueLatest.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest study session'**
+  String get continueLatest;
+
+  /// No description provided for @continueSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Session summary'**
+  String get continueSummary;
+
+  /// No description provided for @continueQuickQuiz.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick quiz'**
+  String get continueQuickQuiz;
+
+  /// No description provided for @continueLastScore.
+  ///
+  /// In en, this message translates to:
+  /// **'Last score: {percent}%'**
+  String continueLastScore(Object percent);
+
+  /// No description provided for @continueNoTopics.
+  ///
+  /// In en, this message translates to:
+  /// **'No focus topics recorded for this session.'**
+  String get continueNoTopics;
+
+  /// No description provided for @aiTeacherStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Local mock coaching · Prototype'**
+  String get aiTeacherStatus;
+
+  /// No description provided for @aiTeacherNoLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Canned local responses; no live AI connection.'**
+  String get aiTeacherNoLive;
+
+  /// No description provided for @aiTeacherHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a coaching style. The response below stays entirely local and uses mock text.'**
+  String get aiTeacherHelp;
+
+  /// No description provided for @aiTeacherPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Coach prompt'**
+  String get aiTeacherPrompt;
+
+  /// No description provided for @aiTeacherPromptSimple.
+  ///
+  /// In en, this message translates to:
+  /// **'Explain simpler'**
+  String get aiTeacherPromptSimple;
+
+  /// No description provided for @aiTeacherPromptExample.
+  ///
+  /// In en, this message translates to:
+  /// **'Give another example'**
+  String get aiTeacherPromptExample;
+
+  /// No description provided for @aiTeacherPromptQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a question'**
+  String get aiTeacherPromptQuestion;
+
+  /// No description provided for @aiTeacherAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Prototype answer'**
+  String get aiTeacherAnswer;
+
+  /// No description provided for @aiTeacherTryNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Try next'**
+  String get aiTeacherTryNext;
+
+  /// No description provided for @aiTeacherAnotherExample.
+  ///
+  /// In en, this message translates to:
+  /// **'Show another mock example'**
+  String get aiTeacherAnotherExample;
+
+  /// No description provided for @aiTeacherQuizMe.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiz me on this'**
+  String get aiTeacherQuizMe;
+
+  /// No description provided for @sessionGeneratedFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated from: {material}'**
+  String sessionGeneratedFrom(Object material);
+
+  /// No description provided for @sessionLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Local study session'**
+  String get sessionLocal;
+
+  /// No description provided for @sessionNoAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'No answer submitted.'**
+  String get sessionNoAnswer;
+
+  /// No description provided for @sessionNoFlashcards.
+  ///
+  /// In en, this message translates to:
+  /// **'No flashcards in this session.'**
+  String get sessionNoFlashcards;
+
+  /// No description provided for @sessionQuickQuiz.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick quiz'**
+  String get sessionQuickQuiz;
+
+  /// No description provided for @sessionFocusTopics.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus topics'**
+  String get sessionFocusTopics;
+
+  /// No description provided for @sessionNoTopics.
+  ///
+  /// In en, this message translates to:
+  /// **'No focus topics recorded.'**
+  String get sessionNoTopics;
+
+  /// No description provided for @sessionPrototypeExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Prototype explanation'**
+  String get sessionPrototypeExplanation;
+
+  /// No description provided for @sessionPrototypeHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Local mock guidance; not a live AI response.'**
+  String get sessionPrototypeHelp;
+
+  /// No description provided for @sessionMoreFlashcards.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate more flashcards'**
+  String get sessionMoreFlashcards;
+
+  /// No description provided for @sessionAskTeacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask AI Teacher'**
+  String get sessionAskTeacher;
 }
 
 class _AppLocalizationsDelegate

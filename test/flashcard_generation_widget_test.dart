@@ -18,14 +18,14 @@ void main() {
     await _openDialog(tester);
     expect(repository.requestedCounts, isEmpty);
     expect(find.text('Generate new flashcards'), findsOneWidget);
-    expect(find.text('Current: 1'), findsOneWidget);
-    expect(find.text('Add: 5'), findsOneWidget);
-    expect(find.text('After generation: up to 6'), findsOneWidget);
+    expect(find.text('Current: 1 card'), findsOneWidget);
+    expect(find.text('Add: 5 cards'), findsOneWidget);
+    expect(find.text('Projected total: 6 cards'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ChoiceChip, '10'));
     await tester.pumpAndSettle();
-    expect(find.text('Add: 10'), findsOneWidget);
-    expect(find.text('After generation: up to 11'), findsOneWidget);
+    expect(find.text('Add: 10 cards'), findsOneWidget);
+    expect(find.text('Projected total: 11 cards'), findsOneWidget);
     expect(repository.requestedCounts, isEmpty);
 
     await tester.tap(find.text('Cancel'));
@@ -83,7 +83,7 @@ void main() {
       await tester.enterText(field, invalid);
       await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
       await tester.pumpAndSettle();
-      expect(find.text('Enter a whole number from 1 to 30.'), findsOneWidget);
+      expect(find.text('Choose between 1 and 30 new flashcards.'), findsOneWidget);
       expect(repository.requestedCounts, isEmpty);
     }
 

@@ -79,6 +79,9 @@ extension AppLocalizationsX on BuildContext {
       'Could not generate flashcards. Try again.' =>
         l.errorCouldNotGenerateFlashcards,
       'Could not generate quiz. Try again.' => l.errorCouldNotGenerateQuiz,
+      'Could not sync flashcards.' => l.errorCouldNotGenerateFlashcards,
+      'Could not save review progress.' => l.errorCouldNotSaveReview,
+      'Could not save this quiz attempt.' => l.errorCouldNotSaveQuizAttempt,
       _ => l.genericLocalizedError,
     };
   }

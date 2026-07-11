@@ -5,9 +5,11 @@ import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/flashcards/flashcard_training_screen.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
+import 'package:ai_study_buddy/l10n/app_localizations.dart';
 import 'package:ai_study_buddy/shared/widgets/responsive_app_scaffold.dart';
 import 'package:ai_study_buddy/shared/widgets/study_components.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _user = AuthUser(
@@ -85,6 +87,13 @@ void main() {
   testWidgets('study rows do not add row-level blur', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        localizationsDelegates: [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: FocusTopicRow(topic: 'Cells', subject: 'Biology', missCount: 2),
         ),

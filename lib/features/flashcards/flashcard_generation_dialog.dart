@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 
 Future<int?> showFlashcardGenerationDialog(
@@ -42,14 +43,14 @@ class _FlashcardGenerationDialogState
   @override
   Widget build(BuildContext context) {
     return GlassDialog(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text('Generate new flashcards', style: Theme.of(context).textTheme.titleLarge),
+      Text(context.l10n.flashcardGenerationTitle, style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 16),
       SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Choose how many new flashcards to add.'),
+            Text(context.l10n.flashcardGenerationGuidance),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -66,7 +67,7 @@ class _FlashcardGenerationDialogState
                     }),
                   ),
                 ChoiceChip(
-                  label: const Text('Custom'),
+                  label: Text(context.l10n.commonCustom),
                   selected: _isCustom,
                   onSelected: (_) => setState(() {
                     _isCustom = true;
@@ -87,7 +88,7 @@ class _FlashcardGenerationDialogState
                 ),
                 textInputAction: TextInputAction.done,
                 decoration: InputDecoration(
-                  labelText: 'New flashcards',
+                  labelText: context.l10n.flashcardGenerationNewField,
                   errorText: _errorText,
                 ),
                 onChanged: (_) => setState(() => _errorText = null),
@@ -95,11 +96,9 @@ class _FlashcardGenerationDialogState
               ),
             ],
             const SizedBox(height: 16),
-            Text('Current: ${widget.currentCardCount}'),
-            Text('Add: ${_displayedCount()}'),
-            Text(
-              'After generation: up to ${widget.currentCardCount + _displayedCount()}',
-            ),
+            Text(context.l10n.flashcardGenerationCurrent(widget.currentCardCount)),
+            Text(context.l10n.flashcardGenerationAdd(_displayedCount())),
+            Text(context.l10n.flashcardGenerationProjected(widget.currentCardCount + _displayedCount())),
           ],
         ),
       ),
@@ -107,9 +106,9 @@ class _FlashcardGenerationDialogState
       Wrap(alignment: WrapAlignment.end, spacing: 8, children: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.commonCancel),
         ),
-        FilledButton(onPressed: _generate, child: const Text('Generate')),
+        FilledButton(onPressed: _generate, child: Text(context.l10n.commonGenerate)),
       ]),
     ]));
   }
@@ -128,13 +127,13 @@ class _FlashcardGenerationDialogState
     final requestedNewCount = int.tryParse(input);
     if (requestedNewCount == null || requestedNewCount < 1) {
       setState(() {
-        _errorText = 'Enter a whole number from 1 to 30.';
+        _errorText = context.l10n.flashcardGenerationRangeError;
       });
       return;
     }
     if (requestedNewCount > 30) {
       setState(() {
-        _errorText = 'Choose no more than 30 flashcards.';
+        _errorText = context.l10n.flashcardGenerationMaxError;
       });
       return;
     }

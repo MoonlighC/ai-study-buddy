@@ -1201,4 +1201,751 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get errorCouldNotGenerateQuiz =>
       'Не удалось создать тест. Попробуйте еще раз.';
+
+  @override
+  String studyCards(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count карточки',
+      many: '$count карточек',
+      few: '$count карточки',
+      one: '$count карточка',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String studyQuestions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count вопроса',
+      many: '$count вопросов',
+      few: '$count вопроса',
+      one: '$count вопрос',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String studyAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count попытки',
+      many: '$count попыток',
+      few: '$count попытки',
+      one: '$count попытка',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String studyMisses(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ошибки',
+      many: '$count ошибок',
+      few: '$count ошибки',
+      one: '$count ошибка',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get studyProgress => 'Прогресс обучения';
+
+  @override
+  String studyProgressValue(int current, int total) {
+    return '$current из $total';
+  }
+
+  @override
+  String get studyQuestion => 'Вопрос';
+
+  @override
+  String get studyAnswer => 'Ответ';
+
+  @override
+  String get studyShowAnswer => 'Показать ответ';
+
+  @override
+  String get studyHideAnswer => 'Скрыть ответ';
+
+  @override
+  String get studyFlashcardQuestionSemantics =>
+      'Вопрос на карточке. Активируйте, чтобы показать ответ.';
+
+  @override
+  String get studyFlashcardAnswerSemantics =>
+      'Ответ на карточке. Активируйте, чтобы скрыть ответ.';
+
+  @override
+  String get studyMissedAction => 'Не знал';
+
+  @override
+  String get studyKnownAction => 'Знал';
+
+  @override
+  String get studyCorrect => 'Верно';
+
+  @override
+  String get studyIncorrect => 'Неверно';
+
+  @override
+  String studyCorrectAnswer(String answer) {
+    return 'Правильный ответ: $answer';
+  }
+
+  @override
+  String studyChoiceCorrectSemantics(String choice) {
+    return '$choice, правильный ответ';
+  }
+
+  @override
+  String studyChoiceIncorrectSemantics(String choice) {
+    return '$choice, неправильный ответ';
+  }
+
+  @override
+  String get commonCancel => 'Отмена';
+
+  @override
+  String get commonSave => 'Сохранить';
+
+  @override
+  String get commonReturn => 'Назад';
+
+  @override
+  String get commonNext => 'Далее';
+
+  @override
+  String get commonCustom => 'Другое';
+
+  @override
+  String get commonPrototype => 'Прототип';
+
+  @override
+  String get commonGenerate => 'Создать';
+
+  @override
+  String get flashcardsTitle => 'Карточки';
+
+  @override
+  String flashcardsAllTitle(Object subject) {
+    return 'Все карточки — $subject';
+  }
+
+  @override
+  String flashcardsMaterialTitle(Object material) {
+    return 'Карточки — $material';
+  }
+
+  @override
+  String flashcardsScopeMaterial(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count карточки из этого материала',
+      many: '$count карточек из этого материала',
+      few: '$count карточки из этого материала',
+      one: '$count карточка из этого материала',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String flashcardsScopeSubject(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count карточки по этому предмету',
+      many: '$count карточек по этому предмету',
+      few: '$count карточки по этому предмету',
+      one: '$count карточка по этому предмету',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get flashcardsSessionSize => 'Размер занятия';
+
+  @override
+  String flashcardsAvailable(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Для этого выбора доступны $count карточки.',
+      many: 'Для этого выбора доступно $count карточек.',
+      few: 'Для этого выбора доступны $count карточки.',
+      one: 'Для этого выбора доступна $count карточка.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get flashcardsGenerateMoreGuidance =>
+      'Создайте дополнительные карточки из материала, чтобы открыть занятия большего размера.';
+
+  @override
+  String get flashcardsLoading => 'Загрузка синхронизированных карточек';
+
+  @override
+  String get flashcardsEmptyTitle => 'Карточек пока нет';
+
+  @override
+  String get flashcardsEmptyMessage =>
+      'Добавьте или создайте карточки, чтобы начать повторение.';
+
+  @override
+  String get flashcardsEmptyCloudMessage =>
+      'Создайте их из материала со вставленным текстом.';
+
+  @override
+  String get flashcardsReviewFocus => 'Фокус повторения';
+
+  @override
+  String get flashcardsFilterSemantics => 'Фильтр карточек';
+
+  @override
+  String get flashcardsFilterAll => 'Все';
+
+  @override
+  String get flashcardsFilterWeak => 'Для повторения';
+
+  @override
+  String get flashcardsFilterDue => 'По расписанию';
+
+  @override
+  String flashcardsStartTrainingCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count карточки',
+      many: '$count карточек',
+      few: '$count карточки',
+      one: '$count карточка',
+    );
+    return 'Начать тренировку ($_temp0)';
+  }
+
+  @override
+  String get flashcardsTrainWeak => 'Тренировать карточки для повторения';
+
+  @override
+  String get flashcardsReviewDue => 'Повторить карточки по расписанию';
+
+  @override
+  String get flashcardsNoWeak =>
+      'Сейчас нет карточек для дополнительного повторения.';
+
+  @override
+  String get flashcardsNoDue => 'Сейчас нет карточек по расписанию.';
+
+  @override
+  String get flashcardsCustomSessionTitle => 'Другой размер занятия';
+
+  @override
+  String get flashcardsCardsField => 'Карточки';
+
+  @override
+  String flashcardsMaximum(Object count) {
+    return 'Максимум: $count';
+  }
+
+  @override
+  String get flashcardsChooseAtLeastOne => 'Выберите хотя бы 1 карточку.';
+
+  @override
+  String flashcardsOnlyAvailable(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'доступны только $count карточки',
+      many: 'доступно только $count карточек',
+      few: 'доступны только $count карточки',
+      one: 'доступна только $count карточка',
+    );
+    return 'Для этого выбора $_temp0.';
+  }
+
+  @override
+  String flashcardsTopicDifficulty(String topic, String difficulty) {
+    return 'Тема: $topic · $difficulty';
+  }
+
+  @override
+  String flashcardsReviewStats(Object known, Object missed) {
+    return 'Знал: $known · Не знал: $missed';
+  }
+
+  @override
+  String get flashcardGenerationTitle => 'Создать новые карточки';
+
+  @override
+  String get flashcardGenerationGuidance =>
+      'Выберите, сколько новых карточек добавить.';
+
+  @override
+  String flashcardGenerationCurrent(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count карточки',
+      many: '$count карточек',
+      few: '$count карточки',
+      one: '$count карточка',
+    );
+    return 'Сейчас: $_temp0';
+  }
+
+  @override
+  String flashcardGenerationAdd(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count карточки',
+      many: '$count карточек',
+      few: '$count карточки',
+      one: '$count карточку',
+    );
+    return 'Добавить: $_temp0';
+  }
+
+  @override
+  String flashcardGenerationProjected(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count карточки',
+      many: '$count карточек',
+      few: '$count карточки',
+      one: '$count карточка',
+    );
+    return 'Будет всего: $_temp0';
+  }
+
+  @override
+  String get flashcardGenerationNewField => 'Новые карточки';
+
+  @override
+  String get flashcardGenerationRangeError =>
+      'Выберите от 1 до 30 новых карточек.';
+
+  @override
+  String get flashcardGenerationMaxError => 'Выберите не более 30 карточек.';
+
+  @override
+  String get trainingTitle => 'Тренировка карточек';
+
+  @override
+  String get trainingEmptyTitle => 'Нет карточек для тренировки';
+
+  @override
+  String get trainingEmptyMessage => 'Сначала создайте карточки.';
+
+  @override
+  String get trainingProgress => 'Прогресс по карточкам';
+
+  @override
+  String get trainingComplete => 'Тренировка завершена';
+
+  @override
+  String trainingReviewed(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Повторены $count карточки',
+      many: 'Повторено $count карточек',
+      few: 'Повторены $count карточки',
+      one: 'Повторена $count карточка',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trainingKnown(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Знакомы $count карточки',
+      many: 'Знакомо $count карточек',
+      few: 'Знакомы $count карточки',
+      one: 'Знакома $count карточка',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trainingMissed(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Неизвестны $count карточки',
+      many: 'Неизвестно $count карточек',
+      few: 'Неизвестны $count карточки',
+      one: 'Неизвестна $count карточка',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get trainingReviewMissed => 'Повторить незнакомые карточки';
+
+  @override
+  String get trainingReviewAgain => 'Повторить снова';
+
+  @override
+  String get errorCouldNotSaveReview =>
+      'Не удалось сохранить прогресс повторения.';
+
+  @override
+  String get quizUiTitle => 'Тест';
+
+  @override
+  String get quizEmptyTitle => 'Нет доступных вопросов';
+
+  @override
+  String get quizEmptyMessage =>
+      'Вернитесь к материалу и сначала создайте тест.';
+
+  @override
+  String get quizProgress => 'Прогресс теста';
+
+  @override
+  String get quizShowScore => 'Показать результат';
+
+  @override
+  String get quizMissedReview => 'Повторение вопросов с ошибками';
+
+  @override
+  String get quizFinishReview => 'Завершить повторение';
+
+  @override
+  String get quizResult => 'Результат';
+
+  @override
+  String quizScore(Object percent) {
+    return 'Результат: $percent%';
+  }
+
+  @override
+  String quizCorrectCount(num correct, Object total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      correct,
+      locale: localeName,
+      other: '$correct правильного ответа из $total',
+      many: '$correct правильных ответов из $total',
+      few: '$correct правильных ответа из $total',
+      one: '$correct правильный ответ из $total',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get quizMissedTopics => 'Темы для повторения';
+
+  @override
+  String get quizNoMissedTopics => 'Нет тем для повторения. Отличная работа!';
+
+  @override
+  String get quizSaving => 'Сохранение попытки…';
+
+  @override
+  String get quizUnsyncedWarning =>
+      'Этот результат рассчитан локально и не синхронизирован.';
+
+  @override
+  String get quizReviewMissed => 'Повторить вопросы с ошибками';
+
+  @override
+  String get quizReviewMaterial => 'Повторить материал';
+
+  @override
+  String get quizRetry => 'Пройти тест снова';
+
+  @override
+  String get errorCouldNotSaveQuizAttempt =>
+      'Не удалось сохранить эту попытку.';
+
+  @override
+  String get progressLatestQuiz => 'Последний тест';
+
+  @override
+  String get progressAttemptsCompleted => 'Завершённые попытки';
+
+  @override
+  String get progressFocusTopics => 'Темы для повторения';
+
+  @override
+  String get progressHistoryExplanation =>
+      'Общее число ошибок в завершённых тестах.';
+
+  @override
+  String get progressNoAttempts =>
+      'Пройдите тест, чтобы увидеть здесь результаты.';
+
+  @override
+  String get progressLoading => 'Загрузка прогресса';
+
+  @override
+  String get progressEmptyTitle => 'Попыток пока нет';
+
+  @override
+  String get progressEmptyMessage =>
+      'Пройдите тест, чтобы начать историю прогресса.';
+
+  @override
+  String get afterLectureTitle => 'После лекции';
+
+  @override
+  String get examPrepTitle => 'Подготовка к экзамену';
+
+  @override
+  String get continueStudyingTitle => 'Продолжить обучение';
+
+  @override
+  String get aiTeacherTitle => 'ИИ-преподаватель';
+
+  @override
+  String get studySessionTitle => 'Занятие';
+
+  @override
+  String get studyLocalPrototype => 'Локальный прототип';
+
+  @override
+  String get studyLocalMockCoaching => 'Локальная тестовая помощь';
+
+  @override
+  String get studyChooseSubject => 'Выберите предмет';
+
+  @override
+  String get studyChooseMaterial => 'Выберите материал';
+
+  @override
+  String get studyCreateSession => 'Создать занятие';
+
+  @override
+  String get studyNoSubjectsTitle => 'Предметов пока нет';
+
+  @override
+  String get studyOpenSubjects => 'Открыть предметы';
+
+  @override
+  String get studyNoMaterialsTitle => 'Материалов пока нет';
+
+  @override
+  String get studyContinueSession => 'Продолжить занятие';
+
+  @override
+  String get studyNotCompleted => 'Не завершено';
+
+  @override
+  String get studyBackToSubject => 'Назад к предмету';
+
+  @override
+  String get studyUnavailableTitle => 'Учебный материал недоступен';
+
+  @override
+  String get studySessionOverview => 'Обзор занятия';
+
+  @override
+  String get studyEstimatedTime => 'Примерное время';
+
+  @override
+  String get studySummary => 'Конспект';
+
+  @override
+  String get studyFlashcardsAction => 'Карточки';
+
+  @override
+  String get studyAiTeacherAction => 'ИИ-преподаватель';
+
+  @override
+  String studyMinutes(Object count) {
+    return '$count мин';
+  }
+
+  @override
+  String get studySelectSubject => 'Выберите предмет';
+
+  @override
+  String get studySelectSubjectMessage =>
+      'Выберите предмет лекции, чтобы продолжить.';
+
+  @override
+  String get studyNoMaterialsMessage =>
+      'Добавьте подходящий материал перед созданием занятия.';
+
+  @override
+  String get afterLecturePrototype => 'Локальные рекомендации прототипа';
+
+  @override
+  String get afterLectureNoSubjectsMessage =>
+      'Создайте предмет перед началом занятия после лекции.';
+
+  @override
+  String get afterLectureConfidence => 'Насколько уверенно вы себя чувствуете?';
+
+  @override
+  String get afterLectureSchedule => 'План занятия в прототипе';
+
+  @override
+  String get afterLectureScheduleHelp =>
+      'Локальная оценка; это время не отслеживается.';
+
+  @override
+  String get examPrepPrototype => 'Локальный план-прототип';
+
+  @override
+  String get examPrepHeading => 'Подготовка к экзамену';
+
+  @override
+  String get examPrepHelp =>
+      'Создайте локальный план по предмету, материалам и темам для повторения.';
+
+  @override
+  String get examPrepNoSubjectsMessage =>
+      'Создайте предмет перед подготовкой плана к экзамену.';
+
+  @override
+  String get examPrepDatePreview => 'Предварительная дата экзамена';
+
+  @override
+  String get examPrepDateUnavailable =>
+      'Выбор даты недоступен в этом прототипе.';
+
+  @override
+  String get examPrepDate => 'Дата экзамена';
+
+  @override
+  String get examPrepMockDate => 'Примерная дата: через 2 недели';
+
+  @override
+  String get examPrepMaterialsPreview => 'Выбранные материалы';
+
+  @override
+  String get examPrepMaterialsEmptyHelp =>
+      'План всё равно можно начать с выбранного предмета.';
+
+  @override
+  String get examPrepIncluded => 'Включено в план';
+
+  @override
+  String get examPrepTopicsPreview => 'Темы для повторения';
+
+  @override
+  String get examPrepTopicsHelp =>
+      'Локальные рекомендации прототипа; это не оценка знаний.';
+
+  @override
+  String get examPrepPlanPreview => 'Предварительный план подготовки';
+
+  @override
+  String get examPrepPlanHelp => 'Локальные рекомендации прототипа.';
+
+  @override
+  String get continueEmptyTitle => 'Нечего продолжать';
+
+  @override
+  String get continueEmptyMessage => 'Начните занятие по одному из предметов.';
+
+  @override
+  String get continueUnavailableMessage =>
+      'Предмет или источник последнего занятия больше недоступен.';
+
+  @override
+  String continueFrom(Object material) {
+    return 'Продолжить с материалом: $material';
+  }
+
+  @override
+  String get continueLatest => 'Последнее занятие';
+
+  @override
+  String get continueSummary => 'Итоги занятия';
+
+  @override
+  String get continueQuickQuiz => 'Короткий тест';
+
+  @override
+  String continueLastScore(Object percent) {
+    return 'Последний результат: $percent%';
+  }
+
+  @override
+  String get continueNoTopics => 'Для этого занятия нет тем для повторения.';
+
+  @override
+  String get aiTeacherStatus => 'Локальная тестовая помощь · Прототип';
+
+  @override
+  String get aiTeacherNoLive =>
+      'Готовые локальные ответы; подключения к ИИ нет.';
+
+  @override
+  String get aiTeacherHelp =>
+      'Выберите стиль помощи. Ответ ниже остаётся локальным и использует тестовый текст.';
+
+  @override
+  String get aiTeacherPrompt => 'Запрос преподавателю';
+
+  @override
+  String get aiTeacherPromptSimple => 'Объяснить проще';
+
+  @override
+  String get aiTeacherPromptExample => 'Привести другой пример';
+
+  @override
+  String get aiTeacherPromptQuestion => 'Задать вопрос';
+
+  @override
+  String get aiTeacherAnswer => 'Ответ прототипа';
+
+  @override
+  String get aiTeacherTryNext => 'Попробуйте дальше';
+
+  @override
+  String get aiTeacherAnotherExample => 'Показать другой пример';
+
+  @override
+  String get aiTeacherQuizMe => 'Проверить мои знания';
+
+  @override
+  String sessionGeneratedFrom(Object material) {
+    return 'Создано из материала: $material';
+  }
+
+  @override
+  String get sessionLocal => 'Локальное занятие';
+
+  @override
+  String get sessionNoAnswer => 'Ответ не дан.';
+
+  @override
+  String get sessionNoFlashcards => 'В этом занятии нет карточек.';
+
+  @override
+  String get sessionQuickQuiz => 'Короткий тест';
+
+  @override
+  String get sessionFocusTopics => 'Темы для повторения';
+
+  @override
+  String get sessionNoTopics => 'Темы для повторения не записаны.';
+
+  @override
+  String get sessionPrototypeExplanation => 'Объяснение прототипа';
+
+  @override
+  String get sessionPrototypeHelp =>
+      'Локальная тестовая рекомендация; это не ответ ИИ.';
+
+  @override
+  String get sessionMoreFlashcards => 'Создать больше карточек';
+
+  @override
+  String get sessionAskTeacher => 'Спросить ИИ-преподавателя';
 }

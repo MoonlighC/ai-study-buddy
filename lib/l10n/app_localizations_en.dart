@@ -1158,4 +1158,718 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorCouldNotGenerateQuiz => 'Could not generate quiz. Try again.';
+
+  @override
+  String studyCards(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards',
+      one: '1 card',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String studyQuestions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count questions',
+      one: '1 question',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String studyAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count attempts',
+      one: '1 attempt',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String studyMisses(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count misses',
+      one: '1 miss',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get studyProgress => 'Study progress';
+
+  @override
+  String studyProgressValue(int current, int total) {
+    return '$current of $total';
+  }
+
+  @override
+  String get studyQuestion => 'Question';
+
+  @override
+  String get studyAnswer => 'Answer';
+
+  @override
+  String get studyShowAnswer => 'Show answer';
+
+  @override
+  String get studyHideAnswer => 'Hide answer';
+
+  @override
+  String get studyFlashcardQuestionSemantics =>
+      'Flashcard question. Activate to show answer.';
+
+  @override
+  String get studyFlashcardAnswerSemantics =>
+      'Flashcard answer. Activate to hide answer.';
+
+  @override
+  String get studyMissedAction => 'I missed it';
+
+  @override
+  String get studyKnownAction => 'I knew it';
+
+  @override
+  String get studyCorrect => 'Correct';
+
+  @override
+  String get studyIncorrect => 'Incorrect';
+
+  @override
+  String studyCorrectAnswer(String answer) {
+    return 'Correct answer: $answer';
+  }
+
+  @override
+  String studyChoiceCorrectSemantics(String choice) {
+    return '$choice, correct answer';
+  }
+
+  @override
+  String studyChoiceIncorrectSemantics(String choice) {
+    return '$choice, incorrect answer';
+  }
+
+  @override
+  String get commonCancel => 'Cancel';
+
+  @override
+  String get commonSave => 'Save';
+
+  @override
+  String get commonReturn => 'Return';
+
+  @override
+  String get commonNext => 'Next';
+
+  @override
+  String get commonCustom => 'Custom';
+
+  @override
+  String get commonPrototype => 'Prototype';
+
+  @override
+  String get commonGenerate => 'Generate';
+
+  @override
+  String get flashcardsTitle => 'Flashcards';
+
+  @override
+  String flashcardsAllTitle(Object subject) {
+    return 'All flashcards — $subject';
+  }
+
+  @override
+  String flashcardsMaterialTitle(Object material) {
+    return 'Flashcards — $material';
+  }
+
+  @override
+  String flashcardsScopeMaterial(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards from this material',
+      one: '1 card from this material',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String flashcardsScopeSubject(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards across this subject',
+      one: '1 card across this subject',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get flashcardsSessionSize => 'Study session size';
+
+  @override
+  String flashcardsAvailable(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards available for this selection.',
+      one: '1 card available for this selection.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get flashcardsGenerateMoreGuidance =>
+      'Generate more flashcards from a material to unlock larger sessions.';
+
+  @override
+  String get flashcardsLoading => 'Loading synced flashcards';
+
+  @override
+  String get flashcardsEmptyTitle => 'No flashcards yet';
+
+  @override
+  String get flashcardsEmptyMessage =>
+      'Add or generate cards to start reviewing.';
+
+  @override
+  String get flashcardsEmptyCloudMessage =>
+      'Generate them from a pasted-text material.';
+
+  @override
+  String get flashcardsReviewFocus => 'Review focus';
+
+  @override
+  String get flashcardsFilterSemantics => 'Flashcard filter';
+
+  @override
+  String get flashcardsFilterAll => 'All';
+
+  @override
+  String get flashcardsFilterWeak => 'For review';
+
+  @override
+  String get flashcardsFilterDue => 'Due for review';
+
+  @override
+  String flashcardsStartTrainingCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards',
+      one: '1 card',
+    );
+    return 'Start training ($_temp0)';
+  }
+
+  @override
+  String get flashcardsTrainWeak => 'Train cards for review';
+
+  @override
+  String get flashcardsReviewDue => 'Review due cards';
+
+  @override
+  String get flashcardsNoWeak => 'No cards need extra review right now.';
+
+  @override
+  String get flashcardsNoDue => 'No cards are due right now.';
+
+  @override
+  String get flashcardsCustomSessionTitle => 'Custom session size';
+
+  @override
+  String get flashcardsCardsField => 'Cards';
+
+  @override
+  String flashcardsMaximum(Object count) {
+    return 'Maximum: $count';
+  }
+
+  @override
+  String get flashcardsChooseAtLeastOne => 'Choose at least 1 card.';
+
+  @override
+  String flashcardsOnlyAvailable(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards are available',
+      one: '1 card is available',
+    );
+    return 'Only $_temp0 for this selection.';
+  }
+
+  @override
+  String flashcardsTopicDifficulty(String topic, String difficulty) {
+    return 'Topic: $topic · $difficulty';
+  }
+
+  @override
+  String flashcardsReviewStats(Object known, Object missed) {
+    return 'Known $known · Missed $missed';
+  }
+
+  @override
+  String get flashcardGenerationTitle => 'Generate new flashcards';
+
+  @override
+  String get flashcardGenerationGuidance =>
+      'Choose how many new flashcards to add.';
+
+  @override
+  String flashcardGenerationCurrent(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards',
+      one: '1 card',
+    );
+    return 'Current: $_temp0';
+  }
+
+  @override
+  String flashcardGenerationAdd(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards',
+      one: '1 card',
+    );
+    return 'Add: $_temp0';
+  }
+
+  @override
+  String flashcardGenerationProjected(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards',
+      one: '1 card',
+    );
+    return 'Projected total: $_temp0';
+  }
+
+  @override
+  String get flashcardGenerationNewField => 'New flashcards';
+
+  @override
+  String get flashcardGenerationRangeError =>
+      'Choose between 1 and 30 new flashcards.';
+
+  @override
+  String get flashcardGenerationMaxError =>
+      'Choose no more than 30 flashcards.';
+
+  @override
+  String get trainingTitle => 'Flashcard training';
+
+  @override
+  String get trainingEmptyTitle => 'No flashcards to train';
+
+  @override
+  String get trainingEmptyMessage => 'Generate flashcards first.';
+
+  @override
+  String get trainingProgress => 'Flashcard progress';
+
+  @override
+  String get trainingComplete => 'Training complete';
+
+  @override
+  String trainingReviewed(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards reviewed',
+      one: '1 card reviewed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trainingKnown(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards known',
+      one: '1 card known',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trainingMissed(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards missed',
+      one: '1 card missed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get trainingReviewMissed => 'Review missed cards again';
+
+  @override
+  String get trainingReviewAgain => 'Review again';
+
+  @override
+  String get errorCouldNotSaveReview => 'Could not save review progress.';
+
+  @override
+  String get quizUiTitle => 'Quiz';
+
+  @override
+  String get quizEmptyTitle => 'No questions available';
+
+  @override
+  String get quizEmptyMessage =>
+      'Return to the material and generate a quiz first.';
+
+  @override
+  String get quizProgress => 'Question progress';
+
+  @override
+  String get quizShowScore => 'Show score';
+
+  @override
+  String get quizMissedReview => 'Missed question review';
+
+  @override
+  String get quizFinishReview => 'Finish review';
+
+  @override
+  String get quizResult => 'Result';
+
+  @override
+  String quizScore(Object percent) {
+    return 'Score: $percent%';
+  }
+
+  @override
+  String quizCorrectCount(num correct, Object total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      correct,
+      locale: localeName,
+      other: '$correct correct answers out of $total',
+      one: '1 correct answer out of $total',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get quizMissedTopics => 'Missed topics';
+
+  @override
+  String get quizNoMissedTopics => 'No missed topics. Great work!';
+
+  @override
+  String get quizSaving => 'Saving quiz attempt…';
+
+  @override
+  String get quizUnsyncedWarning =>
+      'This score was calculated locally and was not synchronized.';
+
+  @override
+  String get quizReviewMissed => 'Review missed questions';
+
+  @override
+  String get quizReviewMaterial => 'Review material';
+
+  @override
+  String get quizRetry => 'Retry quiz';
+
+  @override
+  String get errorCouldNotSaveQuizAttempt =>
+      'Could not save this quiz attempt.';
+
+  @override
+  String get progressLatestQuiz => 'Latest quiz';
+
+  @override
+  String get progressAttemptsCompleted => 'Attempts completed';
+
+  @override
+  String get progressFocusTopics => 'Focus topics';
+
+  @override
+  String get progressHistoryExplanation =>
+      'Miss counts are cumulative quiz history, not a mastery score.';
+
+  @override
+  String get progressNoAttempts => 'Complete a quiz to see results here.';
+
+  @override
+  String get progressLoading => 'Loading progress';
+
+  @override
+  String get progressEmptyTitle => 'No quiz attempts yet';
+
+  @override
+  String get progressEmptyMessage =>
+      'Complete a quiz to build your progress history.';
+
+  @override
+  String get afterLectureTitle => 'After Lecture';
+
+  @override
+  String get examPrepTitle => 'Exam Prep';
+
+  @override
+  String get continueStudyingTitle => 'Continue Studying';
+
+  @override
+  String get aiTeacherTitle => 'AI Teacher';
+
+  @override
+  String get studySessionTitle => 'Study Session';
+
+  @override
+  String get studyLocalPrototype => 'Local prototype';
+
+  @override
+  String get studyLocalMockCoaching => 'Local mock coaching';
+
+  @override
+  String get studyChooseSubject => 'Choose subject';
+
+  @override
+  String get studyChooseMaterial => 'Choose material';
+
+  @override
+  String get studyCreateSession => 'Create study session';
+
+  @override
+  String get studyNoSubjectsTitle => 'No subjects yet';
+
+  @override
+  String get studyOpenSubjects => 'Open Subjects';
+
+  @override
+  String get studyNoMaterialsTitle => 'No materials yet';
+
+  @override
+  String get studyContinueSession => 'Continue session';
+
+  @override
+  String get studyNotCompleted => 'Not completed';
+
+  @override
+  String get studyBackToSubject => 'Back to subject';
+
+  @override
+  String get studyUnavailableTitle => 'No study material available';
+
+  @override
+  String get studySessionOverview => 'Session overview';
+
+  @override
+  String get studyEstimatedTime => 'Estimated study time';
+
+  @override
+  String get studySummary => 'Summary';
+
+  @override
+  String get studyFlashcardsAction => 'Flashcards';
+
+  @override
+  String get studyAiTeacherAction => 'AI Teacher';
+
+  @override
+  String studyMinutes(Object count) {
+    return '$count min';
+  }
+
+  @override
+  String get studySelectSubject => 'Select a subject';
+
+  @override
+  String get studySelectSubjectMessage =>
+      'Choose the lecture subject to continue.';
+
+  @override
+  String get studyNoMaterialsMessage =>
+      'Add a usable material before creating this study session.';
+
+  @override
+  String get afterLecturePrototype => 'Local prototype guidance';
+
+  @override
+  String get afterLectureNoSubjectsMessage =>
+      'Create a subject before starting an after-lecture session.';
+
+  @override
+  String get afterLectureConfidence => 'How confident do you feel?';
+
+  @override
+  String get afterLectureSchedule => 'Prototype study schedule';
+
+  @override
+  String get afterLectureScheduleHelp =>
+      'Estimated locally; this is not tracked study time.';
+
+  @override
+  String get examPrepPrototype => 'Local prototype plan';
+
+  @override
+  String get examPrepHeading => 'Prepare for an exam';
+
+  @override
+  String get examPrepHelp =>
+      'Create a local study plan from a subject, materials, and weak topics.';
+
+  @override
+  String get examPrepNoSubjectsMessage =>
+      'Create a subject before preparing an exam plan.';
+
+  @override
+  String get examPrepDatePreview => 'Exam date preview';
+
+  @override
+  String get examPrepDateUnavailable =>
+      'Date selection is not available in this prototype.';
+
+  @override
+  String get examPrepDate => 'Exam date';
+
+  @override
+  String get examPrepMockDate => 'Mock date: 2 weeks from now';
+
+  @override
+  String get examPrepMaterialsPreview => 'Selected materials preview';
+
+  @override
+  String get examPrepMaterialsEmptyHelp =>
+      'The plan can still start from the selected subject.';
+
+  @override
+  String get examPrepIncluded => 'Included in plan';
+
+  @override
+  String get examPrepTopicsPreview => 'Preview focus topics';
+
+  @override
+  String get examPrepTopicsHelp =>
+      'Locally generated prototype guidance; not a mastery score.';
+
+  @override
+  String get examPrepPlanPreview => 'Preview preparation plan';
+
+  @override
+  String get examPrepPlanHelp => 'Locally generated prototype guidance.';
+
+  @override
+  String get continueEmptyTitle => 'Nothing to continue';
+
+  @override
+  String get continueEmptyMessage =>
+      'Start a study session from one of your subjects.';
+
+  @override
+  String get continueUnavailableMessage =>
+      'The subject or source for your latest session is no longer available.';
+
+  @override
+  String continueFrom(Object material) {
+    return 'Continue from $material';
+  }
+
+  @override
+  String get continueLatest => 'Latest study session';
+
+  @override
+  String get continueSummary => 'Session summary';
+
+  @override
+  String get continueQuickQuiz => 'Quick quiz';
+
+  @override
+  String continueLastScore(Object percent) {
+    return 'Last score: $percent%';
+  }
+
+  @override
+  String get continueNoTopics => 'No focus topics recorded for this session.';
+
+  @override
+  String get aiTeacherStatus => 'Local mock coaching · Prototype';
+
+  @override
+  String get aiTeacherNoLive =>
+      'Canned local responses; no live AI connection.';
+
+  @override
+  String get aiTeacherHelp =>
+      'Choose a coaching style. The response below stays entirely local and uses mock text.';
+
+  @override
+  String get aiTeacherPrompt => 'Coach prompt';
+
+  @override
+  String get aiTeacherPromptSimple => 'Explain simpler';
+
+  @override
+  String get aiTeacherPromptExample => 'Give another example';
+
+  @override
+  String get aiTeacherPromptQuestion => 'Ask a question';
+
+  @override
+  String get aiTeacherAnswer => 'Prototype answer';
+
+  @override
+  String get aiTeacherTryNext => 'Try next';
+
+  @override
+  String get aiTeacherAnotherExample => 'Show another mock example';
+
+  @override
+  String get aiTeacherQuizMe => 'Quiz me on this';
+
+  @override
+  String sessionGeneratedFrom(Object material) {
+    return 'Generated from: $material';
+  }
+
+  @override
+  String get sessionLocal => 'Local study session';
+
+  @override
+  String get sessionNoAnswer => 'No answer submitted.';
+
+  @override
+  String get sessionNoFlashcards => 'No flashcards in this session.';
+
+  @override
+  String get sessionQuickQuiz => 'Quick quiz';
+
+  @override
+  String get sessionFocusTopics => 'Focus topics';
+
+  @override
+  String get sessionNoTopics => 'No focus topics recorded.';
+
+  @override
+  String get sessionPrototypeExplanation => 'Prototype explanation';
+
+  @override
+  String get sessionPrototypeHelp =>
+      'Local mock guidance; not a live AI response.';
+
+  @override
+  String get sessionMoreFlashcards => 'Generate more flashcards';
+
+  @override
+  String get sessionAskTeacher => 'Ask AI Teacher';
 }

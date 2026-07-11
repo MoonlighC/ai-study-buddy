@@ -5,6 +5,7 @@ import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../../core/models/flashcard.dart';
 import '../../core/models/subject.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -69,10 +70,10 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
         state.config.effectiveBackendMode == AppBackendMode.supabase;
 
     final title = widget.args.isMaterialScoped
-        ? 'Flashcards — ${widget.args.materialTitle ?? 'Material'}'
-        : 'All flashcards — ${widget.args.subject.name}';
+        ? context.l10n.flashcardsMaterialTitle(widget.args.materialTitle ?? '')
+        : context.l10n.flashcardsAllTitle(widget.args.subject.name);
     final helper = widget.args.isMaterialScoped
-        ? '${_cardsLabel(allCards.length)} from this material'
+        ? context.l10n.flashcardsScopeMaterial(allCards.length)
         : _subjectScopeHelper(allCards);
 
     return ResponsiveAppScaffold(
@@ -89,14 +90,14 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
               StudyContextHeader(
                 title: widget.args.materialTitle ?? widget.args.subject.name,
                 subtitle: helper,
-                status: _cardsLabel(allCards.length),
+                status: context.l10n.studyCards(allCards.length),
               ),
               const SizedBox(height: 12),
               GlassCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Study session size'),
+                    Text(context.l10n.flashcardsSessionSize),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -110,7 +111,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                                 : (_) => setState(() => sessionSize = size),
                           ),
                         ChoiceChip(
-                          label: const Text('Custom'),
+                          label: Text(context.l10n.commonCustom),
                           selected: isCustomSelected,
                           onSelected: availableCount == 0
                               ? null
@@ -129,7 +130,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                     if (hasUnavailablePreset) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'Generate more flashcards from a material to unlock larger sessions.',
+                        context.l10n.flashcardsGenerateMoreGuidance,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -138,31 +139,31 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
               ),
               const SizedBox(height: 16),
               if (state.isLoadingFlashcards)
-                const GlassCard(
-                  child: LoadingState(label: 'Loading synced flashcards'),
+                GlassCard(
+                  child: LoadingState(label: context.l10n.flashcardsLoading),
                 ),
               if (state.flashcardSyncErrorMessage != null)
                 GlassCard(
                   child: ErrorRetryState(
-                    message: state.flashcardSyncErrorMessage!,
+                    message: context.localizedSafeMessage(state.flashcardSyncErrorMessage!),
                     onRetry: null,
                   ),
                 ),
               if (!state.isLoadingFlashcards && allCards.isEmpty)
                 GlassCard(
                   child: EmptyState(
-                    title: 'No flashcards yet',
+                    title: context.l10n.flashcardsEmptyTitle,
                     icon: Icons.style_outlined,
                     message: isSupabaseMode
-                        ? 'Generate them from a pasted-text material.'
-                        : 'Add or generate cards to start reviewing.',
+                        ? context.l10n.flashcardsEmptyCloudMessage
+                        : context.l10n.flashcardsEmptyMessage,
                   ),
                 ),
               if (allCards.isNotEmpty) ...[
-                const Text('Review focus'),
+                Text(context.l10n.flashcardsReviewFocus),
                 const SizedBox(height: 8),
                 Semantics(
-                  label: 'Flashcard filter',
+                  label: context.l10n.flashcardsFilterSemantics,
                   child: SegmentedButton<_FlashcardFilter>(
                     segments: [
                       for (final filter in _FlashcardFilter.values)
@@ -183,7 +184,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                         _startTraining(visibleCards, effectiveSessionSize),
                     icon: const Icon(Icons.school_outlined),
                     label: Text(
-                      'Start training (${_cardsLabel(effectiveSessionSize)})',
+                      context.l10n.flashcardsStartTrainingCount(effectiveSessionSize),
                     ),
                   )
                 else
@@ -200,7 +201,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                     onPressed: () =>
                         _startTraining(weakCards, selectedSessionSize),
                     icon: const Icon(Icons.trending_down_outlined),
-                    label: const Text('Train weak cards'),
+                    label: Text(context.l10n.flashcardsTrainWeak),
                   ),
                 ],
                 if (dueCards.isNotEmpty) ...[
@@ -209,7 +210,7 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                     onPressed: () =>
                         _startTraining(dueCards, selectedSessionSize),
                     icon: const Icon(Icons.event_available_outlined),
-                    label: const Text('Review due cards'),
+                    label: Text(context.l10n.flashcardsReviewDue),
                   ),
                 ],
                 if (weakCards.isEmpty || dueCards.isEmpty) ...[
@@ -217,10 +218,10 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                   Text(
                     [
                       if (weakCards.isEmpty)
-                        'No weak cards right now.'
+                        context.l10n.flashcardsNoWeak
                       else
                         null,
-                      if (dueCards.isEmpty) 'No due cards right now.' else null,
+                      if (dueCards.isEmpty) context.l10n.flashcardsNoDue else null,
                     ].whereType<String>().join(' '),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
@@ -298,9 +299,9 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
 
   String _filterLabel(_FlashcardFilter filter) {
     return switch (filter) {
-      _FlashcardFilter.all => 'All',
-      _FlashcardFilter.weak => 'Weak',
-      _FlashcardFilter.due => 'Due',
+      _FlashcardFilter.all => context.l10n.flashcardsFilterAll,
+      _FlashcardFilter.weak => context.l10n.flashcardsFilterWeak,
+      _FlashcardFilter.due => context.l10n.flashcardsFilterDue,
     };
   }
 
@@ -314,26 +315,22 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
 
   String _emptyFilterTitle(_FlashcardFilter filter) {
     return switch (filter) {
-      _FlashcardFilter.all => 'No flashcards yet',
-      _FlashcardFilter.weak => 'No weak cards',
-      _FlashcardFilter.due => 'No due cards',
+      _FlashcardFilter.all => context.l10n.flashcardsEmptyTitle,
+      _FlashcardFilter.weak => context.l10n.flashcardsNoWeak,
+      _FlashcardFilter.due => context.l10n.flashcardsNoDue,
     };
   }
 
   String _emptyFilterSubtitle(_FlashcardFilter filter) {
     return switch (filter) {
-      _FlashcardFilter.all => 'Add or generate cards to start reviewing.',
-      _FlashcardFilter.weak => 'Cards you miss more than you know appear here.',
-      _FlashcardFilter.due => 'Reviewed cards will appear here when due.',
+      _FlashcardFilter.all => context.l10n.flashcardsEmptyMessage,
+      _FlashcardFilter.weak => context.l10n.flashcardsNoWeak,
+      _FlashcardFilter.due => context.l10n.flashcardsNoDue,
     };
   }
 
   String _availableCountText(int count) {
-    return '${_cardsLabel(count)} available for this selection.';
-  }
-
-  String _cardsLabel(int count) {
-    return count == 1 ? '1 card' : '$count cards';
+    return context.l10n.flashcardsAvailable(count);
   }
 
   String _subjectScopeHelper(List<Flashcard> cards) {
@@ -346,12 +343,12 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
       (card) => card.materialId == null || card.materialId!.isEmpty,
     );
     if (materialIds.isEmpty || hasLegacyCards) {
-      return '${_cardsLabel(cards.length)} across this subject';
+      return context.l10n.flashcardsScopeSubject(cards.length);
     }
     final materialsLabel = materialIds.length == 1
         ? '1 material'
         : '${materialIds.length} materials';
-    return '${_cardsLabel(cards.length)} from $materialsLabel';
+    return '${context.l10n.studyCards(cards.length)} · $materialsLabel';
   }
 }
 
@@ -392,7 +389,7 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Custom session size',
+            context.l10n.flashcardsCustomSessionTitle,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 16),
@@ -408,8 +405,8 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
                 ),
                 textInputAction: TextInputAction.done,
                 decoration: InputDecoration(
-                  labelText: 'Cards',
-                  helperText: 'Maximum: ${widget.availableCount}',
+                  labelText: context.l10n.flashcardsCardsField,
+                  helperText: context.l10n.flashcardsMaximum(widget.availableCount),
                   errorText: _errorText,
                 ),
                 onChanged: (_) {
@@ -426,7 +423,7 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
               if (_showGenerateMoreGuidance) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'Generate more flashcards from a material to unlock larger sessions.',
+                  context.l10n.flashcardsGenerateMoreGuidance,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -439,9 +436,9 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
             children: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(context.l10n.commonCancel),
               ),
-              FilledButton(onPressed: _save, child: const Text('Save')),
+              FilledButton(onPressed: _save, child: Text(context.l10n.commonSave)),
             ],
           ),
         ],
@@ -453,7 +450,7 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
     final requestedSize = int.tryParse(_controller.text.trim());
     if (requestedSize == null || requestedSize < 1) {
       setState(() {
-        _errorText = 'Choose at least 1 card.';
+        _errorText = context.l10n.flashcardsChooseAtLeastOne;
         _showGenerateMoreGuidance = false;
       });
       return;
@@ -461,7 +458,7 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
     if (requestedSize > widget.availableCount) {
       setState(() {
         _errorText =
-            'Only ${_cardsLabel(widget.availableCount)} available for this selection.';
+            context.l10n.flashcardsOnlyAvailable(widget.availableCount);
         _showGenerateMoreGuidance = true;
       });
       return;
@@ -469,9 +466,6 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
     Navigator.pop(context, requestedSize);
   }
 
-  String _cardsLabel(int count) {
-    return count == 1 ? '1 card' : '$count cards';
-  }
 }
 
 class _FlashcardListItem extends StatelessWidget {
@@ -493,9 +487,9 @@ class _FlashcardListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final reviewStats = card.correctCount == 0 && card.incorrectCount == 0
         ? null
-        : 'Known ${card.correctCount} - Missed ${card.incorrectCount}';
+        : context.l10n.flashcardsReviewStats(card.correctCount, card.incorrectCount);
     final details = [
-      'Topic: ${card.topic} - ${card.difficulty.label}',
+      context.l10n.flashcardsTopicDifficulty(card.topic, card.difficulty.label),
       ?reviewStats,
       if (isAnswerVisible) card.back,
     ].join('\n');
@@ -507,7 +501,9 @@ class _FlashcardListItem extends StatelessWidget {
         spacing: 4,
         children: [
           IconButton(
-            tooltip: isAnswerVisible ? 'Hide answer' : 'Show answer',
+            tooltip: isAnswerVisible
+                ? context.l10n.studyHideAnswer
+                : context.l10n.studyShowAnswer,
             icon: Icon(
               isAnswerVisible
                   ? Icons.visibility_off_outlined

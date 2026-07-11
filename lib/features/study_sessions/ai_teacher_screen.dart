@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/study_components.dart';
@@ -17,14 +18,14 @@ class AiTeacherScreen extends StatefulWidget {
 
 class _AiTeacherScreenState extends State<AiTeacherScreen> {
   static const ai = MockAiService();
-  String selectedPrompt = 'Explain simpler';
+  _CoachPrompt selectedPrompt = _CoachPrompt.simple;
 
   @override
   Widget build(BuildContext context) {
     final subject = widget.subject;
 
     return ResponsiveAppScaffold(
-      title: 'AI Teacher',
+      title: context.l10n.aiTeacherTitle,
       showBack: true,
       showNavigation: false,
       subjectColor: Color(subject.colorValue),
@@ -32,33 +33,29 @@ class _AiTeacherScreenState extends State<AiTeacherScreen> {
         width: ResponsiveContentWidth.reading,
         child: ListView(
           children: [
-            const GlassStatusChip(
-              label: 'Local mock coaching · Prototype',
+            GlassStatusChip(
+              label: context.l10n.aiTeacherStatus,
               icon: Icons.science_outlined,
             ),
             const SizedBox(height: 12),
             StudyModeCard(
               title: subject.name,
-              subtitle: 'Canned local responses; no live AI connection.',
+              subtitle: context.l10n.aiTeacherNoLive,
               child: Text(
-                'Choose a coaching style. The response below stays entirely local and uses mock text.',
+                context.l10n.aiTeacherHelp,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
             StudyModeCard(
               icon: Icons.tune_outlined,
-              title: 'Coach prompt',
+              title: context.l10n.aiTeacherPrompt,
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final prompt in [
-                    'Explain simpler',
-                    'Give another example',
-                    'Ask a question',
-                  ])
+                  for (final prompt in _CoachPrompt.values)
                     ChoiceChip(
-                      label: Text(prompt),
+                      label: Text(_promptLabel(context, prompt)),
                       selected: selectedPrompt == prompt,
                       onSelected: (_) =>
                           setState(() => selectedPrompt = prompt),
@@ -68,8 +65,8 @@ class _AiTeacherScreenState extends State<AiTeacherScreen> {
             ),
             StudyModeCard(
               icon: Icons.psychology_alt_outlined,
-              title: 'Prototype answer',
-              subtitle: selectedPrompt,
+              title: context.l10n.aiTeacherAnswer,
+              subtitle: _promptLabel(context, selectedPrompt),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -92,22 +89,22 @@ class _AiTeacherScreenState extends State<AiTeacherScreen> {
             ),
             StudyModeCard(
               icon: Icons.chat_bubble_outline,
-              title: 'Try next',
+              title: context.l10n.aiTeacherTryNext,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   OutlinedButton.icon(
                     onPressed: () =>
-                        setState(() => selectedPrompt = 'Give another example'),
+                        setState(() => selectedPrompt = _CoachPrompt.example),
                     icon: const Icon(Icons.lightbulb_outline),
-                    label: const Text('Show another mock example'),
+                    label: Text(context.l10n.aiTeacherAnotherExample),
                   ),
                   const SizedBox(height: 8),
                   FilledButton.icon(
                     onPressed: () =>
-                        setState(() => selectedPrompt = 'Ask a question'),
+                        setState(() => selectedPrompt = _CoachPrompt.question),
                     icon: const Icon(Icons.quiz_outlined),
-                    label: const Text('Quiz me on this'),
+                    label: Text(context.l10n.aiTeacherQuizMe),
                   ),
                 ],
               ),
@@ -118,14 +115,22 @@ class _AiTeacherScreenState extends State<AiTeacherScreen> {
     );
   }
 
-  String _promptFollowUp(String prompt) {
+  String _promptLabel(BuildContext context, _CoachPrompt prompt) => switch (prompt) {
+    _CoachPrompt.simple => context.l10n.aiTeacherPromptSimple,
+    _CoachPrompt.example => context.l10n.aiTeacherPromptExample,
+    _CoachPrompt.question => context.l10n.aiTeacherPromptQuestion,
+  };
+
+  String _promptFollowUp(_CoachPrompt prompt) {
     return switch (prompt) {
-      'Give another example' =>
+      _CoachPrompt.example =>
         'Example: connect the main idea to a familiar lecture note, then restate it in your own words.',
-      'Ask a question' =>
+      _CoachPrompt.question =>
         'Question: what is the first clue you would look for to recognize this topic on a quiz?',
       _ =>
         'Simpler version: focus on the cause, the key term, and one example before adding details.',
     };
   }
 }
+
+enum _CoachPrompt { simple, example, question }

@@ -18,7 +18,7 @@ void main() {
     await _openFlashcards(tester, const FlashcardsRouteArgs(subject: _subject));
 
     expect(find.text('All flashcards — Biology'), findsOneWidget);
-    expect(find.text('3 cards from 2 materials'), findsOneWidget);
+    expect(find.text('3 cards · 2 materials'), findsOneWidget);
     expect(find.text('Weak one'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Other material'),
@@ -52,15 +52,15 @@ void main() {
     await _pumpScope(tester, [_weakOne, _dueOne, _otherMaterial]);
     await _openFlashcards(tester, _materialOneArgs);
 
-    await tester.tap(find.text('Weak'));
+    await tester.tap(find.text('For review'));
     await tester.pumpAndSettle();
     expect(find.text('1 card available for this selection.'), findsOneWidget);
     expect(find.text('Weak one'), findsOneWidget);
     expect(find.text('Due one'), findsNothing);
     expect(find.text('Other material'), findsNothing);
 
-    await tester.ensureVisible(find.text('Train weak cards'));
-    await tester.tap(find.text('Train weak cards'));
+    await tester.ensureVisible(find.text('Train cards for review'));
+    await tester.tap(find.text('Train cards for review'));
     await tester.pumpAndSettle();
     expect(find.text('1 / 1'), findsOneWidget);
     expect(find.text('Weak one'), findsOneWidget);
@@ -73,7 +73,7 @@ void main() {
     await _pumpScope(tester, [_weakOne, _dueOne, _otherMaterial]);
     await _openFlashcards(tester, _materialOneArgs);
 
-    await tester.tap(find.text('Due'));
+    await tester.tap(find.text('Due for review'));
     await tester.pumpAndSettle();
     expect(find.text('1 card available for this selection.'), findsOneWidget);
     expect(find.text('Due one'), findsOneWidget);

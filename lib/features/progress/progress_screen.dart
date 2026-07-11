@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -16,24 +17,24 @@ class ProgressScreen extends StatelessWidget {
     final state = AppStateScope.watch(context);
     final latest = state.latestQuizAttempt;
     return ResponsiveAppScaffold(
-      title: 'Progress', activeRoute: AppRoutes.progress,
+      title: context.l10n.navProgress, activeRoute: AppRoutes.progress,
       body: ResponsiveContent(width: ResponsiveContentWidth.wide, child: ListView(children: [
         if (state.isLoadingQuizAttempts)
-          const GlassCard(child: LoadingState(label: 'Loading quiz results'))
+          GlassCard(child: LoadingState(label: context.l10n.progressLoading))
         else
           AttemptSummaryCard(score: latest?.score, correct: latest?.correctQuestions, total: latest?.totalQuestions, attemptCount: state.quizAttempts.length),
         const SizedBox(height: 20),
-        Text('Focus topics', style: Theme.of(context).textTheme.headlineSmall),
+        Text(context.l10n.progressFocusTopics, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 4),
-        const Text('Miss counts are cumulative quiz history, not a mastery score.'),
+        Text(context.l10n.progressHistoryExplanation),
         const SizedBox(height: 12),
         GlassCard(padding: EdgeInsets.zero, child:
           state.isLoadingCumulativeWeakTopics
-            ? const LoadingState(label: 'Loading focus topics')
+            ? LoadingState(label: context.l10n.progressLoading)
             : state.weakTopicSyncErrorMessage != null
-              ? ErrorRetryState(message: state.weakTopicSyncErrorMessage!, onRetry: () => state.loadCumulativeWeakTopicsFor(AuthScope.read(context).user))
+              ? ErrorRetryState(message: context.localizedSafeMessage(state.weakTopicSyncErrorMessage!), onRetry: () => state.loadCumulativeWeakTopicsFor(AuthScope.read(context).user))
               : state.cumulativeWeakTopics.isEmpty
-                ? const EmptyState(title: 'No focus topics yet', message: 'Complete quizzes to discover topics that need more practice.', icon: Icons.flag_outlined)
+                ? EmptyState(title: context.l10n.progressFocusTopics, message: context.l10n.progressEmptyMessage, icon: Icons.flag_outlined)
                 : Column(children: [for (final topic in state.cumulativeWeakTopics) FocusTopicRow(topic: topic.topic, subject: _subjectName(state, topic.subjectId), missCount: topic.missCount)]),
         ),
       ])),

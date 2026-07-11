@@ -9,6 +9,7 @@ import '../../core/models/quiz_attempt.dart';
 import '../../core/models/quiz_question.dart';
 import '../../core/utils/uuid.dart';
 import '../../core/models/subject.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -63,15 +64,15 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
     final state = AppStateScope.watch(context);
     final questions = _attempt.quiz.questions;
     if (questions.isEmpty) {
-      return const ResponsiveAppScaffold(
-        title: 'Quiz',
+      return ResponsiveAppScaffold(
+        title: context.l10n.quizUiTitle,
         showBack: true,
         showNavigation: false,
         body: ResponsiveContent(
           width: ResponsiveContentWidth.reading,
           child: EmptyState(
-            title: 'No questions available',
-            message: 'Return to the material and generate a quiz first.',
+            title: context.l10n.quizEmptyTitle,
+            message: context.l10n.quizEmptyMessage,
             icon: Icons.quiz_outlined,
           ),
         ),
@@ -79,7 +80,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
     }
 
     return ResponsiveAppScaffold(
-      title: 'Quiz',
+      title: context.l10n.quizUiTitle,
       subtitle: widget.args.material.title,
       showBack: true,
       showNavigation: false,
@@ -113,7 +114,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
               )
             else if (_mode == _QuizMode.missedReview) ...[
               Text(
-                'Missed question review',
+                context.l10n.quizMissedReview,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -131,7 +132,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
                     _reviewAnswers[_missedQuestions[_reviewIndex].id] == null
                     ? null
                     : _advanceMissedReview,
-                finalActionLabel: 'Finish review',
+                finalActionLabel: context.l10n.quizFinishReview,
               ),
             ] else
               _QuestionView(
@@ -175,10 +176,10 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
     if (!saved) {
       final message =
           AppStateScope.read(context).quizAttemptSyncErrorMessage ??
-          'Could not save this quiz attempt.';
+          context.l10n.errorCouldNotSaveQuizAttempt;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ).showSnackBar(SnackBar(content: Text(context.localizedSafeMessage(message))));
     }
   }
 
@@ -232,7 +233,7 @@ class _QuestionView extends StatelessWidget {
     required this.selectedAnswer,
     required this.onAnswer,
     required this.onNext,
-    this.finalActionLabel = 'Show score',
+    this.finalActionLabel,
   });
 
   final QuizQuestion question;
@@ -241,7 +242,7 @@ class _QuestionView extends StatelessWidget {
   final String? selectedAnswer;
   final ValueChanged<String> onAnswer;
   final VoidCallback? onNext;
-  final String finalActionLabel;
+  final String? finalActionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -256,7 +257,7 @@ class _QuestionView extends StatelessWidget {
           StudyProgressHeader(
             current: questionNumber,
             total: totalQuestions,
-            label: 'Question progress',
+            label: context.l10n.quizProgress,
           ),
           const SizedBox(height: 16),
           Text(
@@ -285,10 +286,10 @@ class _QuestionView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(isCorrect ? 'Correct' : 'Incorrect'),
+                  Text(isCorrect ? context.l10n.studyCorrect : context.l10n.studyIncorrect),
                   if (!isCorrect) ...[
                     const SizedBox(height: 4),
-                    Text('Correct answer: ${question.correctAnswer}'),
+                    Text(context.l10n.studyCorrectAnswer(question.correctAnswer)),
                   ],
                   const SizedBox(height: 4),
                   Text(question.explanation),
@@ -300,7 +301,9 @@ class _QuestionView extends StatelessWidget {
           FilledButton(
             onPressed: onNext,
             child: Text(
-              questionNumber == totalQuestions ? finalActionLabel : 'Next',
+              questionNumber == totalQuestions
+                  ? (finalActionLabel ?? context.l10n.quizShowScore)
+                  : context.l10n.commonNext,
             ),
           ),
         ],
@@ -313,10 +316,10 @@ class _QuestionView extends StatelessWidget {
       return option;
     }
     if (option == question.correctAnswer) {
-      return '$option - correct';
+      return option;
     }
     if (option == selectedAnswer) {
-      return '$option - incorrect';
+      return option;
     }
     return option;
   }
@@ -357,32 +360,32 @@ class _ResultView extends StatelessWidget {
     final weakTopics = result?.weakTopicsSnapshot ?? _weakTopics();
 
     return StudyCompletionCard(
-      title: 'Result',
+      title: context.l10n.quizResult,
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Score: $percent%',
+              context.l10n.quizScore(percent),
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 4),
-            Text('$correctCount / ${questions.length} correct'),
+            Text(context.l10n.quizCorrectCount(correctCount, questions.length)),
             const SizedBox(height: 16),
             Text(
-              'Missed topics',
+              context.l10n.quizMissedTopics,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 6),
             if (weakTopics.isEmpty)
-              const Text('No missed topics. Great work!')
+              Text(context.l10n.quizNoMissedTopics)
             else
               for (final topic in weakTopics)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
                     topic.missCount > 1
-                        ? '${topic.topic} (${topic.missCount} misses)'
+                        ? '${topic.topic} (${context.l10n.studyMisses(topic.missCount)})'
                         : topic.topic,
                   ),
                 ),
@@ -390,12 +393,12 @@ class _ResultView extends StatelessWidget {
               const SizedBox(height: 8),
               const LinearProgressIndicator(),
               const SizedBox(height: 4),
-              const Text('Saving quiz attempt…'),
+              Text(context.l10n.quizSaving),
             ],
             if (!isSaving && warningMessage != null) ...[
               const SizedBox(height: 8),
               Text(
-                '${warningMessage!} This score is calculated locally and has not been synced.',
+                '${context.localizedSafeMessage(warningMessage!)} ${context.l10n.quizUnsyncedWarning}',
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
@@ -404,20 +407,20 @@ class _ResultView extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onReviewMissed,
                 icon: const Icon(Icons.rate_review_outlined),
-                label: const Text('Review missed questions'),
+                label: Text(context.l10n.quizReviewMissed),
               ),
               const SizedBox(height: 8),
             ],
             FilledButton.icon(
               onPressed: onReviewMaterial,
               icon: const Icon(Icons.menu_book_outlined),
-              label: const Text('Review material'),
+              label: Text(context.l10n.quizReviewMaterial),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: isSaving ? null : onRetry,
               icon: const Icon(Icons.replay_outlined),
-              label: const Text('Retry quiz'),
+              label: Text(context.l10n.quizRetry),
             ),
           ],
         ),

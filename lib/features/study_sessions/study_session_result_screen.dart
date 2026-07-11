@@ -5,6 +5,7 @@ import '../../app/routes.dart';
 import '../../core/models/study_session.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../../shared/widgets/study_components.dart';
@@ -31,7 +32,7 @@ class StudySessionResultScreen extends StatelessWidget {
         material.subjectId == subject.id &&
         state.canGenerateSummaryForMaterial(material);
     return ResponsiveAppScaffold(
-      title: 'Study Session',
+      title: context.l10n.studySessionTitle,
       showBack: true,
       showNavigation: false,
       subjectColor: Color(subject.colorValue),
@@ -42,58 +43,58 @@ class StudySessionResultScreen extends StatelessWidget {
             if (!usable)
               EmptyState(
                 key: const ValueKey('study-session-unavailable'),
-                title: 'No study material available',
+                title: context.l10n.studyUnavailableTitle,
                 message:
                     'Add a ready material with useful content to ${subject.name} before creating a study session.',
                 icon: Icons.article_outlined,
                 action: OutlinedButton.icon(
                   onPressed: () => Navigator.maybePop(context),
                   icon: const Icon(Icons.arrow_back),
-                  label: const Text('Back to subject'),
+                  label: Text(context.l10n.studyBackToSubject),
                 ),
               )
             else ...[
               StudyContextHeader(
                 title: subject.name,
-                subtitle: 'Generated from: ${material.title}',
-                status: 'Local study session',
+                subtitle: context.l10n.sessionGeneratedFrom(material.title),
+                status: context.l10n.sessionLocal,
               ),
               const SizedBox(height: 12),
               StudyCompletionCard(
-                title: 'Session overview',
+                title: context.l10n.studySessionOverview,
                 children: [
                   ListTile(
                     leading: const Icon(Icons.quiz_outlined),
-                    title: const Text('Quiz'),
+                    title: Text(context.l10n.quizUiTitle),
                     trailing: Text(
                       session.quizScorePercent == null
-                          ? 'Not completed'
+                          ? context.l10n.studyNotCompleted
                           : '${session.quizScorePercent}%',
                     ),
                   ),
                   if (session.quizScorePercent == null)
-                    const Text('No answer submitted.'),
+                    Text(context.l10n.sessionNoAnswer),
                   ListTile(
                     leading: const Icon(Icons.schedule_outlined),
-                    title: const Text('Estimated study time'),
+                    title: Text(context.l10n.studyEstimatedTime),
                     trailing: Text(
-                      '${session.studyTimeBlocks.fold<int>(0, (sum, block) => sum + block.minutes)} min',
+                      context.l10n.studyMinutes(session.studyTimeBlocks.fold<int>(0, (sum, block) => sum + block.minutes)),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               StudyModeCard(
-                title: 'Summary',
+                title: context.l10n.studySummary,
                 icon: Icons.summarize_outlined,
                 child: Text(session.summary),
               ),
               const SizedBox(height: 12),
               StudyModeCard(
-                title: 'Flashcards',
+                title: context.l10n.studyFlashcardsAction,
                 icon: Icons.style_outlined,
                 child: session.flashcards.isEmpty
-                    ? const Text('No flashcards in this session.')
+                    ? Text(context.l10n.sessionNoFlashcards)
                     : Column(
                         children: [
                           for (final card in session.flashcards)
@@ -106,7 +107,7 @@ class StudySessionResultScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               StudyModeCard(
-                title: 'Quick quiz',
+                title: context.l10n.sessionQuickQuiz,
                 icon: Icons.quiz_outlined,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -127,16 +128,16 @@ class StudySessionResultScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                    Text(session.feedback ?? 'No answer submitted.'),
+                    Text(session.feedback ?? context.l10n.sessionNoAnswer),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
               StudyModeCard(
-                title: 'Focus topics',
+                title: context.l10n.sessionFocusTopics,
                 icon: Icons.flag_outlined,
                 child: session.weakTopics.isEmpty
-                    ? const Text('No focus topics recorded.')
+                    ? Text(context.l10n.sessionNoTopics)
                     : Column(
                         children: [
                           for (final topic in session.weakTopics)
@@ -149,8 +150,8 @@ class StudySessionResultScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               StudyModeCard(
-                title: 'Prototype explanation',
-                subtitle: 'Local mock guidance; not a live AI response.',
+                title: context.l10n.sessionPrototypeExplanation,
+                subtitle: context.l10n.sessionPrototypeHelp,
                 icon: Icons.science_outlined,
                 child: Text(ai.mistakeExplanationFor(subject)),
               ),
@@ -166,7 +167,7 @@ class StudySessionResultScreen extends StatelessWidget {
                       arguments: FlashcardsRouteArgs(subject: subject),
                     ),
                     icon: const Icon(Icons.style_outlined),
-                    label: const Text('Generate more flashcards'),
+                    label: Text(context.l10n.sessionMoreFlashcards),
                   ),
                   OutlinedButton.icon(
                     onPressed: () => Navigator.pushNamed(
@@ -175,7 +176,7 @@ class StudySessionResultScreen extends StatelessWidget {
                       arguments: subject,
                     ),
                     icon: const Icon(Icons.psychology_alt_outlined),
-                    label: const Text('Ask AI Teacher'),
+                    label: Text(context.l10n.sessionAskTeacher),
                   ),
                 ],
               ),

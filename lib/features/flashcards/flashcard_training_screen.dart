@@ -4,6 +4,7 @@ import '../../app/app_state.dart';
 import '../../core/models/flashcard.dart';
 import '../../core/models/material.dart';
 import '../../core/models/subject.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../../shared/widgets/study_components.dart';
@@ -51,15 +52,15 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
   Widget build(BuildContext context) {
     final cards = _sessionCards;
     if (cards.isEmpty) {
-      return const ResponsiveAppScaffold(
-        title: 'Flashcard training',
+      return ResponsiveAppScaffold(
+        title: context.l10n.trainingTitle,
         showBack: true,
         showNavigation: false,
         body: ResponsiveContent(
           width: ResponsiveContentWidth.reading,
           child: EmptyState(
-            title: 'No flashcards to train',
-            message: 'Generate flashcards first.',
+            title: context.l10n.trainingEmptyTitle,
+            message: context.l10n.trainingEmptyMessage,
             icon: Icons.style_outlined,
           ),
         ),
@@ -68,7 +69,7 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
 
     if (_isComplete) {
       return ResponsiveAppScaffold(
-        title: 'Training complete',
+        title: context.l10n.trainingComplete,
         showBack: true,
         showNavigation: false,
         body: ResponsiveContent(
@@ -88,7 +89,7 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
 
     final card = cards[_currentIndex];
     return ResponsiveAppScaffold(
-      title: 'Flashcard training',
+      title: context.l10n.trainingTitle,
       subtitle: widget.args.material?.title ?? widget.args.subject.name,
       showBack: true,
       showNavigation: false,
@@ -100,7 +101,7 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
             StudyProgressHeader(
               current: _currentIndex + 1,
               total: cards.length,
-              label: 'Flashcard progress',
+              label: context.l10n.trainingProgress,
             ),
             const SizedBox(height: 16),
             FlashcardSurface(
@@ -116,7 +117,7 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
               FilledButton.icon(
                 onPressed: () => setState(() => _isShowingAnswer = true),
                 icon: const Icon(Icons.visibility_outlined),
-                label: const Text('Show answer'),
+                label: Text(context.l10n.studyShowAnswer),
               )
             else
               RatingActionRow(
@@ -139,10 +140,10 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
     if (!saved) {
       final message =
           AppStateScope.read(context).flashcardReviewErrorMessage ??
-          'Could not save review progress.';
+          context.l10n.errorCouldNotSaveReview;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ).showSnackBar(SnackBar(content: Text(context.localizedSafeMessage(message))));
       return;
     }
 
@@ -211,24 +212,21 @@ class _CompletionView extends StatelessWidget {
     return ListView(
       children: [
         StudyCompletionCard(
-          title: 'Training complete',
+          title: context.l10n.trainingComplete,
           children: [
             Column(
               children: [
                 ListTile(
                   leading: const Icon(Icons.style_outlined),
-                  title: const Text('Cards reviewed'),
-                  trailing: Text('$reviewedCount'),
+                  title: Text(context.l10n.trainingReviewed(reviewedCount)),
                 ),
                 ListTile(
                   leading: const Icon(Icons.check_circle_outline),
-                  title: const Text('Known'),
-                  trailing: Text('$knownCount'),
+                  title: Text(context.l10n.trainingKnown(knownCount)),
                 ),
                 ListTile(
                   leading: const Icon(Icons.refresh_outlined),
-                  title: const Text('Missed'),
-                  trailing: Text('$missedCount'),
+                  title: Text(context.l10n.trainingMissed(missedCount)),
                 ),
               ],
             ),
@@ -239,20 +237,20 @@ class _CompletionView extends StatelessWidget {
           FilledButton.icon(
             onPressed: onReviewMissedAgain,
             icon: const Icon(Icons.refresh_outlined),
-            label: const Text('Review missed again'),
+            label: Text(context.l10n.trainingReviewMissed),
           ),
           const SizedBox(height: 8),
         ],
         OutlinedButton.icon(
           onPressed: onReviewAgain,
           icon: const Icon(Icons.replay_outlined),
-          label: const Text('Review again'),
+          label: Text(context.l10n.trainingReviewAgain),
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: onReturn,
           icon: const Icon(Icons.arrow_back_outlined),
-          label: const Text('Return'),
+          label: Text(context.l10n.commonReturn),
         ),
       ],
     );

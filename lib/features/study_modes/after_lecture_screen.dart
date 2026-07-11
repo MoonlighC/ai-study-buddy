@@ -7,6 +7,7 @@ import '../../core/models/study_session.dart';
 import '../../core/models/study_time_block.dart';
 import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -42,33 +43,32 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
         ? selectedMaterial
         : null;
     return ResponsiveAppScaffold(
-      title: 'After Lecture',
+      title: context.l10n.afterLectureTitle,
       showBack: true,
       showNavigation: false,
       body: ResponsiveContent(
         width: ResponsiveContentWidth.reading,
         child: ListView(
           children: [
-            const GlassStatusChip(
-              label: 'Local prototype guidance',
+            GlassStatusChip(
+              label: context.l10n.afterLecturePrototype,
               icon: Icons.science_outlined,
             ),
             const SizedBox(height: 12),
             if (subjects.isEmpty)
               EmptyState(
-                title: 'No subjects yet',
-                message:
-                    'Create a subject before starting an after-lecture session.',
+                title: context.l10n.studyNoSubjectsTitle,
+                message: context.l10n.afterLectureNoSubjectsMessage,
                 icon: Icons.folder_open_outlined,
                 action: FilledButton(
                   onPressed: () =>
                       Navigator.pushNamed(context, AppRoutes.subjects),
-                  child: const Text('Open Subjects'),
+                  child: Text(context.l10n.studyOpenSubjects),
                 ),
               )
             else ...[
               StudyModeCard(
-                title: 'Choose a subject',
+                title: context.l10n.studyChooseSubject,
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -87,25 +87,24 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
               ),
               const SizedBox(height: 12),
               if (subject == null)
-                const GlassCard(
+                GlassCard(
                   child: EmptyState(
-                    title: 'Select a subject',
-                    message: 'Choose the lecture subject to continue.',
+                    title: context.l10n.studySelectSubject,
+                    message: context.l10n.studySelectSubjectMessage,
                     icon: Icons.touch_app_outlined,
                   ),
                 )
               else if (materials.isEmpty)
-                const GlassCard(
+                GlassCard(
                   child: EmptyState(
-                    title: 'No materials available',
-                    message:
-                        'Add a usable material before creating this study session.',
+                    title: context.l10n.studyNoMaterialsTitle,
+                    message: context.l10n.studyNoMaterialsMessage,
                     icon: Icons.article_outlined,
                   ),
                 )
               else
                 StudyModeCard(
-                  title: 'Choose material',
+                  title: context.l10n.studyChooseMaterial,
                   child: Column(
                     children: [
                       for (final item in materials)
@@ -126,7 +125,7 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
               if (material != null) ...[
                 const SizedBox(height: 12),
                 StudyModeCard(
-                  title: 'How confident do you feel?',
+                  title: context.l10n.afterLectureConfidence,
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -143,15 +142,14 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
                 ),
                 const SizedBox(height: 12),
                 StudyModeCard(
-                  title: 'Prototype study schedule',
-                  subtitle:
-                      'Estimated locally; this is not tracked study time.',
+                  title: context.l10n.afterLectureSchedule,
+                  subtitle: context.l10n.afterLectureScheduleHelp,
                   child: Column(
                     children: [
                       for (final block in _blocksFor(confidence))
                         ListTile(
                           title: Text(block.label),
-                          trailing: Text('${block.minutes} min'),
+                          trailing: Text(context.l10n.studyMinutes(block.minutes)),
                         ),
                     ],
                   ),
@@ -171,7 +169,7 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
                     );
                   },
                   icon: const Icon(Icons.auto_awesome_outlined),
-                  label: const Text('Create study session'),
+                  label: Text(context.l10n.studyCreateSession),
                 ),
               ],
             ],
