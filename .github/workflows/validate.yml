@@ -1,0 +1,33 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.4
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter gen-l10n
+      - run: flutter analyze
+      - run: flutter test
+      - name: Release metadata
+        run: dart run tool/release_validation_cli.dart metadata
+      - name: Localization and release foundation
+        run: flutter test test/localization_literal_audit_test.dart test/release_foundation_test.dart
+      - name: Tracked-secret scan
+        run: dart run tool/release_validation_cli.dart secret-scan
+      - name: Template-asset check
+        run: dart run tool/release_validation_cli.dart template-assets
+      - name: Android structural check
+        run: dart run tool/release_validation_cli.dart android-structure

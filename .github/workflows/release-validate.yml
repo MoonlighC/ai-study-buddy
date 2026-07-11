@@ -1,0 +1,91 @@
+name: Release validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Build environment
+        required: true
+        type: choice
+        options: [staging, production]
+      rc_label:
+        description: Optional rc.N label; leave empty for final validation
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RETENTION_DAYS: ${{ inputs.rc_label != '' && 14 || 30 }}
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: {flutter-version: 3.44.4, channel: stable, cache: true}
+      - run: flutter pub get
+      - name: Validate public configuration presence
+        env:
+          APP_ENV: ${{ inputs.environment }}
+          APP_BACKEND_MODE: supabase
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        shell: bash
+        run: |
+          if [ "$APP_ENV" = production ]; then dart run tool/release_validation_cli.dart production-config; fi
+      - name: Build Web validation output
+        run: flutter build web --release --dart-define=APP_ENV=${{ inputs.environment }} --dart-define=APP_BACKEND_MODE=supabase --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ vars.SUPABASE_ANON_KEY }}
+      - run: dart run tool/release_validation_cli.dart package-input --platform=web --path=build/web
+      - uses: actions/upload-artifact@v4
+        with: {name: web-validation-${{ inputs.environment }}, path: build/web, retention-days: '${{ env.RETENTION_DAYS }}'}
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: {flutter-version: 3.44.4, channel: stable, cache: true}
+      - run: flutter pub get
+      - run: flutter build windows --release --dart-define=APP_ENV=${{ inputs.environment }} --dart-define=APP_BACKEND_MODE=supabase --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ vars.SUPABASE_ANON_KEY }}
+      - run: dart run tool/release_validation_cli.dart package-input --platform=windows-x64 --path=build/windows/x64/runner/Release
+      - uses: actions/upload-artifact@v4
+        with: {name: windows-validation-${{ inputs.environment }}, path: build/windows/x64/runner/Release, retention-days: '${{ env.RETENTION_DAYS }}'}
+
+  android-production:
+    if: inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment: production-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: {flutter-version: 3.44.4, channel: stable, cache: true}
+      - name: Require protected signing setup
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_B64" && test -n "$ANDROID_KEY_ALIAS" && test -n "$ANDROID_STORE_PASSWORD" && test -n "$ANDROID_KEY_PASSWORD" || { echo 'Protected Android signing setup is absent.'; exit 1; }
+      - name: Materialize temporary keystore
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-signing"
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/android-signing/upload.jks"
+      - name: Build signed production AAB validation output
+        env:
+          RELEASE_SIGNING_SOURCE: ci
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/android-signing/upload.jks
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: flutter build appbundle --release --dart-define=APP_ENV=production --dart-define=APP_BACKEND_MODE=supabase --dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ vars.SUPABASE_ANON_KEY }}
+      - uses: actions/upload-artifact@v4
+        with: {name: android-production-validation, path: build/app/outputs/bundle/release/*.aab, retention-days: '${{ env.RETENTION_DAYS }}'}
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/android-signing"

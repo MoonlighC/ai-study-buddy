@@ -1,7 +1,43 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+data class ReleaseSigningValues(val storeFile: String, val keyAlias: String, val storePassword: String, val keyPassword: String)
+
+fun releaseSigningValues(): ReleaseSigningValues? {
+    val localFile = rootProject.file("key.properties")
+    val local = Properties().apply { if (localFile.exists()) localFile.inputStream().use(::load) }
+    val selected = System.getenv("RELEASE_SIGNING_SOURCE") ?: if (local.isNotEmpty()) "local" else "ci"
+    if (selected != "local" && selected != "ci") throw GradleException("Release signing source must be local or ci.")
+    val values = if (selected == "local") mapOf(
+        "keystorePath" to local.getProperty("storeFile", ""), "keyAlias" to local.getProperty("keyAlias", ""),
+        "storePassword" to local.getProperty("storePassword", ""), "keyPassword" to local.getProperty("keyPassword", ""),
+    ) else mapOf(
+        "keystorePath" to (System.getenv("ANDROID_KEYSTORE_PATH") ?: ""), "keyAlias" to (System.getenv("ANDROID_KEY_ALIAS") ?: ""),
+        "storePassword" to (System.getenv("ANDROID_STORE_PASSWORD") ?: ""), "keyPassword" to (System.getenv("ANDROID_KEY_PASSWORD") ?: ""),
+    )
+    if (values.values.any { it.isBlank() }) return null
+    return ReleaseSigningValues(values.getValue("keystorePath"), values.getValue("keyAlias"), values.getValue("storePassword"), values.getValue("keyPassword"))
+}
+
+val releaseSigning = releaseSigningValues()
+
+fun missingReleaseSigningFields(): List<String> {
+    val localFile = rootProject.file("key.properties")
+    val local = Properties().apply { if (localFile.exists()) localFile.inputStream().use(::load) }
+    val selected = System.getenv("RELEASE_SIGNING_SOURCE") ?: if (local.isNotEmpty()) "local" else "ci"
+    val values = if (selected == "local") mapOf(
+        "keystorePath" to local.getProperty("storeFile", ""), "keyAlias" to local.getProperty("keyAlias", ""),
+        "storePassword" to local.getProperty("storePassword", ""), "keyPassword" to local.getProperty("keyPassword", ""),
+    ) else mapOf(
+        "keystorePath" to (System.getenv("ANDROID_KEYSTORE_PATH") ?: ""), "keyAlias" to (System.getenv("ANDROID_KEY_ALIAS") ?: ""),
+        "storePassword" to (System.getenv("ANDROID_STORE_PASSWORD") ?: ""), "keyPassword" to (System.getenv("ANDROID_KEY_PASSWORD") ?: ""),
+    )
+    return values.filterValues { it.isBlank() }.keys.sorted()
 }
 
 android {
@@ -15,7 +51,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.moonlightc.aistudybuddy"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -25,12 +60,26 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        releaseSigning?.let { signing -> create("releaseUpload") {
+            storeFile = file(signing.storeFile)
+            keyAlias = signing.keyAlias
+            storePassword = signing.storePassword
+            keyPassword = signing.keyPassword
+        }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (releaseSigning != null) signingConfig = signingConfigs.getByName("releaseUpload")
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.name.contains("release", ignoreCase = true) } && releaseSigning == null) {
+        throw GradleException("Release signing configuration is incomplete. Missing fields: ${missingReleaseSigningFields().joinToString(", ")}.")
     }
 }
 

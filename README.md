@@ -30,3 +30,7 @@ Service-role, database, and OpenAI credentials must remain server-side.
 See [Phase 11.1 release foundation](docs/release-foundation-phase-11-1.md) for
 the environment matrix, platform identifiers, build commands, deployment
 checklists, and distribution limitations.
+
+See [Phase 11.2 release readiness](docs/release-readiness-phase-11-2.md) for
+structural signing validation, packaging, CI, store checklists, and release
+runbooks.

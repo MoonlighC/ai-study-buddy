@@ -74,3 +74,11 @@ release-artifacts/
 *.aab
 *.appx
 *.msix
+*.sha256
+checksums.txt
+build-manifest*.json
+*.xcdistributionlogs
+*.p8
+android/.ci-signing/
+**/temporary-signing/
+packaging-output/
