@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../core/models/subject.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../auth/auth_controller.dart';
@@ -29,9 +30,10 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
+    final l10n = context.l10n;
 
     return ResponsiveAppScaffold(
-      title: 'Add pasted text',
+      title: l10n.materialAddTitle,
       subtitle: widget.subject.name,
       showBack: true,
       body: ResponsiveContent(
@@ -57,8 +59,8 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
                     key: const ValueKey('material-title-field'),
                     controller: titleController,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Material title',
+                    decoration: InputDecoration(
+                      labelText: l10n.materialTitleLabel,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -67,10 +69,9 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
                     controller: contentController,
                     minLines: 8,
                     maxLines: 16,
-                    decoration: const InputDecoration(
-                      labelText: 'Paste lecture text',
-                      helperText:
-                          'Add enough readable study text for useful learning tools.',
+                    decoration: InputDecoration(
+                      labelText: l10n.materialPasteTextLabel,
+                      helperText: l10n.materialAddIntro,
                       alignLabelWithHint: true,
                     ),
                   ),
@@ -84,7 +85,9 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
                   : () => _saveMaterial(context),
               icon: const Icon(Icons.save_outlined),
               label: Text(
-                state.isCreatingMaterial ? 'Saving material' : 'Save material',
+                state.isCreatingMaterial
+                    ? l10n.materialSavingMaterial
+                    : l10n.materialSaveMaterial,
               ),
             ),
           ],
@@ -107,14 +110,14 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
     if (!saved) {
       final message =
           state.materialSyncErrorMessage ?? 'Could not save material.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.localizedSafeMessage(message))),
+      );
       return;
     }
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Material saved.')));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.materialSaved)));
     Navigator.pop(context);
   }
 }

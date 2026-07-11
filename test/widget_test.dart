@@ -71,7 +71,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Cell respiration notes'), findsOneWidget);
-    expect(find.text('Just now - pasted text'), findsOneWidget);
+    expect(find.text('Just now · Pasted text'), findsOneWidget);
 
     await tester.tap(find.text('Cell respiration notes'));
     await tester.pumpAndSettle();
@@ -509,7 +509,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(quizRepository.generatedMaterialIds, ['bio-lecture-1']);
-    expect(find.text('1 questions ready.'), findsOneWidget);
+    expect(find.text('1 question ready.'), findsOneWidget);
     expect(find.text('Take quiz'), findsOneWidget);
   });
 
@@ -1408,20 +1408,23 @@ void main() {
       await tester.pumpAndSettle();
       _expectChoiceSelected(tester, 'Deutsch');
 
-      await _scrollTo(tester, find.text('Default flashcard session size'));
+      await _scrollTo(
+        tester,
+        find.text('Standardgröße für Karteikarten-Sitzungen'),
+      );
       await tester.tap(find.widgetWithText(ChoiceChip, '10'));
       await tester.pumpAndSettle();
       _expectChoiceSelected(tester, '10');
 
-      await _scrollTo(tester, find.text('Daily study goal'));
-      await tester.tap(find.text('30 min'));
+      await _scrollTo(tester, find.text('Tägliches Lernziel'));
+      await tester.tap(find.text('30 Min.'));
       await tester.pumpAndSettle();
-      _expectChoiceSelected(tester, '30 min');
+      _expectChoiceSelected(tester, '30 Min.');
 
-      await _scrollTo(tester, find.text('Default difficulty'));
-      await tester.tap(find.text('exam'));
+      await _scrollTo(tester, find.text('Standard-Schwierigkeit'));
+      await tester.tap(find.text('Prüfung'));
       await tester.pumpAndSettle();
-      _expectChoiceSelected(tester, 'exam');
+      _expectChoiceSelected(tester, 'Prüfung');
 
       await _pushRoute(
         tester,
@@ -2019,7 +2022,7 @@ void main() {
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.subjects);
 
-    expect(find.text('Could not sync subjects.'), findsOneWidget);
+    expect(find.text('Could not sync subjects. Try again.'), findsOneWidget);
     expect(find.text('Your app is still usable.'), findsOneWidget);
   });
 
@@ -2097,8 +2100,9 @@ void main() {
     await _scrollTo(tester, find.text('Summaries'));
 
     expect(find.text('Summaries'), findsOneWidget);
+    expect(find.text('No summaries yet'), findsOneWidget);
     expect(
-      find.text('No summaries yet. Generate one from a material.'),
+      find.text('Generate a summary from a material and it will appear here.'),
       findsOneWidget,
     );
   });
@@ -2370,7 +2374,7 @@ void main() {
     await _pushRoute(tester, AppRoutes.subjectDetail, arguments: subject);
 
     expect(find.text('Cloud Biology'), findsWidgets);
-    expect(find.text('Could not sync materials.'), findsOneWidget);
+    expect(find.text('Could not sync materials. Try again.'), findsOneWidget);
     expect(find.text('No materials yet'), findsOneWidget);
   });
 

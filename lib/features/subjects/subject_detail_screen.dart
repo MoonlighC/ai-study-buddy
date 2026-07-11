@@ -9,6 +9,7 @@ import '../../core/models/material.dart';
 import '../../core/models/subject.dart';
 import '../../core/models/study_session.dart';
 import '../../core/models/weak_topic.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -34,10 +35,11 @@ class SubjectDetailScreen extends StatelessWidget {
         .toList();
     final subjectColor = safeSubjectColor(subject.colorValue);
     final eligibleMaterial = _firstEligibleStudyMaterial(state, materials);
+    final l10n = context.l10n;
 
     return ResponsiveAppScaffold(
       title: subject.name,
-      subtitle: 'Subject workspace',
+      subtitle: l10n.subjectWorkspaceSubtitle,
       showBack: true,
       activeRoute: null,
       subjectColor: subjectColor,
@@ -62,9 +64,8 @@ class SubjectDetailScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _SectionTitle(
-                        title: 'Materials',
-                        subtitle:
-                            '${materials.length} ${materials.length == 1 ? 'item' : 'items'} in this subject',
+                        title: l10n.subjectMaterials,
+                        subtitle: l10n.subjectItemsInSubject(materials.length),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       GlassSurface(
@@ -77,9 +78,9 @@ class SubjectDetailScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
-                      const _SectionTitle(
-                        title: 'Summaries',
-                        subtitle: 'Generated explanations from your materials',
+                      _SectionTitle(
+                        title: l10n.subjectSummaries,
+                        subtitle: l10n.subjectSummariesSubtitle,
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       GlassSurface(
@@ -143,9 +144,9 @@ class SubjectDetailScreen extends StatelessWidget {
     final message =
         AppStateScope.read(context).favoriteSyncErrorMessage ??
         'Could not update favorite.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
   }
 }
 
@@ -199,14 +200,13 @@ class _SubjectHero extends StatelessWidget {
               const SizedBox(height: AppSpacing.xxs),
               Text(
                 subject.description.isEmpty
-                    ? 'Your focused study space.'
+                    ? context.l10n.subjectsDefaultDescription
                     : subject.description,
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: AppSpacing.md),
               GlassStatusChip(
-                label:
-                    '$materialCount ${materialCount == 1 ? 'material' : 'materials'}',
+                label: context.l10n.materialsCount(materialCount),
                 icon: Icons.article_outlined,
                 color: color,
               ),
@@ -229,9 +229,9 @@ class _StudyActions extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionTitle(
-          title: 'Study actions',
-          subtitle: 'Build from notes in this subject',
+        _SectionTitle(
+          title: context.l10n.subjectStudyActions,
+          subtitle: context.l10n.subjectStudyActionsSubtitle,
         ),
         const SizedBox(height: AppSpacing.md),
         FilledButton.icon(
@@ -242,12 +242,12 @@ class _StudyActions extends StatelessWidget {
             arguments: subject,
           ),
           icon: const Icon(Icons.post_add_outlined),
-          label: const Text('Add pasted text'),
+          label: Text(context.l10n.subjectAddPastedText),
         ),
         const SizedBox(height: AppSpacing.xs),
         GlassButton(
           keyValue: const ValueKey('subject-create-study-session'),
-          label: 'Create study session',
+          label: context.l10n.subjectCreateStudySession,
           icon: Icons.school_outlined,
           onPressed: eligibleMaterial == null
               ? null
@@ -266,7 +266,7 @@ class _StudyActions extends StatelessWidget {
         ),
         if (eligibleMaterial == null) ...[
           const SizedBox(height: AppSpacing.xs),
-          const Text('Add a material to create a study session.'),
+          Text(context.l10n.subjectAddMaterialForSession),
         ],
       ],
     ),
@@ -283,9 +283,9 @@ class _UploadActions extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionTitle(
-          title: 'Upload materials',
-          subtitle: 'Private PDFs and images',
+        _SectionTitle(
+          title: context.l10n.subjectUploadMaterials,
+          subtitle: context.l10n.subjectUploadMaterialsSubtitle,
         ),
         const SizedBox(height: AppSpacing.md),
         OutlinedButton.icon(
@@ -299,7 +299,7 @@ class _UploadActions extends StatelessWidget {
             ),
           ),
           icon: const Icon(Icons.picture_as_pdf_outlined),
-          label: const Text('Upload PDF'),
+          label: Text(context.l10n.subjectUploadPdf),
         ),
         const SizedBox(height: AppSpacing.xs),
         OutlinedButton.icon(
@@ -313,7 +313,7 @@ class _UploadActions extends StatelessWidget {
             ),
           ),
           icon: const Icon(Icons.image_outlined),
-          label: const Text('Upload image'),
+          label: Text(context.l10n.subjectUploadImage),
         ),
       ],
     ),
@@ -330,9 +330,9 @@ class _FocusTopics extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle(
-          title: 'Focus topics',
-          subtitle: 'Cumulative misses from quizzes',
+        _SectionTitle(
+          title: context.l10n.homeFocusTopics,
+          subtitle: context.l10n.subjectFocusTopicsSubtitle,
         ),
         const SizedBox(height: AppSpacing.sm),
         for (final topic in topics)
@@ -343,9 +343,7 @@ class _FocusTopics extends StatelessWidget {
                 const Icon(Icons.flag_outlined, size: AppIconSizes.control),
                 const SizedBox(width: AppSpacing.xs),
                 Expanded(child: Text(topic.topic)),
-                Text(
-                  '${topic.missCount} ${topic.missCount == 1 ? 'miss' : 'misses'}',
-                ),
+                Text(context.l10n.missesCount(topic.missCount)),
               ],
             ),
           ),
@@ -370,26 +368,28 @@ class _MaterialsList extends StatelessWidget {
     return Column(
       children: [
         if (state.isLoadingMaterials)
-          const LoadingState(label: 'Loading synced materials'),
+          LoadingState(label: context.l10n.subjectLoadingMaterials),
         if (state.materialSyncErrorMessage != null)
           ErrorRetryState(
-            message: state.materialSyncErrorMessage!,
-            supportingText: 'Your subject is still usable.',
+            message: context.localizedSafeMessage(
+              state.materialSyncErrorMessage!,
+            ),
+            supportingText: context.l10n.subjectStillUsable,
             onRetry: state.isLoadingMaterials
                 ? null
                 : () => state.loadMaterialsFor(AuthScope.read(context).user),
           ),
         if (!state.isLoadingMaterials && materials.isEmpty)
-          const EmptyState(
-            title: 'No materials yet',
-            message: 'Add pasted text or upload a file to begin.',
+          EmptyState(
+            title: context.l10n.subjectNoMaterialsTitle,
+            message: context.l10n.subjectNoMaterialsMessage,
             icon: Icons.article_outlined,
           )
         else
           for (var index = 0; index < materials.length; index++)
             AppListRow(
               title: Text(materials[index].title),
-              subtitle: Text(_materialSubtitle(materials[index])),
+              subtitle: Text(_materialSubtitle(context, materials[index])),
               leading: Icon(
                 _materialIcon(materials[index]),
                 color: Theme.of(context).colorScheme.primary,
@@ -399,8 +399,8 @@ class _MaterialsList extends StatelessWidget {
                 children: [
                   IconButton(
                     tooltip: state.isMaterialFavorite(materials[index].id)
-                        ? 'Unfavorite material'
-                        : 'Favorite material',
+                        ? context.l10n.subjectUnfavoriteMaterialTooltip
+                        : context.l10n.subjectFavoriteMaterialTooltip,
                     onPressed: state.isUpdatingMaterialFavorite
                         ? null
                         : () => onToggleFavorite(materials[index].id),
@@ -433,9 +433,9 @@ class _SummariesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (materials.isEmpty) {
-      return const EmptyState(
-        title: 'No summaries yet',
-        message: 'No summaries yet. Generate one from a material.',
+      return EmptyState(
+        title: context.l10n.subjectNoSummariesTitle,
+        message: context.l10n.subjectNoSummariesMessage,
         icon: Icons.notes_outlined,
       );
     }
@@ -489,17 +489,20 @@ IconData _materialIcon(StudyMaterial material) => switch (material.kind) {
   MaterialKind.pastedText => Icons.article_outlined,
 };
 
-String _materialSubtitle(StudyMaterial material) {
+String _materialSubtitle(BuildContext context, StudyMaterial material) {
+  final l10n = context.l10n;
   if (material.sourceKind != MaterialSourceKind.upload) {
-    return '${material.createdLabel} - pasted text';
+    return '${material.createdLabel} · ${l10n.materialPastedTextKind}';
   }
-  final type = material.kind == MaterialKind.pdf ? 'PDF' : 'Image';
+  final type = material.kind == MaterialKind.pdf
+      ? l10n.uploadPdfKind
+      : l10n.uploadImageKind;
   final size = material.fileSizeBytes == null
-      ? 'Unknown size'
+      ? l10n.materialUnknownSize
       : formatFileSize(material.fileSizeBytes!);
   final status = material.processingStatus == MaterialProcessingStatus.pending
-      ? 'Uploaded · Waiting for processing'
-      : 'Uploaded';
+      ? '${l10n.materialUploadedStatus} · ${l10n.materialWaitingForProcessing}'
+      : l10n.materialUploadedStatus;
   return '$type · $size · $status';
 }
 

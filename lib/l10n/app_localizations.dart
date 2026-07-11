@@ -166,6 +166,24 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get actionRetry;
 
+  /// Common destructive delete action.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get actionDelete;
+
+  /// Expands collapsed text.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get actionShowMore;
+
+  /// Collapses expanded text.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get actionShowLess;
+
   /// Generic loading state text.
   ///
   /// In en, this message translates to:
@@ -177,6 +195,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error'**
   String get statusError;
+
+  /// Email field or account label.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get commonEmail;
+
+  /// Name field or profile label.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get commonName;
+
+  /// Password field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get commonPassword;
+
+  /// Fallback label when a value is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get commonUnknown;
+
+  /// Generic status label.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get commonStatus;
+
+  /// Accessibility label for error messages.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get commonErrorSemantics;
+
+  /// Accessibility label for non-error status messages.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get commonStatusSemantics;
+
+  /// Supporting text shown when a non-blocking sync error occurs.
+  ///
+  /// In en, this message translates to:
+  /// **'Your app is still usable.'**
+  String get commonAppStillUsable;
 
   /// Settings screen title.
   ///
@@ -226,11 +292,125 @@ abstract class AppLocalizations {
   /// **'Русский'**
   String get languageRussian;
 
+  /// Short settings screen intro for mock/local prototype mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Mock preferences for the local prototype.'**
+  String get settingsIntro;
+
+  /// Settings account section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get settingsAccountTitle;
+
+  /// Subtitle for a Supabase-backed account.
+  ///
+  /// In en, this message translates to:
+  /// **'Supabase account'**
+  String get settingsSupabaseAccount;
+
+  /// Subtitle for the local mock account profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Local mock profile'**
+  String get settingsLocalMockProfile;
+
+  /// Action to edit the account display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit name'**
+  String get settingsEditName;
+
+  /// Action that signs the user out.
+  ///
+  /// In en, this message translates to:
+  /// **'Log out'**
+  String get settingsLogOut;
+
+  /// Settings section for local study preferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Study Preferences'**
+  String get settingsStudyPreferencesTitle;
+
+  /// Explains local-only preference storage.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored in local AppState only'**
+  String get settingsStudyPreferencesSubtitle;
+
+  /// Preference label for default flashcard count.
+  ///
+  /// In en, this message translates to:
+  /// **'Default flashcard session size'**
+  String get settingsDefaultFlashcardSessionSize;
+
+  /// Preference label for daily study minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily study goal'**
+  String get settingsDailyStudyGoal;
+
+  /// Preference label for default study difficulty.
+  ///
+  /// In en, this message translates to:
+  /// **'Default difficulty'**
+  String get settingsDefaultDifficulty;
+
+  /// Difficulty preference option.
+  ///
+  /// In en, this message translates to:
+  /// **'easy'**
+  String get settingsDifficultyEasy;
+
+  /// Difficulty preference option.
+  ///
+  /// In en, this message translates to:
+  /// **'medium'**
+  String get settingsDifficultyMedium;
+
+  /// Difficulty preference option.
+  ///
+  /// In en, this message translates to:
+  /// **'exam'**
+  String get settingsDifficultyExam;
+
+  /// Short minute label for settings chips.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String settingsMinutesShort(int minutes);
+
+  /// Settings app preferences section title.
+  ///
+  /// In en, this message translates to:
+  /// **'App preferences'**
+  String get settingsAppPreferencesTitle;
+
+  /// Subtitle for future appearance settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance options are planned'**
+  String get settingsAppearancePlanned;
+
+  /// Appearance setting row title.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearance;
+
   /// Settings placeholder explaining that dark mode is not implemented.
   ///
   /// In en, this message translates to:
   /// **'Dark mode is not available yet.'**
   String get settingsAppearanceUnavailable;
+
+  /// Settings section linking to usage screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage & Limits'**
+  String get settingsUsageTitle;
 
   /// Settings placeholder explaining that usage tracking is not connected.
   ///
@@ -238,17 +418,1697 @@ abstract class AppLocalizations {
   /// **'Usage tracking is not connected'**
   String get settingsUsageUnavailable;
 
+  /// Settings action for opening usage screen.
+  ///
+  /// In en, this message translates to:
+  /// **'View usage information'**
+  String get settingsViewUsage;
+
+  /// Settings row subtitle for planned usage limits.
+  ///
+  /// In en, this message translates to:
+  /// **'Limits and enforcement are planned.'**
+  String get settingsUsagePlanned;
+
+  /// Settings support section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Support'**
+  String get settingsSupportTitle;
+
+  /// Explains support integrations are unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No email or network integration yet'**
+  String get settingsSupportSubtitle;
+
+  /// Disabled support placeholder action.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a bug placeholder'**
+  String get settingsReportBugPlaceholder;
+
+  /// Disabled support placeholder action.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact support placeholder'**
+  String get settingsContactSupportPlaceholder;
+
+  /// Disabled support placeholder action.
+  ///
+  /// In en, this message translates to:
+  /// **'Send feedback placeholder'**
+  String get settingsSendFeedbackPlaceholder;
+
+  /// Settings diagnostics section title.
+  ///
+  /// In en, this message translates to:
+  /// **'About / Debug'**
+  String get settingsAboutDebugTitle;
+
+  /// Settings diagnostics section subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Prototype diagnostics'**
+  String get settingsAboutDebugSubtitle;
+
+  /// Diagnostics label for backend mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Backend mode'**
+  String get settingsBackendMode;
+
+  /// Diagnostics label for security note.
+  ///
+  /// In en, this message translates to:
+  /// **'Security note'**
+  String get settingsSecurityNote;
+
+  /// Diagnostics value explaining secrets are not stored in Flutter.
+  ///
+  /// In en, this message translates to:
+  /// **'No server secrets or OpenAI key in Flutter.'**
+  String get settingsSecurityNoteValue;
+
   /// Short placeholder for features planned for a later phase.
   ///
   /// In en, this message translates to:
   /// **'Coming later'**
   String get comingLater;
 
+  /// Login screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome back'**
+  String get authWelcomeBackTitle;
+
+  /// Login screen subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn lecture material into focused study sessions.'**
+  String get authWelcomeBackSubtitle;
+
+  /// Signup screen title and action.
+  ///
+  /// In en, this message translates to:
+  /// **'Create account'**
+  String get authCreateAccountTitle;
+
+  /// Signup screen subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up your study profile.'**
+  String get authCreateAccountSubtitle;
+
+  /// Login action.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in'**
+  String get authLogIn;
+
+  /// Password reset action.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot password?'**
+  String get authForgotPassword;
+
+  /// Mock mode email continue action.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with email'**
+  String get authContinueWithEmail;
+
+  /// Disabled Google auth placeholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Google coming later'**
+  String get authGoogleComingLater;
+
+  /// Disabled Apple auth placeholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Apple coming later'**
+  String get authAppleComingLater;
+
+  /// Confirm password field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm password'**
+  String get authConfirmPassword;
+
+  /// Signup action returning to login.
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account? Log in'**
+  String get authAlreadyHaveAccount;
+
+  /// Password visibility tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get authShowPassword;
+
+  /// Password visibility tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get authHidePassword;
+
+  /// Auth gate loading message.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing your study space'**
+  String get authPreparingStudySpace;
+
+  /// Password reset notice.
+  ///
+  /// In en, this message translates to:
+  /// **'If an account exists for {email}, a reset email is on the way.'**
+  String authResetNotice(String email);
+
+  /// Signup confirmation notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your email to confirm your account, then log in.'**
+  String get authCheckEmailNotice;
+
+  /// Dashboard app shell subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your calm place to learn'**
+  String get homeSubtitle;
+
+  /// Dashboard section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent materials'**
+  String get homeRecentMaterials;
+
+  /// Dashboard action linking to subjects.
+  ///
+  /// In en, this message translates to:
+  /// **'View subjects'**
+  String get homeViewSubjects;
+
+  /// Dashboard empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No materials yet'**
+  String get homeNoMaterialsTitle;
+
+  /// Dashboard empty state message.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a subject and add your first study material.'**
+  String get homeNoMaterialsMessage;
+
+  /// Dashboard subjects section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Your subjects'**
+  String get homeYourSubjects;
+
+  /// Dashboard subject empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'Create your first subject'**
+  String get homeCreateFirstSubject;
+
+  /// Dashboard subject empty state message.
+  ///
+  /// In en, this message translates to:
+  /// **'Subjects keep materials and study tools together.'**
+  String get homeCreateFirstSubjectMessage;
+
+  /// Dashboard hero status chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Study workspace'**
+  String get homeStudyWorkspace;
+
+  /// Dashboard hero headline.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready for your next study step?'**
+  String get homeHeroTitle;
+
+  /// Dashboard hero copy when materials exist.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with a recent material or choose a focused study action.'**
+  String get homeHeroWithMaterials;
+
+  /// Dashboard hero copy when no materials exist.
+  ///
+  /// In en, this message translates to:
+  /// **'Add study material to a subject, then build summaries, flashcards, and quizzes.'**
+  String get homeHeroWithoutMaterials;
+
+  /// Dashboard hero action when no subjects exist.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a subject'**
+  String get homeCreateSubject;
+
+  /// Dashboard hero action when subjects exist.
+  ///
+  /// In en, this message translates to:
+  /// **'Open subjects'**
+  String get homeOpenSubjects;
+
+  /// Visible button for deferred After Lecture route.
+  ///
+  /// In en, this message translates to:
+  /// **'After Lecture'**
+  String get homeAfterLecture;
+
+  /// Dashboard latest progress section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest progress'**
+  String get homeLatestProgress;
+
+  /// Dashboard empty progress title.
+  ///
+  /// In en, this message translates to:
+  /// **'No quiz attempts yet'**
+  String get homeNoQuizAttemptsTitle;
+
+  /// Dashboard empty progress message.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete a quiz to see your latest result.'**
+  String get homeNoQuizAttemptsMessage;
+
+  /// Quiz result count.
+  ///
+  /// In en, this message translates to:
+  /// **'{correct} of {total} correct'**
+  String homeCorrectCount(int correct, int total);
+
+  /// Dashboard focus topics section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus topics'**
+  String get homeFocusTopics;
+
+  /// Dashboard empty focus topics text.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete quizzes to reveal topics worth revisiting.'**
+  String get homeFocusTopicsEmpty;
+
+  /// Subject plus miss count.
+  ///
+  /// In en, this message translates to:
+  /// **'{subject} · {count, plural, one {1 miss} other {{count} misses}}'**
+  String homeMissesWithSubject(String subject, int count);
+
+  /// Dashboard quick actions section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick actions'**
+  String get homeQuickActions;
+
+  /// Visible button for deferred Exam Prep route.
+  ///
+  /// In en, this message translates to:
+  /// **'Prepare for Exam'**
+  String get homePrepareForExam;
+
+  /// Visible button for deferred Continue Studying route.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue Studying'**
+  String get homeContinueStudying;
+
+  /// Subjects screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Subjects'**
+  String get subjectsTitle;
+
+  /// Subjects screen subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Study workspace'**
+  String get subjectsSubtitle;
+
+  /// Subjects loading state.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading synced subjects'**
+  String get subjectsLoading;
+
+  /// Supporting text when synced subjects cannot refresh but cached subjects are visible.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the subjects currently available.'**
+  String get subjectsShowingAvailable;
+
+  /// Subjects empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No subjects yet'**
+  String get subjectsNoSubjectsTitle;
+
+  /// Subjects empty state message.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a subject to group your materials, summaries, flashcards, and quizzes.'**
+  String get subjectsNoSubjectsMessage;
+
+  /// Create subject action.
+  ///
+  /// In en, this message translates to:
+  /// **'Create subject'**
+  String get subjectsCreateSubject;
+
+  /// Create subject busy label.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating subject'**
+  String get subjectsCreatingSubject;
+
+  /// Subjects screen hero heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Your subjects'**
+  String get subjectsHeaderTitle;
+
+  /// Subjects screen hero explanatory copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Create focused spaces for lecture notes, summaries, quizzes, and exam prep.'**
+  String get subjectsHeaderMessage;
+
+  /// Fallback shown when a subject has no user-entered description.
+  ///
+  /// In en, this message translates to:
+  /// **'No description yet'**
+  String get subjectsNoDescription;
+
+  /// Visible button for deferred Exam Prep route.
+  ///
+  /// In en, this message translates to:
+  /// **'Exam Prep'**
+  String get subjectsExamPrep;
+
+  /// Accessibility label for opening a subject.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {subject}'**
+  String subjectsOpenSubject(String subject);
+
+  /// Create subject dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Create subject'**
+  String get subjectsCreateDialogTitle;
+
+  /// Subject name field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject name'**
+  String get subjectsNameLabel;
+
+  /// Subject name field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Biology, math, history...'**
+  String get subjectsNameHint;
+
+  /// Subject description field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get subjectsDescriptionLabel;
+
+  /// Subject color picker label.
+  ///
+  /// In en, this message translates to:
+  /// **'Color'**
+  String get subjectsColor;
+
+  /// Subject color picker option.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue'**
+  String get colorBlue;
+
+  /// Subject color picker option.
+  ///
+  /// In en, this message translates to:
+  /// **'Green'**
+  String get colorGreen;
+
+  /// Subject color picker option.
+  ///
+  /// In en, this message translates to:
+  /// **'Pink'**
+  String get colorPink;
+
+  /// Subject color picker option.
+  ///
+  /// In en, this message translates to:
+  /// **'Amber'**
+  String get colorAmber;
+
+  /// Accessibility label for a subject color choice.
+  ///
+  /// In en, this message translates to:
+  /// **'{color} subject color'**
+  String subjectsColorSemantics(String color);
+
+  /// Fallback description for a new subject.
+  ///
+  /// In en, this message translates to:
+  /// **'Study materials and practice for this subject.'**
+  String get subjectsDefaultDescription;
+
+  /// Material count label.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0 {0 materials} one {1 material} other {{count} materials}}'**
+  String materialsCount(int count);
+
+  /// Subject detail materials section count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0 {0 items in this subject} one {1 item in this subject} other {{count} items in this subject}}'**
+  String subjectItemsInSubject(int count);
+
+  /// Summary count label.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0 {0 summaries} one {1 summary} other {{count} summaries}}'**
+  String summariesCount(int count);
+
+  /// Subject detail subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject workspace'**
+  String get subjectWorkspaceSubtitle;
+
+  /// Materials section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials'**
+  String get subjectMaterials;
+
+  /// Summaries section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Summaries'**
+  String get subjectSummaries;
+
+  /// Summaries section subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated explanations from your materials'**
+  String get subjectSummariesSubtitle;
+
+  /// Subject detail study actions section.
+  ///
+  /// In en, this message translates to:
+  /// **'Study actions'**
+  String get subjectStudyActions;
+
+  /// Study actions section subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Build from notes in this subject'**
+  String get subjectStudyActionsSubtitle;
+
+  /// Action to add pasted text material.
+  ///
+  /// In en, this message translates to:
+  /// **'Add pasted text'**
+  String get subjectAddPastedText;
+
+  /// Action to create a study session.
+  ///
+  /// In en, this message translates to:
+  /// **'Create study session'**
+  String get subjectCreateStudySession;
+
+  /// Helper text when study sessions are unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a material to create a study session.'**
+  String get subjectAddMaterialForSession;
+
+  /// Upload section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload materials'**
+  String get subjectUploadMaterials;
+
+  /// Upload section subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Private PDFs and images'**
+  String get subjectUploadMaterialsSubtitle;
+
+  /// Upload PDF action.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload PDF'**
+  String get subjectUploadPdf;
+
+  /// Upload image action.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload image'**
+  String get subjectUploadImage;
+
+  /// Focus topics section subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cumulative misses from quizzes'**
+  String get subjectFocusTopicsSubtitle;
+
+  /// Quiz miss count without a subject prefix.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 miss} other {{count} misses}}'**
+  String missesCount(int count);
+
+  /// Subject materials loading text.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading synced materials'**
+  String get subjectLoadingMaterials;
+
+  /// Supporting text when a subject detail sync error is non-blocking.
+  ///
+  /// In en, this message translates to:
+  /// **'Your subject is still usable.'**
+  String get subjectStillUsable;
+
+  /// Subject materials empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No materials yet'**
+  String get subjectNoMaterialsTitle;
+
+  /// Subject materials empty message.
+  ///
+  /// In en, this message translates to:
+  /// **'Add pasted text or upload a file to start studying.'**
+  String get subjectNoMaterialsMessage;
+
+  /// Subject summaries empty title.
+  ///
+  /// In en, this message translates to:
+  /// **'No summaries yet'**
+  String get subjectNoSummariesTitle;
+
+  /// Subject summaries empty message.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate a summary from a material and it will appear here.'**
+  String get subjectNoSummariesMessage;
+
+  /// Tooltip to favorite a material.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite material'**
+  String get subjectFavoriteMaterialTooltip;
+
+  /// Tooltip to remove a material favorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfavorite material'**
+  String get subjectUnfavoriteMaterialTooltip;
+
+  /// Pasted-text entry screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Add pasted text'**
+  String get materialAddTitle;
+
+  /// Pasted text entry guidance.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste notes, transcripts, or textbook excerpts. Keep the original source language.'**
+  String get materialAddIntro;
+
+  /// Material title field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Material title'**
+  String get materialTitleLabel;
+
+  /// Pasted material text field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste lecture text'**
+  String get materialPasteTextLabel;
+
+  /// Material kind label for user-entered pasted text.
+  ///
+  /// In en, this message translates to:
+  /// **'Pasted text'**
+  String get materialPastedTextKind;
+
+  /// Uploaded material status label.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploaded'**
+  String get materialUploadedStatus;
+
+  /// Uploaded material status while processing has not started.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for processing'**
+  String get materialWaitingForProcessing;
+
+  /// Fallback file size label.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown size'**
+  String get materialUnknownSize;
+
+  /// Save pasted material action.
+  ///
+  /// In en, this message translates to:
+  /// **'Save material'**
+  String get materialSaveMaterial;
+
+  /// Busy label while saving material.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving material'**
+  String get materialSavingMaterial;
+
+  /// Snackbar after saving material.
+  ///
+  /// In en, this message translates to:
+  /// **'Material saved.'**
+  String get materialSaved;
+
+  /// Snackbar after uploading material.
+  ///
+  /// In en, this message translates to:
+  /// **'Material uploaded.'**
+  String get materialUploaded;
+
+  /// Upload PDF screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload PDF'**
+  String get uploadPdfTitle;
+
+  /// Upload image screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload image'**
+  String get uploadImageTitle;
+
+  /// PDF upload guidance.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF files up to 10 MiB.'**
+  String get uploadPdfGuidance;
+
+  /// Image upload guidance.
+  ///
+  /// In en, this message translates to:
+  /// **'PNG, JPG, JPEG, or WEBP images up to 8 MiB.'**
+  String get uploadImageGuidance;
+
+  /// Choose PDF file action.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose PDF'**
+  String get uploadChoosePdf;
+
+  /// Choose image file action.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose image'**
+  String get uploadChooseImage;
+
+  /// PDF file kind label.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF'**
+  String get uploadPdfKind;
+
+  /// Image file kind label.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get uploadImageKind;
+
+  /// Upload selected material action.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload material'**
+  String get uploadMaterial;
+
+  /// Upload busy status.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading material'**
+  String get uploadingMaterial;
+
+  /// Favorites screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites'**
+  String get favoritesTitle;
+
+  /// Favorites screen subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Study only favorites'**
+  String get favoritesSubtitle;
+
+  /// Favorite materials group title.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials'**
+  String get favoritesMaterials;
+
+  /// Favorite flashcards group title.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards'**
+  String get favoritesFlashcards;
+
+  /// Favorites loading title.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading synced favorites'**
+  String get favoritesLoading;
+
+  /// Favorites sync error supporting text.
+  ///
+  /// In en, this message translates to:
+  /// **'Your app is still usable.'**
+  String get favoritesStillUsable;
+
+  /// Favorites empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorites yet'**
+  String get favoritesNoFavoritesTitle;
+
+  /// Favorites empty state message.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark materials or flashcards as favorites to find them here.'**
+  String get favoritesNoFavoritesMessage;
+
+  /// Tooltip/action to remove a flashcard favorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfavorite'**
+  String get favoritesUnfavorite;
+
+  /// Tooltip/action to remove a material favorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfavorite material'**
+  String get favoritesUnfavoriteMaterial;
+
+  /// Search screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchTitle;
+
+  /// Search field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Search study workspace'**
+  String get searchFieldLabel;
+
+  /// Search clear tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get searchClear;
+
+  /// Initial search empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'Start typing to search'**
+  String get searchStartTitle;
+
+  /// Initial search empty state message.
+  ///
+  /// In en, this message translates to:
+  /// **'Find subjects, materials, summaries, and flashcards.'**
+  String get searchStartMessage;
+
+  /// Search no results title.
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get searchNoResultsTitle;
+
+  /// Search no results message.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another word or add more study material.'**
+  String get searchNoResultsMessage;
+
+  /// Search group heading for subjects.
+  ///
+  /// In en, this message translates to:
+  /// **'Subjects ({count})'**
+  String searchSubjectsGroup(int count);
+
+  /// Search group heading for materials.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials ({count})'**
+  String searchMaterialsGroup(int count);
+
+  /// Search group heading for flashcards.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards ({count})'**
+  String searchFlashcardsGroup(int count);
+
+  /// Usage screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage'**
+  String get usageTitle;
+
+  /// Usage empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage tracking is not connected yet'**
+  String get usageUnavailableTitle;
+
+  /// Usage empty state message.
+  ///
+  /// In en, this message translates to:
+  /// **'This prototype does not show token counts, quotas, or billing data.'**
+  String get usageUnavailableMessage;
+
+  /// Material detail screen title.
+  ///
+  /// In en, this message translates to:
+  /// **'Material'**
+  String get materialDetailTitle;
+
+  /// Busy status while deleting a material.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting material'**
+  String get materialDeletingTitle;
+
+  /// Delete progress explanatory text.
+  ///
+  /// In en, this message translates to:
+  /// **'Removing the source and material-specific study content.'**
+  String get materialDeletingMessage;
+
+  /// Busy status while AI content is generated.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating study content'**
+  String get materialGeneratingStudyContentTitle;
+
+  /// AI generation progress explanatory text.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating material-scoped learning content…'**
+  String get materialGeneratingStudyContentMessage;
+
+  /// Warning title for partial extraction results.
+  ///
+  /// In en, this message translates to:
+  /// **'Partial result'**
+  String get materialPartialResultTitle;
+
+  /// Warning text for partial scanned PDF OCR.
+  ///
+  /// In en, this message translates to:
+  /// **'Some pages could not be read. Available study text can still be used.'**
+  String get materialPartialScannedMessage;
+
+  /// File metadata section title.
+  ///
+  /// In en, this message translates to:
+  /// **'File metadata'**
+  String get materialFileMetadataTitle;
+
+  /// Filename metadata label.
+  ///
+  /// In en, this message translates to:
+  /// **'Filename'**
+  String get materialFilenameLabel;
+
+  /// File type metadata label.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get materialTypeLabel;
+
+  /// File size metadata label.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get materialSizeLabel;
+
+  /// MIME type metadata label.
+  ///
+  /// In en, this message translates to:
+  /// **'MIME'**
+  String get materialMimeLabel;
+
+  /// Material status metadata label.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get materialStatusLabel;
+
+  /// Created metadata label.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get materialCreatedLabel;
+
+  /// Summary section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get materialSummaryTitle;
+
+  /// Flashcards section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards'**
+  String get materialFlashcardsTitle;
+
+  /// Quiz section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiz'**
+  String get materialQuizTitle;
+
+  /// Study session action section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Study session'**
+  String get materialStudySessionTitle;
+
+  /// Destructive confirmation dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete material?'**
+  String get materialDeleteDialogTitle;
+
+  /// Destructive action confirming material deletion.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete material'**
+  String get materialDeleteMaterial;
+
+  /// Snackbar after material deletion.
+  ///
+  /// In en, this message translates to:
+  /// **'Material deleted.'**
+  String get materialDeleted;
+
+  /// Delete dialog heading for deleted items.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed:'**
+  String get materialDeleteRemoved;
+
+  /// Delete dialog heading for retained items.
+  ///
+  /// In en, this message translates to:
+  /// **'Preserved:'**
+  String get materialDeletePreserved;
+
+  /// Delete dialog item.
+  ///
+  /// In en, this message translates to:
+  /// **'Source material'**
+  String get materialDeleteSourceMaterial;
+
+  /// Delete dialog item.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploaded file, if present'**
+  String get materialDeleteUploadedFile;
+
+  /// Delete dialog item.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get materialDeleteSummary;
+
+  /// Delete dialog item.
+  ///
+  /// In en, this message translates to:
+  /// **'Material-specific flashcards'**
+  String get materialDeleteFlashcards;
+
+  /// Delete dialog item.
+  ///
+  /// In en, this message translates to:
+  /// **'Material-specific quizzes'**
+  String get materialDeleteQuizzes;
+
+  /// Delete dialog preserved item.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed quiz results'**
+  String get materialDeleteQuizResults;
+
+  /// Delete dialog preserved item.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress history'**
+  String get materialDeleteProgressHistory;
+
+  /// Delete dialog preserved item.
+  ///
+  /// In en, this message translates to:
+  /// **'Cumulative weak topics'**
+  String get materialDeleteWeakTopics;
+
+  /// Delete dialog preserved item.
+  ///
+  /// In en, this message translates to:
+  /// **'Study history'**
+  String get materialDeleteStudyHistory;
+
+  /// Material ready status after text extraction.
+  ///
+  /// In en, this message translates to:
+  /// **'Text extracted'**
+  String get materialTextExtracted;
+
+  /// Material ready status after OCR extraction.
+  ///
+  /// In en, this message translates to:
+  /// **'Text extracted with OCR'**
+  String get materialTextExtractedWithOcr;
+
+  /// Processed pages out of total pages.
+  ///
+  /// In en, this message translates to:
+  /// **'{processed}/{total} pages'**
+  String materialPagesProgress(int processed, int total);
+
+  /// Material page count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 page} other {{count} pages}}'**
+  String materialPagesCount(int count);
+
+  /// Material processing status.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing'**
+  String get materialProcessingStatus;
+
+  /// Material failed status.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get materialFailedStatus;
+
+  /// Material processing panel title.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing material'**
+  String get materialProcessingTitle;
+
+  /// Recovery panel title for stuck processing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing appears to be stuck'**
+  String get materialStuckTitle;
+
+  /// Recovery panel text for stuck processing.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset this material and try processing again.'**
+  String get materialStuckMessage;
+
+  /// Recovery action label.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset and try again'**
+  String get materialResetTryAgain;
+
+  /// Image extraction failure title.
+  ///
+  /// In en, this message translates to:
+  /// **'Image text extraction failed'**
+  String get imageExtractionFailedTitle;
+
+  /// Image extraction section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Image text extraction'**
+  String get imageExtractionTitle;
+
+  /// Image OCR loading text.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading image text…'**
+  String get imageReadingText;
+
+  /// Image extraction helper text.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract readable study text from this image.'**
+  String get imageExtractHelper;
+
+  /// Retry image OCR action.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry image text extraction'**
+  String get imageRetryExtraction;
+
+  /// Start image OCR action.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract text from image'**
+  String get imageExtractText;
+
+  /// PDF OCR mixed-document title.
+  ///
+  /// In en, this message translates to:
+  /// **'Some pages need OCR'**
+  String get pdfSomePagesNeedOcr;
+
+  /// PDF needs OCR title.
+  ///
+  /// In en, this message translates to:
+  /// **'No usable selectable text was found'**
+  String get pdfNoSelectableText;
+
+  /// Scanned PDF OCR loading text.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading scanned PDF pages…'**
+  String get pdfReadingScannedPages;
+
+  /// PDF pages requiring OCR.
+  ///
+  /// In en, this message translates to:
+  /// **'{candidateCount} of {pageCount} pages require OCR.'**
+  String pdfRequiresOcrCount(int candidateCount, int pageCount);
+
+  /// PDF requires OCR helper text.
+  ///
+  /// In en, this message translates to:
+  /// **'This PDF requires OCR before its study tools are available.'**
+  String get pdfRequiresOcrMessage;
+
+  /// Start PDF OCR action.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan PDF with OCR'**
+  String get pdfScanWithOcr;
+
+  /// PDF text extraction failure title.
+  ///
+  /// In en, this message translates to:
+  /// **'Text extraction failed'**
+  String get pdfTextExtractionFailedTitle;
+
+  /// PDF text extraction section title.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF text extraction'**
+  String get pdfTextExtractionTitle;
+
+  /// PDF text extraction loading text.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracting selectable text…'**
+  String get pdfExtractingSelectable;
+
+  /// PDF extraction generic failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not extract text. Try again.'**
+  String get pdfCouldNotExtract;
+
+  /// PDF extraction helper text.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract selectable text from this PDF.'**
+  String get pdfExtractHelper;
+
+  /// Retry PDF extraction action.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry text extraction'**
+  String get pdfRetryTextExtraction;
+
+  /// Start PDF extraction action.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract text'**
+  String get pdfExtractText;
+
+  /// PDF OCR confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan PDF with OCR?'**
+  String get pdfScanDialogTitle;
+
+  /// PDF OCR confirmation text.
+  ///
+  /// In en, this message translates to:
+  /// **'This PDF has {pageCount} pages. {candidateCount} pages require OCR.\n\nThis version supports up to 10 total pages. AI OCR can take longer and uses paid processing.'**
+  String pdfScanDialogMessage(int pageCount, int candidateCount);
+
+  /// Confirm PDF OCR action.
+  ///
+  /// In en, this message translates to:
+  /// **'Start OCR'**
+  String get pdfStartOcr;
+
+  /// Summary empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'No summary yet.'**
+  String get summaryNoSummary;
+
+  /// Regenerate summary action.
+  ///
+  /// In en, this message translates to:
+  /// **'Regenerate summary'**
+  String get summaryRegenerate;
+
+  /// Generate AI summary action.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize with AI'**
+  String get summaryWithAi;
+
+  /// Generate mock summary action.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate mock summary'**
+  String get summaryGenerateMock;
+
+  /// Summary generation busy label.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating summary'**
+  String get summaryGenerating;
+
+  /// Flashcard count ready label.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 flashcard ready.} other {{count} flashcards ready.}}'**
+  String flashcardsReady(int count);
+
+  /// Flashcards empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'No flashcards yet.'**
+  String get flashcardsNoFlashcards;
+
+  /// Flashcards too-short helper.
+  ///
+  /// In en, this message translates to:
+  /// **'Add more lecture text before generating flashcards.'**
+  String get flashcardsTooShort;
+
+  /// Start flashcard training action.
+  ///
+  /// In en, this message translates to:
+  /// **'Start training'**
+  String get flashcardsStartTraining;
+
+  /// Open flashcards action.
+  ///
+  /// In en, this message translates to:
+  /// **'Review these flashcards'**
+  String get flashcardsReviewThese;
+
+  /// Generate flashcards action.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate flashcards'**
+  String get flashcardsGenerate;
+
+  /// Flashcards generation busy label.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating flashcards'**
+  String get flashcardsGenerating;
+
+  /// Snackbar when generation creates no unique flashcards.
+  ///
+  /// In en, this message translates to:
+  /// **'No new unique flashcards were generated.'**
+  String get flashcardsNoNewGenerated;
+
+  /// Snackbar after new flashcards are generated.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 new flashcard generated.} other {{count} new flashcards generated.}}'**
+  String flashcardsNewGenerated(int count);
+
+  /// Quiz question count ready label.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {1 question ready.} other {{count} questions ready.}}'**
+  String quizQuestionsReady(int count);
+
+  /// Quiz empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'No quiz yet.'**
+  String get quizNoQuiz;
+
+  /// Start quiz action.
+  ///
+  /// In en, this message translates to:
+  /// **'Take quiz'**
+  String get quizTakeQuiz;
+
+  /// Generate quiz action.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate quiz'**
+  String get quizGenerate;
+
+  /// Generate mock quiz action.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate mock quiz'**
+  String get quizGenerateMock;
+
+  /// Quiz generation busy label.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating quiz'**
+  String get quizGenerating;
+
   /// Generic localized fallback for safe errors when no specific mapping exists.
   ///
   /// In en, this message translates to:
   /// **'Something went wrong. Please try again.'**
   String get genericLocalizedError;
+
+  /// Validation error for empty name.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your name.'**
+  String get errorEnterName;
+
+  /// Validation error for invalid email.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address.'**
+  String get errorEnterValidEmail;
+
+  /// Validation error for a short password.
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at least 6 characters.'**
+  String get errorPasswordTooShort;
+
+  /// Validation error for missing password confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your password.'**
+  String get errorConfirmPassword;
+
+  /// Validation error for password mismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match.'**
+  String get errorPasswordsDoNotMatch;
+
+  /// Auth error for profile editing.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to edit your profile.'**
+  String get errorLoginToEditProfile;
+
+  /// Friendly signup error for duplicate account.
+  ///
+  /// In en, this message translates to:
+  /// **'An account already exists for this email. Try logging in instead.'**
+  String get errorAccountAlreadyExists;
+
+  /// Profile update error.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update the account profile.'**
+  String get errorCouldNotUpdateProfile;
+
+  /// Logout failure message.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not log out.'**
+  String get errorCouldNotLogOut;
+
+  /// Subject sync error.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sync subjects. Try again.'**
+  String get errorCouldNotSyncSubjects;
+
+  /// Validation error for subject creation.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a subject name.'**
+  String get errorEnterSubjectName;
+
+  /// Auth error for syncing subjects.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to sync subjects.'**
+  String get errorLoginToSyncSubjects;
+
+  /// Material sync error.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sync materials. Try again.'**
+  String get errorCouldNotSyncMaterials;
+
+  /// Validation error for pasted material.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a title and pasted text.'**
+  String get errorEnterTitleAndText;
+
+  /// Auth error for syncing materials.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to sync materials.'**
+  String get errorLoginToSyncMaterials;
+
+  /// Upload validation error.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a PDF or image to upload.'**
+  String get errorChoosePdfOrImage;
+
+  /// Auth error for uploads.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to upload materials.'**
+  String get errorLoginToUploadMaterials;
+
+  /// Upload failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not upload the selected file.'**
+  String get errorCouldNotUploadFile;
+
+  /// Unsupported file validation error.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a supported PDF, PNG, JPG, JPEG, or WEBP file.'**
+  String get errorUnsupportedFile;
+
+  /// Empty file validation error.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected file is empty.'**
+  String get errorEmptyFile;
+
+  /// File signature validation error.
+  ///
+  /// In en, this message translates to:
+  /// **'The file contents do not match the selected file type.'**
+  String get errorFileTypeMismatch;
+
+  /// File picker failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the file picker.'**
+  String get errorCouldNotOpenFilePicker;
+
+  /// Missing material error.
+  ///
+  /// In en, this message translates to:
+  /// **'Material unavailable.'**
+  String get errorMaterialUnavailable;
+
+  /// Favorite update error.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update favorite.'**
+  String get errorCouldNotUpdateFavorite;
+
+  /// Favorite sync error.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sync favorites. Try again.'**
+  String get errorCouldNotSyncFavorites;
+
+  /// Material deletion error.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete the material. Try again.'**
+  String get errorCouldNotDeleteMaterial;
+
+  /// Auth error for deleting a material.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to delete this material.'**
+  String get errorLoginToDeleteMaterial;
+
+  /// Processing recovery error.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing could not be reset.'**
+  String get errorCouldNotResetProcessing;
+
+  /// PDF extraction unavailable error.
+  ///
+  /// In en, this message translates to:
+  /// **'This PDF cannot be extracted.'**
+  String get errorPdfCannotBeExtracted;
+
+  /// Auth error for PDF text extraction.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to extract PDF text.'**
+  String get errorLoginToExtractPdf;
+
+  /// PDF extraction failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not extract text. Try again.'**
+  String get errorCouldNotExtractText;
+
+  /// Image OCR unavailable error.
+  ///
+  /// In en, this message translates to:
+  /// **'This image cannot be processed.'**
+  String get errorImageCannotBeProcessed;
+
+  /// Auth error for image OCR.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to extract image text.'**
+  String get errorLoginToExtractImage;
+
+  /// Image OCR failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not extract image text. Try again.'**
+  String get errorCouldNotExtractImageText;
+
+  /// Scanned PDF OCR unavailable error.
+  ///
+  /// In en, this message translates to:
+  /// **'This PDF cannot be scanned with OCR.'**
+  String get errorPdfCannotBeScanned;
+
+  /// Auth error for scanned PDF OCR.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in to scan this PDF.'**
+  String get errorLoginToScanPdf;
+
+  /// Scanned PDF OCR failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not scan this PDF. Try again.'**
+  String get errorCouldNotScanPdf;
+
+  /// Scanned PDF OCR page limit error.
+  ///
+  /// In en, this message translates to:
+  /// **'This version can scan PDFs up to 10 pages. Split the PDF and upload a smaller file.'**
+  String get errorPdfOcrPageLimit;
+
+  /// PDF extraction safe message for scanned PDFs.
+  ///
+  /// In en, this message translates to:
+  /// **'No selectable text was found. Scanned PDFs will be supported in the OCR phase.'**
+  String get errorNoSelectablePdfText;
+
+  /// Image OCR safe message for no text.
+  ///
+  /// In en, this message translates to:
+  /// **'No readable text was found in this image.'**
+  String get errorNoReadableImageText;
+
+  /// Invalid PDF safe message.
+  ///
+  /// In en, this message translates to:
+  /// **'The uploaded file is not a valid PDF.'**
+  String get errorInvalidPdf;
+
+  /// Unreadable PDF safe message.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the uploaded PDF.'**
+  String get errorCouldNotReadPdf;
+
+  /// Unreadable image safe message.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the uploaded image.'**
+  String get errorCouldNotReadImage;
+
+  /// Invalid image safe message.
+  ///
+  /// In en, this message translates to:
+  /// **'The uploaded file is not a valid supported image.'**
+  String get errorInvalidImage;
+
+  /// Summary generation failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not generate summary. Try again.'**
+  String get errorCouldNotGenerateSummary;
+
+  /// Summary minimum input validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Add more lecture text before generating a summary.'**
+  String get errorAddMoreLectureText;
+
+  /// Flashcard generation failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not generate flashcards. Try again.'**
+  String get errorCouldNotGenerateFlashcards;
+
+  /// Quiz generation failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not generate quiz. Try again.'**
+  String get errorCouldNotGenerateQuiz;
 }
 
 class _AppLocalizationsDelegate

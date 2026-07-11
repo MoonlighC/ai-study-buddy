@@ -7,6 +7,7 @@ import '../../app/routes.dart';
 import '../../core/models/material.dart';
 import '../../core/models/quiz_attempt.dart';
 import '../../core/models/weak_topic.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -21,10 +22,11 @@ class DashboardScreen extends StatelessWidget {
     final recentMaterials = state.materials.take(4).toList();
     final focusTopics = state.cumulativeWeakTopics.take(3).toList();
     final latestAttempt = state.latestQuizAttempt;
+    final l10n = context.l10n;
 
     return ResponsiveAppScaffold(
-      title: 'AI Study Buddy',
-      subtitle: 'Your calm place to learn',
+      title: l10n.appTitle,
+      subtitle: l10n.homeSubtitle,
       activeRoute: AppRoutes.dashboard,
       body: SingleChildScrollView(
         key: const ValueKey('home-scroll-view'),
@@ -42,18 +44,17 @@ class DashboardScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   _SectionHeading(
-                    title: 'Recent materials',
-                    actionLabel: 'View subjects',
+                    title: l10n.homeRecentMaterials,
+                    actionLabel: l10n.homeViewSubjects,
                     onAction: () =>
                         Navigator.pushNamed(context, AppRoutes.subjects),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   GlassSurface(
                     child: recentMaterials.isEmpty
-                        ? const EmptyState(
-                            title: 'No materials yet',
-                            message:
-                                'Open a subject and add your first study material.',
+                        ? EmptyState(
+                            title: l10n.homeNoMaterialsTitle,
+                            message: l10n.homeNoMaterialsMessage,
                             icon: Icons.article_outlined,
                           )
                         : Column(
@@ -77,14 +78,13 @@ class DashboardScreen extends StatelessWidget {
                           ),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  _SectionHeading(title: 'Your subjects'),
+                  _SectionHeading(title: l10n.homeYourSubjects),
                   const SizedBox(height: AppSpacing.sm),
                   if (recentSubjects.isEmpty)
-                    const GlassCard(
+                    GlassCard(
                       child: EmptyState(
-                        title: 'Create your first subject',
-                        message:
-                            'Subjects keep materials and study tools together.',
+                        title: l10n.homeCreateFirstSubject,
+                        message: l10n.homeCreateFirstSubjectMessage,
                         icon: Icons.folder_open_outlined,
                       ),
                     )
@@ -166,21 +166,21 @@ class _Hero extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const GlassStatusChip(
-          label: 'Study workspace',
+        GlassStatusChip(
+          label: context.l10n.homeStudyWorkspace,
           icon: Icons.menu_book_outlined,
           color: AppColors.secondary,
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
-          'Ready for your next study step?',
+          context.l10n.homeHeroTitle,
           style: Theme.of(context).textTheme.displaySmall,
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
           hasMaterials
-              ? 'Continue with a recent material or choose a focused study action.'
-              : 'Add study material to a subject, then build summaries, flashcards, and quizzes.',
+              ? context.l10n.homeHeroWithMaterials
+              : context.l10n.homeHeroWithoutMaterials,
           style: Theme.of(context).textTheme.bodyLarge,
         ),
         const SizedBox(height: AppSpacing.xl),
@@ -193,14 +193,16 @@ class _Hero extends StatelessWidget {
               onPressed: () => Navigator.pushNamed(context, AppRoutes.subjects),
               icon: const Icon(Icons.folder_open_outlined),
               label: Text(
-                subjectCount == 0 ? 'Create a subject' : 'Open subjects',
+                subjectCount == 0
+                    ? context.l10n.homeCreateSubject
+                    : context.l10n.homeOpenSubjects,
               ),
             ),
             OutlinedButton.icon(
               onPressed: () =>
                   Navigator.pushNamed(context, AppRoutes.afterLecture),
               icon: const Icon(Icons.auto_stories_outlined),
-              label: const Text('After Lecture'),
+              label: Text(context.l10n.homeAfterLecture),
             ),
           ],
         ),
@@ -257,12 +259,12 @@ class _LatestProgress extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeading(title: 'Latest progress'),
+          _SectionHeading(title: context.l10n.homeLatestProgress),
           const SizedBox(height: AppSpacing.md),
           if (latest == null)
-            const EmptyState(
-              title: 'No quiz attempts yet',
-              message: 'Complete a quiz to see your latest result.',
+            EmptyState(
+              title: context.l10n.homeNoQuizAttemptsTitle,
+              message: context.l10n.homeNoQuizAttemptsMessage,
               icon: Icons.quiz_outlined,
             )
           else ...[
@@ -272,7 +274,10 @@ class _LatestProgress extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xxs),
             Text(
-              '${latest.correctQuestions} of ${latest.totalQuestions} correct',
+              context.l10n.homeCorrectCount(
+                latest.correctQuestions,
+                latest.totalQuestions,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -297,10 +302,10 @@ class _FocusTopics extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeading(title: 'Focus topics'),
+        _SectionHeading(title: context.l10n.homeFocusTopics),
         const SizedBox(height: AppSpacing.sm),
         if (topics.isEmpty)
-          const Text('Complete quizzes to reveal topics worth revisiting.')
+          Text(context.l10n.homeFocusTopicsEmpty)
         else
           for (final topic in topics)
             Padding(
@@ -319,7 +324,10 @@ class _FocusTopics extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         Text(
-                          '${state.subjectFor(topic.subjectId).name} · ${topic.missCount} ${topic.missCount == 1 ? 'miss' : 'misses'}',
+                          context.l10n.homeMissesWithSubject(
+                            state.subjectFor(topic.subjectId).name,
+                            topic.missCount,
+                          ),
                         ),
                       ],
                     ),
@@ -340,16 +348,16 @@ class _QuickActions extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionHeading(title: 'Quick actions'),
+        _SectionHeading(title: context.l10n.homeQuickActions),
         const SizedBox(height: AppSpacing.sm),
         GlassButton(
-          label: 'Prepare for Exam',
+          label: context.l10n.homePrepareForExam,
           icon: Icons.event_available_outlined,
           onPressed: () => Navigator.pushNamed(context, AppRoutes.examPrep),
         ),
         const SizedBox(height: AppSpacing.xs),
         GlassButton(
-          label: 'Continue Studying',
+          label: context.l10n.homeContinueStudying,
           icon: Icons.play_circle_outline,
           onPressed: () =>
               Navigator.pushNamed(context, AppRoutes.continueStudying),

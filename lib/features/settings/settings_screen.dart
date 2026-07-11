@@ -37,21 +37,21 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Mock preferences for the local prototype.',
+              l10n.settingsIntro,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
             _SettingsSection(
               icon: Icons.person_outline,
-              title: 'Account',
+              title: l10n.settingsAccountTitle,
               subtitle: isSupabaseMode
-                  ? 'Supabase account'
-                  : 'Local mock profile',
+                  ? l10n.settingsSupabaseAccount
+                  : l10n.settingsLocalMockProfile,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _InfoRow(label: 'Name', value: accountName),
-                  _InfoRow(label: 'Email', value: accountEmail),
+                  _InfoRow(label: l10n.commonName, value: accountName),
+                  _InfoRow(label: l10n.commonEmail, value: accountEmail),
                   const SizedBox(height: 12),
                   if (isSupabaseMode) ...[
                     OutlinedButton.icon(
@@ -59,14 +59,14 @@ class SettingsScreen extends StatelessWidget {
                           ? null
                           : () => _editName(context),
                       icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Edit name'),
+                      label: Text(l10n.settingsEditName),
                     ),
                     const SizedBox(height: 8),
                   ],
                   FilledButton.tonalIcon(
                     onPressed: auth.isLoading ? null : () => _logOut(context),
                     icon: const Icon(Icons.logout),
-                    label: const Text('Log out'),
+                    label: Text(l10n.settingsLogOut),
                   ),
                 ],
               ),
@@ -94,12 +94,12 @@ class SettingsScreen extends StatelessWidget {
             ),
             _SettingsSection(
               icon: Icons.tune_outlined,
-              title: 'Study Preferences',
-              subtitle: 'Stored in local AppState only',
+              title: l10n.settingsStudyPreferencesTitle,
+              subtitle: l10n.settingsStudyPreferencesSubtitle,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _PreferenceLabel('Default flashcard session size'),
+                  _PreferenceLabel(l10n.settingsDefaultFlashcardSessionSize),
                   _PreferenceChips<int>(
                     values: const [5, 10, 20],
                     selected: state.defaultFlashcardSessionSize,
@@ -107,19 +107,19 @@ class SettingsScreen extends StatelessWidget {
                     onSelected: state.setDefaultFlashcardSessionSize,
                   ),
                   const SizedBox(height: 14),
-                  const _PreferenceLabel('Daily study goal'),
+                  _PreferenceLabel(l10n.settingsDailyStudyGoal),
                   _PreferenceChips<int>(
                     values: const [10, 20, 30],
                     selected: state.dailyStudyGoalMinutes,
-                    labelFor: (value) => '$value min',
+                    labelFor: (value) => l10n.settingsMinutesShort(value),
                     onSelected: state.setDailyStudyGoalMinutes,
                   ),
                   const SizedBox(height: 14),
-                  const _PreferenceLabel('Default difficulty'),
+                  _PreferenceLabel(l10n.settingsDefaultDifficulty),
                   _PreferenceChips<StudyDifficultyPreference>(
                     values: StudyDifficultyPreference.values,
                     selected: state.defaultDifficulty,
-                    labelFor: (value) => value.label,
+                    labelFor: (value) => _difficultyLabel(context, value),
                     onSelected: state.setDefaultDifficulty,
                   ),
                 ],
@@ -127,68 +127,68 @@ class SettingsScreen extends StatelessWidget {
             ),
             _SettingsSection(
               icon: Icons.palette_outlined,
-              title: 'App preferences',
-              subtitle: 'Appearance options are planned',
+              title: l10n.settingsAppPreferencesTitle,
+              subtitle: l10n.settingsAppearancePlanned,
               child: ListTile(
                 enabled: false,
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.dark_mode_outlined),
-                title: const Text('Appearance'),
+                title: Text(l10n.settingsAppearance),
                 subtitle: Text(l10n.settingsAppearanceUnavailable),
               ),
             ),
             _SettingsSection(
               icon: Icons.speed_outlined,
-              title: 'Usage & Limits',
+              title: l10n.settingsUsageTitle,
               subtitle: l10n.settingsUsageUnavailable,
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('View usage information'),
-                subtitle: const Text('Limits and enforcement are planned.'),
+                title: Text(l10n.settingsViewUsage),
+                subtitle: Text(l10n.settingsUsagePlanned),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.pushNamed(context, AppRoutes.usage),
               ),
             ),
             _SettingsSection(
               icon: Icons.support_agent_outlined,
-              title: 'Support',
-              subtitle: 'No email or network integration yet',
+              title: l10n.settingsSupportTitle,
+              subtitle: l10n.settingsSupportSubtitle,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   OutlinedButton.icon(
                     onPressed: null,
                     icon: const Icon(Icons.bug_report_outlined),
-                    label: const Text('Report a bug placeholder'),
+                    label: Text(l10n.settingsReportBugPlaceholder),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: null,
                     icon: const Icon(Icons.contact_support_outlined),
-                    label: const Text('Contact support placeholder'),
+                    label: Text(l10n.settingsContactSupportPlaceholder),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: null,
                     icon: const Icon(Icons.feedback_outlined),
-                    label: const Text('Send feedback placeholder'),
+                    label: Text(l10n.settingsSendFeedbackPlaceholder),
                   ),
                 ],
               ),
             ),
             _SettingsSection(
               icon: Icons.info_outline,
-              title: 'About / Debug',
-              subtitle: 'Prototype diagnostics',
+              title: l10n.settingsAboutDebugTitle,
+              subtitle: l10n.settingsAboutDebugSubtitle,
               child: Column(
                 children: [
                   _InfoRow(
-                    label: 'Backend mode',
+                    label: l10n.settingsBackendMode,
                     value: _backendModeLabel(state.config.effectiveBackendMode),
                   ),
-                  const _InfoRow(
-                    label: 'Security note',
-                    value: 'No server secrets or OpenAI key in Flutter.',
+                  _InfoRow(
+                    label: l10n.settingsSecurityNote,
+                    value: l10n.settingsSecurityNoteValue,
                   ),
                 ],
               ),
@@ -213,6 +213,18 @@ class SettingsScreen extends StatelessWidget {
       AppLanguagePreference.english => l10n.languageEnglish,
       AppLanguagePreference.german => l10n.languageGerman,
       AppLanguagePreference.russian => l10n.languageRussian,
+    };
+  }
+
+  String _difficultyLabel(
+    BuildContext context,
+    StudyDifficultyPreference value,
+  ) {
+    final l10n = context.l10n;
+    return switch (value) {
+      StudyDifficultyPreference.easy => l10n.settingsDifficultyEasy,
+      StudyDifficultyPreference.medium => l10n.settingsDifficultyMedium,
+      StudyDifficultyPreference.exam => l10n.settingsDifficultyExam,
     };
   }
 
@@ -249,9 +261,9 @@ class SettingsScreen extends StatelessWidget {
     final message =
         AuthScope.read(context).errorMessage ??
         'Could not update the account profile.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
   }
 
   Future<void> _logOut(BuildContext context) async {
@@ -262,9 +274,9 @@ class SettingsScreen extends StatelessWidget {
     if (!signedOut) {
       final message =
           AuthScope.read(context).errorMessage ?? 'Could not log out.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.localizedSafeMessage(message))),
+      );
       return;
     }
     AppStateScope.read(context).clearSyncedWorkspaceForSignOut();
@@ -299,17 +311,24 @@ class _EditNameDialogState extends State<_EditNameDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Edit name', style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          l10n.settingsEditName,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 16),
         TextField(
           controller: _controller,
           autofocus: true,
           textInputAction: TextInputAction.done,
-          decoration: InputDecoration(labelText: 'Name', errorText: _errorText),
+          decoration: InputDecoration(
+            labelText: l10n.commonName,
+            errorText: _errorText,
+          ),
           onChanged: (_) {
             if (_errorText == null) {
               return;
@@ -327,9 +346,9 @@ class _EditNameDialogState extends State<_EditNameDialog> {
           children: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(l10n.actionCancel),
             ),
-            FilledButton(onPressed: _save, child: const Text('Save')),
+            FilledButton(onPressed: _save, child: Text(l10n.actionSave)),
           ],
         ),
       ],
@@ -340,7 +359,7 @@ class _EditNameDialogState extends State<_EditNameDialog> {
     final trimmedName = _controller.text.trim();
     if (trimmedName.isEmpty) {
       setState(() {
-        _errorText = 'Enter your name.';
+        _errorText = context.l10n.errorEnterName;
       });
       return;
     }

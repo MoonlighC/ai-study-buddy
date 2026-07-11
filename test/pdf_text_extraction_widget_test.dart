@@ -42,7 +42,10 @@ void main() {
     await _pumpDetail(tester, material);
 
     expect(find.text('Text extraction failed'), findsOneWidget);
-    expect(find.text('Could not extract text from this PDF.'), findsOneWidget);
+    expect(
+      find.text('Something went wrong. Please try again.'),
+      findsOneWidget,
+    );
     expect(find.text('Retry text extraction'), findsOneWidget);
     expect(find.text('Summary'), findsNothing);
   });
@@ -63,7 +66,7 @@ void main() {
       ),
     );
     await _pumpDetail(tester, material);
-    expect(find.text('Status: Text extracted · 3 pages'), findsOneWidget);
+    expect(find.text('Text extracted · 3 pages'), findsOneWidget);
     expect(find.text('Extracted text'), findsNothing);
     expect(find.text('View extracted text'), findsNothing);
     expect(find.textContaining('RAW PDF TEXT LAYER'), findsNothing);
@@ -164,7 +167,7 @@ void main() {
       ),
     );
     await _pumpDetail(tester, image);
-    expect(find.text('Status: Text extracted'), findsOneWidget);
+    expect(find.text('Text extracted'), findsWidgets);
     expect(find.textContaining('INTERNAL OCR'), findsNothing);
     expect(find.text('Summary'), findsOneWidget);
     await tester.scrollUntilVisible(

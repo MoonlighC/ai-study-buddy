@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design_system/tokens.dart';
+import '../../l10n/l10n_extensions.dart';
 
 class AuthMessage extends StatelessWidget {
   const AuthMessage({required this.message, this.isError = false, super.key});
@@ -10,6 +11,10 @@ class AuthMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localizedMessage = context.localizedSafeMessage(message);
+    final semanticsLabel = isError
+        ? context.l10n.commonErrorSemantics
+        : context.l10n.commonStatusSemantics;
     final colorScheme = Theme.of(context).colorScheme;
     final background = isError
         ? colorScheme.errorContainer
@@ -20,7 +25,7 @@ class AuthMessage extends StatelessWidget {
 
     return Semantics(
       liveRegion: true,
-      label: '${isError ? 'Error' : 'Status'}: $message',
+      label: '$semanticsLabel: $localizedMessage',
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
@@ -34,11 +39,14 @@ class AuthMessage extends StatelessWidget {
             Icon(
               isError ? Icons.error_outline : Icons.info_outline,
               color: foreground,
-              semanticLabel: isError ? 'Error' : 'Status',
+              semanticLabel: semanticsLabel,
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: Text(message, style: TextStyle(color: foreground)),
+              child: Text(
+                localizedMessage,
+                style: TextStyle(color: foreground),
+              ),
             ),
           ],
         ),

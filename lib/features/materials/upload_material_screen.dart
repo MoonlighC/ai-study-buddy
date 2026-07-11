@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_state.dart';
 import '../../core/models/material.dart';
 import '../../core/models/subject.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../auth/auth_controller.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
@@ -34,8 +35,9 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
     final selected = selectedFile;
+    final l10n = context.l10n;
     return ResponsiveAppScaffold(
-      title: isPdf ? 'Upload PDF' : 'Upload image',
+      title: isPdf ? l10n.uploadPdfTitle : l10n.uploadImageTitle,
       subtitle: widget.args.subject.name,
       showBack: true,
       body: ResponsiveContent(
@@ -48,11 +50,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
-            Text(
-              isPdf
-                  ? 'PDF files up to 10 MiB.'
-                  : 'PNG, JPG, JPEG, or WEBP images up to 8 MiB.',
-            ),
+            Text(isPdf ? l10n.uploadPdfGuidance : l10n.uploadImageGuidance),
             const SizedBox(height: 16),
             GlassCard(
               key: const ValueKey('upload-picker-surface'),
@@ -61,7 +59,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   GlassStatusChip(
-                    label: isPdf ? 'PDF' : 'Image',
+                    label: isPdf ? l10n.uploadPdfKind : l10n.uploadImageKind,
                     icon: isPdf
                         ? Icons.picture_as_pdf_outlined
                         : Icons.image_outlined,
@@ -74,7 +72,9 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                           ? Icons.picture_as_pdf_outlined
                           : Icons.image_outlined,
                     ),
-                    label: Text(isPdf ? 'Choose PDF' : 'Choose image'),
+                    label: Text(
+                      isPdf ? l10n.uploadChoosePdf : l10n.uploadChooseImage,
+                    ),
                   ),
                 ],
               ),
@@ -91,7 +91,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                   ),
                   title: Text(selected.name),
                   subtitle: Text(
-                    '${isPdf ? 'PDF' : 'Image'} · ${formatFileSize(selected.reportedSizeBytes)}',
+                    '${isPdf ? l10n.uploadPdfKind : l10n.uploadImageKind} · ${formatFileSize(selected.reportedSizeBytes)}',
                   ),
                   showDivider: false,
                 ),
@@ -107,15 +107,17 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     : const Icon(Icons.cloud_upload_outlined),
                 label: Text(
                   state.isUploadingMaterial
-                      ? state.uploadStage ?? 'Uploading material'
-                      : 'Upload material',
+                      ? context.localizedSafeMessage(
+                          state.uploadStage ?? 'Uploading material',
+                        )
+                      : l10n.uploadMaterial,
                 ),
               ),
             ],
             if (pickerError != null || state.uploadError != null) ...[
               const SizedBox(height: 12),
               Text(
-                pickerError ?? state.uploadError!,
+                context.localizedSafeMessage(pickerError ?? state.uploadError!),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
@@ -147,7 +149,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
       setState(() => pickerError = error.message);
     } catch (_) {
       if (!mounted) return;
-      setState(() => pickerError = 'Could not open the file picker.');
+      setState(() => pickerError = context.l10n.errorCouldNotOpenFilePicker);
     }
   }
 
@@ -163,7 +165,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
     if (!mounted || !uploaded) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Material uploaded.')));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.materialUploaded)));
     Navigator.pop(context);
   }
 }

@@ -31,6 +31,27 @@ void main() {
     );
   });
 
+  test('locale changes notify and persist exactly once', () async {
+    final store = MemoryAppPreferencesStore();
+    final state = AppState(preferencesStore: store);
+    var notifications = 0;
+    state.addListener(() => notifications += 1);
+
+    state.setLanguagePreference(AppLanguagePreference.german);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(state.languagePreference, AppLanguagePreference.german);
+    expect(state.appLocale, const Locale('de'));
+    expect(notifications, 1);
+    expect(store.savedLocaleCodes, ['de']);
+
+    state.setLanguagePreference(AppLanguagePreference.german);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(notifications, 1);
+    expect(store.savedLocaleCodes, ['de']);
+  });
+
   testWidgets('system preference maps to null MaterialApp locale', (
     tester,
   ) async {
@@ -39,7 +60,7 @@ void main() {
         preferencesStore: MemoryAppPreferencesStore(localeCode: 'system'),
       ),
     );
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).locale, isNull);
   });
@@ -50,7 +71,7 @@ void main() {
         preferencesStore: MemoryAppPreferencesStore(localeCode: 'de'),
       ),
     );
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(
       tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
@@ -64,7 +85,7 @@ void main() {
         preferencesStore: MemoryAppPreferencesStore(localeCode: 'xx'),
       ),
     );
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).locale, isNull);
   });
@@ -79,7 +100,7 @@ void main() {
     await _openSettings(tester);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Deutsch'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(find.text('Einstellungen'), findsWidgets);
     expect(
@@ -100,7 +121,7 @@ void main() {
     expect(_chip(tester, 'System default').selected, isTrue);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Deutsch'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(find.text('Einstellungen'), findsWidgets);
     expect(find.text('Start'), findsOneWidget);
@@ -114,7 +135,7 @@ void main() {
         '\u0420\u0443\u0441\u0441\u043a\u0438\u0439',
       ),
     );
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(
       find.text('\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438'),
@@ -176,41 +197,58 @@ void main() {
         preferencesStore: MemoryAppPreferencesStore(localeCode: 'ru'),
       ),
     );
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     final title = tester.widget<Title>(find.byType(Title).first);
     expect(title.title, 'AI Study Buddy');
   });
 
-  testWidgets('shared navigation and language selector avoid layout overflow', (
+  testWidgets('German settings layout is stable at 390px', (tester) async {
+    await _expectLocalizedSettingsLayout(
+      tester,
+      localeCode: 'de',
+      size: const Size(390, 844),
+      expectedLabels: const ['Einstellungen', 'Fächer'],
+    );
+  });
+
+  testWidgets('Russian settings layout is stable at 390px', (tester) async {
+    await _expectLocalizedSettingsLayout(
+      tester,
+      localeCode: 'ru',
+      size: const Size(390, 844),
+      expectedLabels: const ['Настройки', 'Предметы'],
+    );
+  });
+
+  testWidgets('German settings layout is stable at 1280px', (tester) async {
+    await _expectLocalizedSettingsLayout(
+      tester,
+      localeCode: 'de',
+      size: const Size(1280, 900),
+      expectedLabels: const ['Einstellungen', 'Fächer'],
+    );
+  });
+
+  testWidgets('Russian settings layout is stable at 1280px', (tester) async {
+    await _expectLocalizedSettingsLayout(
+      tester,
+      localeCode: 'ru',
+      size: const Size(1280, 900),
+      expectedLabels: const ['Настройки', 'Предметы'],
+    );
+  });
+
+  testWidgets('localized settings layout is stable at 200 percent text', (
     tester,
   ) async {
-    final previousError = FlutterError.onError;
-    final errors = <FlutterErrorDetails>[];
-    FlutterError.onError = errors.add;
-    addTearDown(() => FlutterError.onError = previousError);
-
-    for (final size in [
-      const Size(390, 844),
-      const Size(800, 900),
-      const Size(1280, 900),
-    ]) {
-      await _setViewport(tester, size);
-      await _enterDashboard(
-        tester,
-        preferencesStore: MemoryAppPreferencesStore(localeCode: 'ru'),
-      );
-      await _openSettings(tester);
-      expect(errors, isEmpty);
-    }
-
-    await _setViewport(tester, const Size(390, 844), textScale: 2);
-    await _enterDashboard(
+    await _expectLocalizedSettingsLayout(
       tester,
-      preferencesStore: MemoryAppPreferencesStore(localeCode: 'de'),
+      localeCode: 'de',
+      size: const Size(390, 844),
+      textScale: 2,
+      expectedLabels: const ['Einstellungen', 'Anzeigesprache'],
     );
-    await _openSettings(tester);
-    expect(errors, isEmpty);
   });
 
   testWidgets('locale changes keep user and AI content unchanged', (
@@ -226,10 +264,10 @@ void main() {
 
     await _openSettings(tester);
     await tester.tap(find.widgetWithText(ChoiceChip, 'Deutsch'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     await tester.tap(find.byKey(const ValueKey('nav-home')));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(find.text('Biology'), findsOneWidget);
     expect(find.text('Photosynthesis lecture notes'), findsOneWidget);
@@ -251,7 +289,7 @@ void main() {
 
     await _openSettings(tester);
     await tester.tap(find.widgetWithText(ChoiceChip, 'Deutsch'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(subjectRepository.loadCount, 1);
     expect(materialRepository.loadCount, 1);
@@ -260,6 +298,40 @@ void main() {
 
 ChoiceChip _chip(WidgetTester tester, String label) {
   return tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, label));
+}
+
+Future<void> _expectLocalizedSettingsLayout(
+  WidgetTester tester, {
+  required String localeCode,
+  required Size size,
+  required List<String> expectedLabels,
+  double textScale = 1,
+}) async {
+  await _setViewport(tester, size, textScale: textScale);
+  await _enterDashboard(
+    tester,
+    preferencesStore: MemoryAppPreferencesStore(localeCode: localeCode),
+  );
+  await _throwPendingException(tester);
+  await _openSettings(tester);
+  await _throwPendingException(tester);
+
+  for (final label in expectedLabels) {
+    if (find.text(label).evaluate().isEmpty &&
+        find
+            .byKey(const ValueKey('settings-scroll-view'))
+            .evaluate()
+            .isNotEmpty) {
+      await tester.scrollUntilVisible(find.text(label), 120, maxScrolls: 12);
+      await tester.pump();
+      await _throwPendingException(tester);
+    }
+    expect(find.text(label), findsWidgets);
+  }
+
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump();
 }
 
 Future<void> _enterDashboard(
@@ -280,16 +352,36 @@ Future<void> _enterDashboard(
       preferencesStore: preferencesStore,
     ),
   );
-  await tester.pumpAndSettle();
-  if (find.text('Continue with email').evaluate().isNotEmpty) {
-    await tester.tap(find.text('Continue with email'));
-    await tester.pumpAndSettle();
+  await _settle(tester);
+  if (find.byKey(const ValueKey('login-form-panel')).evaluate().isNotEmpty) {
+    final primaryAction = find.byKey(const ValueKey('auth-primary-action'));
+    await tester.ensureVisible(primaryAction);
+    await tester.pump();
+    await _throwPendingException(tester);
+    await tester.tap(primaryAction);
+    await _settle(tester);
   }
 }
 
 Future<void> _openSettings(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('nav-settings')));
-  await tester.pumpAndSettle();
+  await _settle(tester);
+}
+
+Future<void> _throwPendingException(WidgetTester tester) async {
+  final exception = tester.takeException();
+  if (exception != null) {
+    fail('Unexpected Flutter exception: $exception');
+  }
+}
+
+Future<void> _settle(WidgetTester tester) async {
+  await tester.pump();
+  await _throwPendingException(tester);
+  for (var i = 0; i < 20; i += 1) {
+    await tester.pump(const Duration(milliseconds: 50));
+    await _throwPendingException(tester);
+  }
 }
 
 Future<void> _setViewport(

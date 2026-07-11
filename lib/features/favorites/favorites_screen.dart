@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_config.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
@@ -20,16 +21,17 @@ class FavoritesScreen extends StatelessWidget {
         materialFavorites.isNotEmpty || flashcardFavorites.isNotEmpty;
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
+    final l10n = context.l10n;
 
     final groups = <Widget>[
       if (materialFavorites.isNotEmpty)
         _FavoriteGroup(
-          title: 'Materials',
+          title: l10n.favoritesMaterials,
           children: [
             for (final material in materialFavorites)
               AppListRow(
                 leading: IconButton(
-                  tooltip: 'Unfavorite material',
+                  tooltip: l10n.favoritesUnfavoriteMaterial,
                   onPressed: state.isUpdatingMaterialFavorite
                       ? null
                       : () => _toggleMaterialFavorite(context, material.id),
@@ -51,12 +53,12 @@ class FavoritesScreen extends StatelessWidget {
         ),
       if (flashcardFavorites.isNotEmpty)
         _FavoriteGroup(
-          title: 'Flashcards',
+          title: l10n.favoritesFlashcards,
           children: [
             for (final card in flashcardFavorites)
               AppListRow(
                 leading: IconButton(
-                  tooltip: 'Unfavorite',
+                  tooltip: l10n.favoritesUnfavorite,
                   onPressed: () =>
                       AppStateScope.read(context).toggleFavorite(card.id),
                   icon: const Icon(Icons.star),
@@ -69,8 +71,8 @@ class FavoritesScreen extends StatelessWidget {
         ),
     ];
     return ResponsiveAppScaffold(
-      title: 'Favorites',
-      subtitle: 'Study only favorites',
+      title: l10n.favoritesTitle,
+      subtitle: l10n.favoritesSubtitle,
       activeRoute: AppRoutes.favorites,
       body: ResponsiveContent(
         width: ResponsiveContentWidth.wide,
@@ -78,50 +80,52 @@ class FavoritesScreen extends StatelessWidget {
           key: const ValueKey('favorites-scroll-view'),
           children: [
             Text(
-              'Study only favorites',
+              l10n.favoritesSubtitle,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
             Text(
               isSupabaseMode
-                  ? 'Favorite materials are grouped here for focused review.'
-                  : 'Favorite materials and cards are grouped here for focused review.',
+                  ? l10n.favoritesNoFavoritesMessage
+                  : l10n.favoritesNoFavoritesMessage,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
             if (state.isLoadingMaterialFavorites)
-              const Card(
+              Card(
                 child: ListTile(
-                  leading: SizedBox.square(
+                  leading: const SizedBox.square(
                     dimension: 24,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  title: Text('Loading synced favorites'),
+                  title: Text(l10n.favoritesLoading),
                 ),
               ),
             if (state.favoriteSyncErrorMessage != null)
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.cloud_off_outlined),
-                  title: Text(state.favoriteSyncErrorMessage!),
-                  subtitle: const Text('Your app is still usable.'),
+                  title: Text(
+                    context.localizedSafeMessage(
+                      state.favoriteSyncErrorMessage!,
+                    ),
+                  ),
+                  subtitle: Text(l10n.favoritesStillUsable),
                   trailing: TextButton(
                     onPressed: state.isLoadingMaterialFavorites
                         ? null
                         : () => state.loadMaterialFavoritesFor(
                             AuthScope.read(context).user,
                           ),
-                    child: const Text('Retry'),
+                    child: Text(l10n.actionRetry),
                   ),
                 ),
               ),
             if (!state.isLoadingMaterialFavorites && !hasFavorites)
               EmptyState(
                 icon: Icons.star_border,
-                title: 'No favorites yet',
-                message: isSupabaseMode
-                    ? 'Star materials to collect them here.'
-                    : 'Star materials or flashcards to collect them here.',
+                title: l10n.favoritesNoFavoritesTitle,
+                message: l10n.favoritesNoFavoritesMessage,
               ),
             if (groups.isNotEmpty)
               LayoutBuilder(
@@ -169,9 +173,9 @@ class FavoritesScreen extends StatelessWidget {
     final message =
         AppStateScope.read(context).favoriteSyncErrorMessage ??
         'Could not update favorite.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../l10n/l10n_extensions.dart';
 import 'auth_controller.dart';
 import 'auth_layout.dart';
 import 'auth_message.dart';
@@ -34,12 +35,13 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = AuthScope.watch(context);
+    final l10n = context.l10n;
 
     final disabled = auth.isLoading || _isSubmitting;
 
     return AuthLayout(
-      title: 'Create account',
-      subtitle: 'Set up your study profile.',
+      title: l10n.authCreateAccountTitle,
+      subtitle: l10n.authCreateAccountSubtitle,
       formKey: const ValueKey('signup-form-panel'),
       form: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -56,9 +58,9 @@ class _SignupScreenState extends State<SignupScreen> {
             controller: _nameController,
             enabled: !disabled,
             textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              prefixIcon: Icon(Icons.person_outline),
+            decoration: InputDecoration(
+              labelText: l10n.commonName,
+              prefixIcon: const Icon(Icons.person_outline),
             ),
           ),
           const SizedBox(height: 12),
@@ -67,9 +69,9 @@ class _SignupScreenState extends State<SignupScreen> {
             enabled: !disabled,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              prefixIcon: Icon(Icons.mail_outline),
+            decoration: InputDecoration(
+              labelText: l10n.commonEmail,
+              prefixIcon: const Icon(Icons.mail_outline),
             ),
           ),
           const SizedBox(height: 12),
@@ -79,10 +81,12 @@ class _SignupScreenState extends State<SignupScreen> {
             obscureText: !_isPasswordVisible,
             textInputAction: TextInputAction.next,
             decoration: InputDecoration(
-              labelText: 'Password',
+              labelText: l10n.commonPassword,
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
-                tooltip: _isPasswordVisible ? 'Hide password' : 'Show password',
+                tooltip: _isPasswordVisible
+                    ? l10n.authHidePassword
+                    : l10n.authShowPassword,
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                 onPressed: disabled
                     ? null
@@ -106,12 +110,12 @@ class _SignupScreenState extends State<SignupScreen> {
             obscureText: !_isConfirmPasswordVisible,
             textInputAction: TextInputAction.done,
             decoration: InputDecoration(
-              labelText: 'Confirm password',
+              labelText: l10n.authConfirmPassword,
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
                 tooltip: _isConfirmPasswordVisible
-                    ? 'Hide password'
-                    : 'Show password',
+                    ? l10n.authHidePassword
+                    : l10n.authShowPassword,
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                 onPressed: disabled
                     ? null
@@ -139,12 +143,12 @@ class _SignupScreenState extends State<SignupScreen> {
             key: const ValueKey('auth-primary-action'),
             onPressed: disabled ? null : () => _createAccount(context),
             icon: const Icon(Icons.person_add_alt_1_outlined),
-            label: const Text('Create account'),
+            label: Text(l10n.authCreateAccountTitle),
           ),
           const SizedBox(height: 10),
           TextButton(
             onPressed: disabled ? null : () => _returnToLogin(),
-            child: const Text('Already have an account? Log in'),
+            child: Text(l10n.authAlreadyHaveAccount),
           ),
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../flashcards/flashcards_screen.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
@@ -27,6 +28,7 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
+    final l10n = context.l10n;
     final results = state.search(query);
 
     final grouped = {
@@ -34,7 +36,7 @@ class _SearchScreenState extends State<SearchScreen> {
         kind: results.where((result) => result.kind == kind).toList(),
     };
     return ResponsiveAppScaffold(
-      title: 'Search',
+      title: l10n.searchTitle,
       activeRoute: AppRoutes.search,
       body: ResponsiveContent(
         width: ResponsiveContentWidth.wide,
@@ -48,13 +50,13 @@ class _SearchScreenState extends State<SearchScreen> {
               textInputAction: TextInputAction.search,
               onSubmitted: (value) => setState(() => query = value),
               decoration: InputDecoration(
-                labelText: 'Search study workspace',
+                labelText: l10n.searchFieldLabel,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: query.isEmpty
                     ? null
                     : IconButton(
                         key: const ValueKey('clear-search-query'),
-                        tooltip: 'Clear search',
+                        tooltip: l10n.searchClear,
                         onPressed: () {
                           controller.clear();
                           setState(() => query = '');
@@ -66,17 +68,16 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
             const SizedBox(height: 16),
             if (query.trim().isEmpty)
-              const EmptyState(
+              EmptyState(
                 icon: Icons.search,
-                title: 'Start typing to search',
-                message:
-                    'Find subjects, materials, and flashcards in this workspace.',
+                title: l10n.searchStartTitle,
+                message: l10n.searchStartMessage,
               )
             else if (results.isEmpty)
-              const EmptyState(
+              EmptyState(
                 icon: Icons.search_off_outlined,
-                title: 'No results',
-                message: 'Try another search term.',
+                title: l10n.searchNoResultsTitle,
+                message: l10n.searchNoResultsMessage,
               )
             else
               LayoutBuilder(
@@ -168,10 +169,15 @@ class _SearchGroup extends StatelessWidget {
   final IconData Function(LocalSearchResultKind) iconFor;
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final title = switch (kind) {
-      LocalSearchResultKind.subject => 'Subjects',
-      LocalSearchResultKind.material => 'Materials',
-      LocalSearchResultKind.flashcard => 'Flashcards',
+      LocalSearchResultKind.subject => l10n.searchSubjectsGroup(results.length),
+      LocalSearchResultKind.material => l10n.searchMaterialsGroup(
+        results.length,
+      ),
+      LocalSearchResultKind.flashcard => l10n.searchFlashcardsGroup(
+        results.length,
+      ),
     };
     return GlassCard(
       padding: EdgeInsets.zero,
@@ -181,10 +187,7 @@ class _SearchGroup extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text(
-              '$title (${results.length})',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            child: Text(title, style: Theme.of(context).textTheme.titleLarge),
           ),
           for (final result in results)
             AppListRow(

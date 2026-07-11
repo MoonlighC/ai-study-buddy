@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../../app/design_system/tokens.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/study_buddy_mark.dart';
 import 'auth_controller.dart';
@@ -50,7 +51,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: SafeArea(
         child: Center(
           child: GlassCard(
@@ -58,11 +59,11 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                StudyBuddyMark(size: 52),
-                SizedBox(height: AppSpacing.md),
-                CircularProgressIndicator(),
-                SizedBox(height: AppSpacing.sm),
-                Text('Preparing your study space'),
+                const StudyBuddyMark(size: 52),
+                const SizedBox(height: AppSpacing.md),
+                const CircularProgressIndicator(),
+                const SizedBox(height: AppSpacing.sm),
+                Text(context.l10n.authPreparingStudySpace),
               ],
             ),
           ),

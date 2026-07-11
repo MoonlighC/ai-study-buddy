@@ -4,6 +4,7 @@ import '../../app/app_config.dart';
 import '../../app/app_state.dart';
 import '../../app/design_system/tokens.dart';
 import '../../app/routes.dart';
+import '../../l10n/l10n_extensions.dart';
 import 'auth_controller.dart';
 import 'auth_layout.dart';
 import 'auth_message.dart';
@@ -35,10 +36,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
     final disabled = auth.isLoading || _isSubmitting;
+    final l10n = context.l10n;
 
     return AuthLayout(
-      title: 'Welcome back',
-      subtitle: 'Turn lecture material into focused study sessions.',
+      title: l10n.authWelcomeBackTitle,
+      subtitle: l10n.authWelcomeBackSubtitle,
       formKey: const ValueKey('login-form-panel'),
       form: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -58,9 +60,9 @@ class _LoginScreenState extends State<LoginScreen> {
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               autofillHints: const [AutofillHints.email],
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                prefixIcon: Icon(Icons.mail_outline),
+              decoration: InputDecoration(
+                labelText: l10n.commonEmail,
+                prefixIcon: const Icon(Icons.mail_outline),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -71,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
               textInputAction: TextInputAction.done,
               autofillHints: const [AutofillHints.password],
               decoration: InputDecoration(
-                labelText: 'Password',
+                labelText: l10n.commonPassword,
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   constraints: const BoxConstraints(
@@ -79,8 +81,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     minHeight: 48,
                   ),
                   tooltip: _isPasswordVisible
-                      ? 'Hide password'
-                      : 'Show password',
+                      ? l10n.authHidePassword
+                      : l10n.authShowPassword,
                   onPressed: disabled
                       ? null
                       : () => setState(
@@ -106,18 +108,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 key: const ValueKey('auth-primary-action'),
                 onPressed: disabled ? null : _logIn,
                 icon: const Icon(Icons.login),
-                label: const Text('Log in'),
+                label: Text(l10n.authLogIn),
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
             OutlinedButton.icon(
               onPressed: disabled ? null : _createAccount,
               icon: const Icon(Icons.person_add_alt_1_outlined),
-              label: const Text('Create account'),
+              label: Text(l10n.authCreateAccountTitle),
             ),
             TextButton(
               onPressed: disabled ? null : _resetPassword,
-              child: const Text('Forgot password?'),
+              child: Text(l10n.authForgotPassword),
             ),
           ] else ...[
             SizedBox(
@@ -126,21 +128,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 key: const ValueKey('auth-primary-action'),
                 onPressed: disabled ? null : _continueWithEmail,
                 icon: const Icon(Icons.mail_outline),
-                label: const Text('Continue with email'),
+                label: Text(l10n.authContinueWithEmail),
               ),
             ),
           ],
           const SizedBox(height: AppSpacing.sm),
           OutlinedButton.icon(
             onPressed: null,
-            icon: Icon(Icons.g_mobiledata),
-            label: Text('Google coming later'),
+            icon: const Icon(Icons.g_mobiledata),
+            label: Text(l10n.authGoogleComingLater),
           ),
           const SizedBox(height: AppSpacing.xs),
           OutlinedButton.icon(
             onPressed: null,
-            icon: Icon(Icons.apple),
-            label: Text('Apple coming later'),
+            icon: const Icon(Icons.apple),
+            label: Text(l10n.authAppleComingLater),
           ),
         ],
       ),

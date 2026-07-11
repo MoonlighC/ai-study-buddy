@@ -5,6 +5,7 @@ import '../../app/app_config.dart';
 import '../../app/routes.dart';
 import '../../core/models/material.dart';
 import '../../core/models/study_session.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/section_card.dart';
@@ -34,9 +35,10 @@ class MaterialDetailScreen extends StatelessWidget {
         isUpload &&
         freshMaterial.processingStatus == MaterialProcessingStatus.ready &&
         freshMaterial.hasContentText;
+    final l10n = context.l10n;
 
     return ResponsiveAppScaffold(
-      title: 'Material',
+      title: l10n.materialDetailTitle,
       subtitle: subject.name,
       showBack: true,
       subjectColor: Color(subject.colorValue),
@@ -48,12 +50,8 @@ class MaterialDetailScreen extends StatelessWidget {
             MaterialHero(
               title: freshMaterial.title,
               subject: subject.name,
-              typeLabel: freshMaterial.kind == MaterialKind.pdf
-                  ? 'PDF'
-                  : freshMaterial.kind == MaterialKind.image
-                  ? 'Image'
-                  : 'Pasted text',
-              statusLabel: _materialStatus(freshMaterial),
+              typeLabel: _materialTypeLabel(context, freshMaterial),
+              statusLabel: _materialStatus(context, freshMaterial),
               isFavorite: isFavorite,
               onFavorite: deleting || state.isUpdatingMaterialFavorite
                   ? null
@@ -64,11 +62,10 @@ class MaterialDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             if (deleting)
-              const MaterialStatusPanel(
+              MaterialStatusPanel(
                 key: Key('material-delete-progress'),
-                title: 'Deleting material',
-                message:
-                    'Removing the source and material-specific study content.',
+                title: l10n.materialDeletingTitle,
+                message: l10n.materialDeletingMessage,
                 icon: Icons.delete_outline,
                 progress: true,
               )
@@ -77,31 +74,30 @@ class MaterialDetailScreen extends StatelessWidget {
               _StaleRecoverySection(
                 materialId: freshMaterial.id,
                 processingMessage: freshMaterial.kind == MaterialKind.pdf
-                    ? 'Extracting selectable text…'
-                    : 'Reading image text…',
+                    ? l10n.pdfExtractingSelectable
+                    : l10n.imageReadingText,
               )
             else if (state.isGeneratingSummary ||
                 state.isGeneratingFlashcards ||
                 state.isGeneratingQuiz)
-              const MaterialStatusPanel(
-                title: 'Generating study content',
-                message: 'Creating material-scoped learning content…',
+              MaterialStatusPanel(
+                title: l10n.materialGeneratingStudyContentTitle,
+                message: l10n.materialGeneratingStudyContentMessage,
                 icon: Icons.auto_awesome_outlined,
                 progress: true,
               )
             else if (freshMaterial.scannedPdfOcr?.partial == true)
-              const MaterialStatusPanel(
-                title: 'Partial result',
-                message:
-                    'Some pages could not be read. Available study text can still be used.',
+              MaterialStatusPanel(
+                title: l10n.materialPartialResultTitle,
+                message: l10n.materialPartialScannedMessage,
                 icon: Icons.warning_amber_rounded,
                 warning: true,
               )
             else if (_imageOcrWarning(freshMaterial.imageOcr?.warningCodes)
                 case final warning?)
               MaterialStatusPanel(
-                title: 'Partial result',
-                message: warning,
+                title: l10n.materialPartialResultTitle,
+                message: context.localizedSafeMessage(warning),
                 icon: Icons.warning_amber_rounded,
                 warning: true,
               )
@@ -112,21 +108,27 @@ class MaterialDetailScreen extends StatelessWidget {
             if (isUpload) ...[
               const SizedBox(height: 16),
               MaterialMetadata(
-                title: 'File metadata',
+                title: l10n.materialFileMetadataTitle,
                 rows: [
-                  ('Filename', freshMaterial.title),
+                  (l10n.materialFilenameLabel, freshMaterial.title),
                   (
-                    'Type',
-                    freshMaterial.kind == MaterialKind.pdf ? 'PDF' : 'Image',
+                    l10n.materialTypeLabel,
+                    _materialTypeLabel(context, freshMaterial),
                   ),
                   (
-                    'Size',
+                    l10n.materialSizeLabel,
                     freshMaterial.fileSizeBytes == null
-                        ? 'Unknown'
+                        ? l10n.commonUnknown
                         : formatFileSize(freshMaterial.fileSizeBytes!),
                   ),
-                  ('MIME', freshMaterial.mimeType ?? 'Unknown'),
-                  ('Status', _materialStatus(freshMaterial)),
+                  (
+                    l10n.materialMimeLabel,
+                    freshMaterial.mimeType ?? l10n.commonUnknown,
+                  ),
+                  (
+                    l10n.materialStatusLabel,
+                    _materialStatus(context, freshMaterial),
+                  ),
                 ],
               ),
             ],
@@ -134,7 +136,7 @@ class MaterialDetailScreen extends StatelessWidget {
               const SizedBox(height: 16),
               AiOutputSection(
                 key: const Key('summary-section'),
-                title: 'Summary',
+                title: l10n.materialSummaryTitle,
                 icon: Icons.auto_awesome_outlined,
                 reading: true,
                 child: _SummarySection(material: freshMaterial),
@@ -142,22 +144,22 @@ class MaterialDetailScreen extends StatelessWidget {
               const SizedBox(height: 16),
               AiOutputSection(
                 key: const Key('flashcards-section'),
-                title: 'Flashcards',
+                title: l10n.materialFlashcardsTitle,
                 icon: Icons.style_outlined,
                 child: _FlashcardsSection(material: freshMaterial),
               ),
               const SizedBox(height: 16),
               AiOutputSection(
                 key: const Key('quiz-section'),
-                title: 'Quiz',
+                title: l10n.materialQuizTitle,
                 icon: Icons.quiz_outlined,
                 child: _QuizSection(material: freshMaterial),
               ),
               const SizedBox(height: 16),
               MaterialActionSection(
-                title: 'Study session',
+                title: l10n.materialStudySessionTitle,
                 child: GlassButton(
-                  label: 'Create study session',
+                  label: l10n.subjectCreateStudySession,
                   icon: Icons.auto_awesome_outlined,
                   prominent: true,
                   onPressed: deleting
@@ -180,7 +182,7 @@ class MaterialDetailScreen extends StatelessWidget {
             if (!isUpload) ...[
               const SizedBox(height: 16),
               AiOutputSection(
-                title: 'Pasted text',
+                title: l10n.materialPastedTextKind,
                 icon: Icons.article_outlined,
                 reading: true,
                 child: Text(freshMaterial.content),
@@ -189,8 +191,11 @@ class MaterialDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
             MaterialMetadata(
               rows: [
-                ('Created', freshMaterial.createdLabel),
-                ('Status', _materialStatus(freshMaterial)),
+                (l10n.materialCreatedLabel, freshMaterial.createdLabel),
+                (
+                  l10n.materialStatusLabel,
+                  _materialStatus(context, freshMaterial),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -341,37 +346,41 @@ class MaterialDetailScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete material?'),
-        content: const SingleChildScrollView(
+        title: Text(context.l10n.materialDeleteDialogTitle),
+        content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Removed:'),
-              SizedBox(height: 6),
-              _DeleteConfirmationItem('Source material'),
-              _DeleteConfirmationItem('Uploaded file, if present'),
-              _DeleteConfirmationItem('Summary'),
-              _DeleteConfirmationItem('Material-specific flashcards'),
-              _DeleteConfirmationItem('Material-specific quizzes'),
-              SizedBox(height: 16),
-              Text('Preserved:'),
-              SizedBox(height: 6),
-              _DeleteConfirmationItem('Completed quiz results'),
-              _DeleteConfirmationItem('Progress history'),
-              _DeleteConfirmationItem('Cumulative weak topics'),
-              _DeleteConfirmationItem('Study history'),
+              Text(context.l10n.materialDeleteRemoved),
+              const SizedBox(height: 6),
+              _DeleteConfirmationItem(
+                context.l10n.materialDeleteSourceMaterial,
+              ),
+              _DeleteConfirmationItem(context.l10n.materialDeleteUploadedFile),
+              _DeleteConfirmationItem(context.l10n.materialDeleteSummary),
+              _DeleteConfirmationItem(context.l10n.materialDeleteFlashcards),
+              _DeleteConfirmationItem(context.l10n.materialDeleteQuizzes),
+              const SizedBox(height: 16),
+              Text(context.l10n.materialDeletePreserved),
+              const SizedBox(height: 6),
+              _DeleteConfirmationItem(context.l10n.materialDeleteQuizResults),
+              _DeleteConfirmationItem(
+                context.l10n.materialDeleteProgressHistory,
+              ),
+              _DeleteConfirmationItem(context.l10n.materialDeleteWeakTopics),
+              _DeleteConfirmationItem(context.l10n.materialDeleteStudyHistory),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.actionCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete material'),
+            child: Text(context.l10n.materialDeleteMaterial),
           ),
         ],
       ),
@@ -389,7 +398,7 @@ class MaterialDetailScreen extends StatelessWidget {
       );
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Material deleted.')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.materialDeleted)));
       if (subjects.isNotEmpty) {
         Navigator.pushReplacementNamed(
           context,
@@ -403,8 +412,10 @@ class MaterialDetailScreen extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            state.materialLifecycleErrorFor(material.id) ??
-                'Could not delete the material. Try again.',
+            context.localizedSafeMessage(
+              state.materialLifecycleErrorFor(material.id) ??
+                  'Could not delete the material. Try again.',
+            ),
           ),
         ),
       );
@@ -424,12 +435,13 @@ class MaterialDetailScreen extends StatelessWidget {
     final message =
         AppStateScope.read(context).favoriteSyncErrorMessage ??
         'Could not update favorite.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
   }
 
-  String _materialStatus(StudyMaterial material) {
+  String _materialStatus(BuildContext context, StudyMaterial material) {
+    final l10n = context.l10n;
     if (material.kind == MaterialKind.pdf &&
         material.processingStatus == MaterialProcessingStatus.ready &&
         material.hasContentText) {
@@ -437,23 +449,36 @@ class MaterialDetailScreen extends StatelessWidget {
         final ocr = material.scannedPdfOcr!;
         final total = ocr.totalPages;
         return total == null
-            ? 'Text extracted with OCR'
-            : 'Text extracted with OCR · ${ocr.processedPages.length}/$total pages${ocr.partial ? ' · Partial' : ''}';
+            ? l10n.materialTextExtractedWithOcr
+            : '${l10n.materialTextExtractedWithOcr} · ${l10n.materialPagesProgress(ocr.processedPages.length, total)}${ocr.partial ? ' · ${l10n.materialPartialResultTitle}' : ''}';
       }
       final pageCount = material.pdfExtraction?.pageCount;
       return pageCount == null
-          ? 'Text extracted'
-          : 'Text extracted · $pageCount ${pageCount == 1 ? 'page' : 'pages'}';
+          ? l10n.materialTextExtracted
+          : '${l10n.materialTextExtracted} · ${l10n.materialPagesCount(pageCount)}';
     }
     if (material.kind == MaterialKind.image &&
         material.processingStatus == MaterialProcessingStatus.ready &&
         material.hasContentText) {
-      return 'Text extracted';
+      return l10n.materialTextExtracted;
     }
-    return material.processingStatus == MaterialProcessingStatus.pending
-        ? 'Uploaded · Waiting for processing'
-        : material.processingStatus.name;
+    return switch (material.processingStatus) {
+      MaterialProcessingStatus.pending =>
+        '${l10n.materialUploadedStatus} · ${l10n.materialWaitingForProcessing}',
+      MaterialProcessingStatus.processing => l10n.materialProcessingStatus,
+      MaterialProcessingStatus.ready => l10n.materialTextExtracted,
+      MaterialProcessingStatus.failed => l10n.materialFailedStatus,
+    };
   }
+}
+
+String _materialTypeLabel(BuildContext context, StudyMaterial material) {
+  final l10n = context.l10n;
+  return switch (material.kind) {
+    MaterialKind.pdf => l10n.uploadPdfKind,
+    MaterialKind.image => l10n.uploadImageKind,
+    MaterialKind.pastedText => l10n.materialPastedTextKind,
+  };
 }
 
 class _DeleteConfirmationItem extends StatelessWidget {
@@ -510,17 +535,17 @@ class _StaleRecoverySectionState extends State<_StaleRecoverySection> {
     final state = AppStateScope.watch(context);
     if (!state.isMaterialRecoveryEligible(widget.materialId)) {
       return MaterialStatusPanel(
-        title: 'Processing material',
+        title: context.l10n.materialProcessingTitle,
         message: widget.processingMessage,
         icon: Icons.autorenew,
         progress: true,
       );
     }
     return MaterialStatusPanel(
-      title: 'Processing appears to be stuck',
-      message: 'Reset this material and try processing again.',
+      title: context.l10n.materialStuckTitle,
+      message: context.l10n.materialStuckMessage,
       icon: Icons.restart_alt,
-      actionLabel: 'Reset and try again',
+      actionLabel: context.l10n.materialResetTryAgain,
       onAction: () => state.recoverStuckMaterialFor(
         AuthScope.read(context).user,
         widget.materialId,
@@ -570,16 +595,22 @@ class _ImageExtractionSection extends StatelessWidget {
         material.imageOcr?.failureMessage;
     return SectionCard(
       icon: failed ? Icons.error_outline : Icons.document_scanner_outlined,
-      title: failed ? 'Image text extraction failed' : 'Image text extraction',
+      title: failed
+          ? context.l10n.imageExtractionFailedTitle
+          : context.l10n.imageExtractionTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (loading || processing)
-            const Text('Reading image text…')
+            Text(context.l10n.imageReadingText)
           else if (failed)
-            Text(error ?? 'Could not extract image text. Try again.')
+            Text(
+              context.localizedSafeMessage(
+                error ?? 'Could not read the uploaded image.',
+              ),
+            )
           else
-            const Text('Extract readable study text from this image.'),
+            Text(context.l10n.imageExtractHelper),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: loading || processing
@@ -596,10 +627,10 @@ class _ImageExtractionSection extends StatelessWidget {
                 : const Icon(Icons.document_scanner_outlined),
             label: Text(
               loading || processing
-                  ? 'Reading image text…'
+                  ? context.l10n.imageReadingText
                   : failed
-                  ? 'Retry image text extraction'
-                  : 'Extract text from image',
+                  ? context.l10n.imageRetryExtraction
+                  : context.l10n.imageExtractText,
             ),
           ),
         ],
@@ -633,26 +664,27 @@ class _PdfExtractionSection extends StatelessWidget {
       return SectionCard(
         icon: Icons.document_scanner_outlined,
         title: mixed
-            ? 'Some pages need OCR'
-            : 'No usable selectable text was found',
+            ? context.l10n.pdfSomePagesNeedOcr
+            : context.l10n.pdfNoSelectableText,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (scanning)
-              const Text('Reading scanned PDF pages…')
+              Text(context.l10n.pdfReadingScannedPages)
             else if (pageCount > 10)
-              const Text(
-                'This version can scan PDFs up to 10 pages. Split the PDF and upload a smaller file.',
-              )
+              Text(context.l10n.errorPdfOcrPageLimit)
             else
               Text(
                 mixed
-                    ? '$candidateCount of $pageCount pages require OCR.'
-                    : 'This PDF requires OCR before its study tools are available.',
+                    ? context.l10n.pdfRequiresOcrCount(
+                        candidateCount,
+                        pageCount,
+                      )
+                    : context.l10n.pdfRequiresOcrMessage,
               ),
             if (state.scannedPdfOcrErrorFor(material.id) case final error?) ...[
               const SizedBox(height: 8),
-              Text(error),
+              Text(context.localizedSafeMessage(error)),
             ],
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -666,7 +698,9 @@ class _PdfExtractionSection extends StatelessWidget {
                     )
                   : const Icon(Icons.document_scanner_outlined),
               label: Text(
-                scanning ? 'Reading scanned PDF pages…' : 'Scan PDF with OCR',
+                scanning
+                    ? context.l10n.pdfReadingScannedPages
+                    : context.l10n.pdfScanWithOcr,
               ),
             ),
           ],
@@ -679,16 +713,22 @@ class _PdfExtractionSection extends StatelessWidget {
 
     return SectionCard(
       icon: failed ? Icons.error_outline : Icons.text_snippet_outlined,
-      title: failed ? 'Text extraction failed' : 'PDF text extraction',
+      title: failed
+          ? context.l10n.pdfTextExtractionFailedTitle
+          : context.l10n.pdfTextExtractionTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (loading || processing)
-            const Text('Extracting selectable text…')
+            Text(context.l10n.pdfExtractingSelectable)
           else if (failed)
-            Text(error ?? 'Could not extract text. Try again.')
+            Text(
+              context.localizedSafeMessage(
+                error ?? 'Could not read the uploaded PDF.',
+              ),
+            )
           else
-            const Text('Extract selectable text from this PDF.'),
+            Text(context.l10n.pdfExtractHelper),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: loading || processing
@@ -702,10 +742,10 @@ class _PdfExtractionSection extends StatelessWidget {
                 : const Icon(Icons.text_snippet_outlined),
             label: Text(
               loading || processing
-                  ? 'Extracting selectable text…'
+                  ? context.l10n.pdfExtractingSelectable
                   : failed
-                  ? 'Retry text extraction'
-                  : 'Extract text',
+                  ? context.l10n.pdfRetryTextExtraction
+                  : context.l10n.pdfExtractText,
             ),
           ),
         ],
@@ -726,19 +766,18 @@ class _PdfExtractionSection extends StatelessWidget {
     final start = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Scan PDF with OCR?'),
+        title: Text(context.l10n.pdfScanDialogTitle),
         content: Text(
-          'This PDF has $pageCount pages. $candidateCount pages require OCR.\n\n'
-          'This version supports up to 10 total pages. AI OCR can take longer and uses paid processing.',
+          context.l10n.pdfScanDialogMessage(pageCount, candidateCount),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.actionCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Start OCR'),
+            child: Text(context.l10n.pdfStartOcr),
           ),
         ],
       ),
@@ -765,16 +804,18 @@ class _QuizSection extends StatelessWidget {
     final hasEnoughText = state.canGenerateQuizForMaterial(material);
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
-    final buttonLabel = isSupabaseMode ? 'Generate quiz' : 'Generate mock quiz';
+    final buttonLabel = isSupabaseMode
+        ? context.l10n.quizGenerate
+        : context.l10n.quizGenerateMock;
     final subject = state.subjectFor(material.subjectId);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (hasQuiz)
-          Text('${quiz.questionCount} questions ready.')
+          Text(context.l10n.quizQuestionsReady(quiz.questionCount))
         else
-          const Text('No quiz yet.'),
+          Text(context.l10n.quizNoQuiz),
         if (canGenerate && !hasEnoughText) ...[
           const SizedBox(height: 8),
           Text(
@@ -785,7 +826,7 @@ class _QuizSection extends StatelessWidget {
         if (state.quizGenerationErrorMessage != null) ...[
           const SizedBox(height: 8),
           Text(
-            state.quizGenerationErrorMessage!,
+            context.localizedSafeMessage(state.quizGenerationErrorMessage!),
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ],
@@ -802,7 +843,7 @@ class _QuizSection extends StatelessWidget {
               ),
             ),
             icon: const Icon(Icons.quiz_outlined),
-            label: const Text('Take quiz'),
+            label: Text(context.l10n.quizTakeQuiz),
           )
         else if (canGenerate)
           FilledButton.icon(
@@ -816,7 +857,9 @@ class _QuizSection extends StatelessWidget {
                   )
                 : const Icon(Icons.auto_awesome_outlined),
             label: Text(
-              state.isGeneratingQuiz ? 'Generating quiz' : buttonLabel,
+              state.isGeneratingQuiz
+                  ? context.l10n.quizGenerating
+                  : buttonLabel,
             ),
           ),
       ],
@@ -833,9 +876,9 @@ class _QuizSection extends StatelessWidget {
     final message =
         AppStateScope.read(context).quizGenerationErrorMessage ??
         'Could not generate quiz. Try again.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
   }
 }
 
@@ -857,24 +900,22 @@ class _FlashcardsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (hasCards)
-          Text(
-            cards.length == 1
-                ? '1 flashcard ready.'
-                : '${cards.length} flashcards ready.',
-          )
+          Text(context.l10n.flashcardsReady(cards.length))
         else
-          const Text('No flashcards yet.'),
+          Text(context.l10n.flashcardsNoFlashcards),
         if (canGenerate && !hasEnoughText) ...[
           const SizedBox(height: 8),
           Text(
-            'Add more lecture text before generating flashcards.',
+            context.l10n.flashcardsTooShort,
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
         if (state.flashcardGenerationErrorMessage != null) ...[
           const SizedBox(height: 8),
           Text(
-            state.flashcardGenerationErrorMessage!,
+            context.localizedSafeMessage(
+              state.flashcardGenerationErrorMessage!,
+            ),
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ],
@@ -894,7 +935,7 @@ class _FlashcardsSection extends StatelessWidget {
                   ),
                 ),
                 icon: const Icon(Icons.school_outlined),
-                label: const Text('Start training'),
+                label: Text(context.l10n.flashcardsStartTraining),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -908,7 +949,7 @@ class _FlashcardsSection extends StatelessWidget {
                   ),
                 ),
                 icon: const Icon(Icons.style_outlined),
-                label: const Text('Review these flashcards'),
+                label: Text(context.l10n.flashcardsReviewThese),
               ),
             ],
           ),
@@ -931,8 +972,8 @@ class _FlashcardsSection extends StatelessWidget {
                 : const Icon(Icons.auto_awesome_outlined),
             label: Text(
               state.isGeneratingFlashcards
-                  ? 'Generating flashcards'
-                  : 'Generate flashcards',
+                  ? context.l10n.flashcardsGenerating
+                  : context.l10n.flashcardsGenerate,
             ),
           ),
       ],
@@ -961,9 +1002,8 @@ class _FlashcardsSection extends StatelessWidget {
     }
     if (result != null) {
       final message = switch (result.createdCount) {
-        0 => 'No new unique flashcards were generated.',
-        1 => '1 new flashcard generated.',
-        final count => '$count new flashcards generated.',
+        0 => context.l10n.flashcardsNoNewGenerated,
+        final count => context.l10n.flashcardsNewGenerated(count),
       };
       ScaffoldMessenger.of(
         context,
@@ -973,9 +1013,9 @@ class _FlashcardsSection extends StatelessWidget {
     final message =
         AppStateScope.read(context).flashcardGenerationErrorMessage ??
         'Could not generate flashcards. Try again.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
   }
 }
 
@@ -1002,10 +1042,10 @@ class _SummarySectionState extends State<_SummarySection> {
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
     final buttonLabel = hasSummary
-        ? 'Regenerate summary'
+        ? context.l10n.summaryRegenerate
         : isSupabaseMode
-        ? 'Summarize with AI'
-        : 'Generate mock summary';
+        ? context.l10n.summaryWithAi
+        : context.l10n.summaryGenerateMock;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1026,22 +1066,26 @@ class _SummarySectionState extends State<_SummarySection> {
               alignment: Alignment.centerLeft,
               child: TextButton(
                 onPressed: () => setState(() => _isExpanded = !_isExpanded),
-                child: Text(_isExpanded ? 'Show less' : 'Show more'),
+                child: Text(
+                  _isExpanded
+                      ? context.l10n.actionShowLess
+                      : context.l10n.actionShowMore,
+                ),
               ),
             ),
         ] else
-          const Text('No summary yet.'),
+          Text(context.l10n.summaryNoSummary),
         if (canGenerate && !hasEnoughText) ...[
           const SizedBox(height: 8),
           Text(
-            AppState.summaryTooShortMessage,
+            context.localizedSafeMessage(AppState.summaryTooShortMessage),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
         if (state.summaryGenerationErrorMessage != null) ...[
           const SizedBox(height: 8),
           Text(
-            state.summaryGenerationErrorMessage!,
+            context.localizedSafeMessage(state.summaryGenerationErrorMessage!),
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ],
@@ -1058,7 +1102,9 @@ class _SummarySectionState extends State<_SummarySection> {
                   )
                 : const Icon(Icons.auto_awesome_outlined),
             label: Text(
-              state.isGeneratingSummary ? 'Generating summary' : buttonLabel,
+              state.isGeneratingSummary
+                  ? context.l10n.summaryGenerating
+                  : buttonLabel,
             ),
           ),
         ],
@@ -1082,8 +1128,8 @@ class _SummarySectionState extends State<_SummarySection> {
     final message =
         AppStateScope.read(context).summaryGenerationErrorMessage ??
         'Could not generate summary. Try again.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
   }
 }
