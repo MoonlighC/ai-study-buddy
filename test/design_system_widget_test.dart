@@ -7,6 +7,7 @@ import 'package:ai_study_buddy/app/routes.dart';
 import 'package:ai_study_buddy/app/theme.dart';
 import 'package:ai_study_buddy/features/auth/auth_controller.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
+import 'package:ai_study_buddy/l10n/app_localizations.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
 import 'package:ai_study_buddy/shared/widgets/app_bottom_nav.dart';
 import 'package:ai_study_buddy/shared/widgets/glass_components.dart';
@@ -275,7 +276,7 @@ void main() {
     await tester.pump();
     expect(
       FocusManager.instance.primaryFocus?.debugLabel,
-      'Navigation Subjects',
+      'Navigation subjects',
     );
     await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
@@ -369,6 +370,8 @@ Future<void> _pumpWorkspace(
         child: MaterialApp(
           key: UniqueKey(),
           theme: buildAppTheme(),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           initialRoute: AppRoutes.dashboard,
           onGenerateRoute: AppRoutes.onGenerateRoute,
           builder: (context, child) => MediaQuery(

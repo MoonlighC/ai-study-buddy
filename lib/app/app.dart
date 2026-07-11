@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'app_config.dart';
+import 'app_preferences.dart';
 import 'app_state.dart';
 import 'routes.dart';
 import 'theme.dart';
+import '../l10n/app_localizations.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/favorites/favorite_repository.dart';
@@ -39,6 +41,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.summaryRepository,
     this.quizRepository,
     this.weakTopicRepository,
+    this.preferencesStore,
     super.key,
   });
 
@@ -59,6 +62,7 @@ class StudyBuddyApp extends StatefulWidget {
   final SummaryRepository? summaryRepository;
   final QuizRepository? quizRepository;
   final WeakTopicRepository? weakTopicRepository;
+  final AppPreferencesStore? preferencesStore;
 
   @override
   State<StudyBuddyApp> createState() => _StudyBuddyAppState();
@@ -82,11 +86,18 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
     summaryRepository: widget.summaryRepository,
     quizRepository: widget.quizRepository,
     weakTopicRepository: widget.weakTopicRepository,
+    preferencesStore: widget.preferencesStore,
   );
   late final AuthController authController = AuthController(
     authRepository: widget.authRepository ?? MockAuthRepository(),
     profileRepository: widget.profileRepository ?? NoopProfileRepository(),
   );
+
+  @override
+  void initState() {
+    super.initState();
+    state.loadPreferences().ignore();
+  }
 
   @override
   void dispose() {
@@ -100,12 +111,19 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
       state: state,
       child: AuthScope(
         controller: authController,
-        child: MaterialApp(
-          title: 'AI Study Buddy',
-          debugShowCheckedModeBanner: false,
-          theme: buildAppTheme(),
-          initialRoute: AppRoutes.authGate,
-          onGenerateRoute: AppRoutes.onGenerateRoute,
+        child: AnimatedBuilder(
+          animation: state,
+          builder: (context, _) => MaterialApp(
+            locale: state.appLocale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            onGenerateTitle: (context) =>
+                AppLocalizations.of(context)!.appTitle,
+            debugShowCheckedModeBanner: false,
+            theme: buildAppTheme(),
+            initialRoute: AppRoutes.authGate,
+            onGenerateRoute: AppRoutes.onGenerateRoute,
+          ),
         ),
       ),
     );

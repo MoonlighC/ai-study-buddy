@@ -6,6 +6,7 @@ import '../../app/design_system/responsive.dart';
 import '../../app/design_system/theme_extensions.dart';
 import '../../app/design_system/tokens.dart';
 import '../../app/routes.dart';
+import '../../l10n/l10n_extensions.dart';
 import 'glass_components.dart';
 import 'study_buddy_mark.dart';
 
@@ -172,7 +173,7 @@ class AppTopBar extends StatelessWidget {
           if (showBack)
             IconButton(
               key: const ValueKey('app-back-button'),
-              tooltip: 'Back',
+              tooltip: context.l10n.actionBack,
               onPressed: () => Navigator.maybePop(context),
               icon: const Icon(Icons.arrow_back),
             )
@@ -198,7 +199,7 @@ class AppTopBar extends StatelessWidget {
           if (showSearch)
             IconButton(
               key: const ValueKey('top-search-action'),
-              tooltip: 'Search',
+              tooltip: context.l10n.actionSearch,
               onPressed: () => Navigator.pushNamed(context, AppRoutes.search),
               icon: const Icon(Icons.search),
             ),
@@ -325,27 +326,32 @@ class ResponsiveAppScaffold extends StatelessWidget {
 }
 
 const _destinations = [
-  _Destination('Home', Icons.home_outlined, Icons.home, AppRoutes.dashboard),
   _Destination(
-    'Subjects',
+    _DestinationLabel.home,
+    Icons.home_outlined,
+    Icons.home,
+    AppRoutes.dashboard,
+  ),
+  _Destination(
+    _DestinationLabel.subjects,
     Icons.folder_outlined,
     Icons.folder,
     AppRoutes.subjects,
   ),
   _Destination(
-    'Favorites',
+    _DestinationLabel.favorites,
     Icons.star_outline,
     Icons.star,
     AppRoutes.favorites,
   ),
   _Destination(
-    'Progress',
+    _DestinationLabel.progress,
     Icons.trending_up_outlined,
     Icons.trending_up,
     AppRoutes.progress,
   ),
   _Destination(
-    'Settings',
+    _DestinationLabel.settings,
     Icons.settings_outlined,
     Icons.settings,
     AppRoutes.settings,
@@ -435,7 +441,7 @@ class _NavigationDestination extends StatefulWidget {
 class _NavigationDestinationState extends State<_NavigationDestination> {
   bool _focused = false;
   late final FocusNode _focusNode = FocusNode(
-    debugLabel: 'Navigation ${widget.destination.label}',
+    debugLabel: 'Navigation ${widget.destination.id}',
   );
 
   @override
@@ -447,6 +453,7 @@ class _NavigationDestinationState extends State<_NavigationDestination> {
   @override
   Widget build(BuildContext context) {
     final visualEffects = AppVisualEffects.of(context);
+    final label = widget.destination.label(context);
     final duration = visualEffects.reducedMotion
         ? Duration.zero
         : AppMotion.stateChange;
@@ -460,11 +467,11 @@ class _NavigationDestinationState extends State<_NavigationDestination> {
     final item = Semantics(
       button: true,
       selected: widget.active,
-      label: widget.destination.label,
+      label: label,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
         child: Focus(
-          key: ValueKey('nav-${widget.destination.label.toLowerCase()}'),
+          key: ValueKey('nav-${widget.destination.id}'),
           focusNode: _focusNode,
           autofocus: widget.active,
           onFocusChange: (focused) {
@@ -527,14 +534,14 @@ class _NavigationDestinationState extends State<_NavigationDestination> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            widget.destination.label,
+                            label,
                             maxLines: 1,
                             style: const TextStyle(fontSize: 10.5),
                           ),
                         ],
                       )
                     : Tooltip(
-                        message: widget.destination.label,
+                        message: label,
                         child: Icon(
                           widget.active
                               ? widget.destination.activeIcon
@@ -552,9 +559,24 @@ class _NavigationDestinationState extends State<_NavigationDestination> {
 }
 
 class _Destination {
-  const _Destination(this.label, this.icon, this.activeIcon, this.route);
-  final String label;
+  const _Destination(this.labelKey, this.icon, this.activeIcon, this.route);
+  final _DestinationLabel labelKey;
   final IconData icon;
   final IconData activeIcon;
   final String route;
+
+  String get id => labelKey.name;
+
+  String label(BuildContext context) {
+    final l10n = context.l10n;
+    return switch (labelKey) {
+      _DestinationLabel.home => l10n.navHome,
+      _DestinationLabel.subjects => l10n.navSubjects,
+      _DestinationLabel.favorites => l10n.navFavorites,
+      _DestinationLabel.progress => l10n.navProgress,
+      _DestinationLabel.settings => l10n.navSettings,
+    };
+  }
 }
+
+enum _DestinationLabel { home, subjects, favorites, progress, settings }

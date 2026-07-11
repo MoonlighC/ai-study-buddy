@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
+import '../../l10n/l10n_extensions.dart';
 
 class AppTopActions extends StatelessWidget {
   const AppTopActions({
@@ -19,7 +20,7 @@ class AppTopActions extends StatelessWidget {
       children: [
         if (showHome)
           IconButton(
-            tooltip: 'Home',
+            tooltip: context.l10n.navHome,
             onPressed: () => Navigator.pushNamedAndRemoveUntil(
               context,
               AppRoutes.dashboard,
@@ -28,13 +29,13 @@ class AppTopActions extends StatelessWidget {
             icon: const Icon(Icons.home_outlined),
           ),
         IconButton(
-          tooltip: 'Search',
+          tooltip: context.l10n.actionSearch,
           onPressed: () => Navigator.pushNamed(context, AppRoutes.search),
           icon: const Icon(Icons.search),
         ),
         if (showFavorites)
           IconButton(
-            tooltip: 'Favorites',
+            tooltip: context.l10n.navFavorites,
             onPressed: () => Navigator.pushNamed(context, AppRoutes.favorites),
             icon: const Icon(Icons.star_outline),
           ),

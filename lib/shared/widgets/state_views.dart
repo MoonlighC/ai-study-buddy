@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design_system/tokens.dart';
+import '../../l10n/l10n_extensions.dart';
 
 class EmptyState extends StatelessWidget {
   const EmptyState({
@@ -98,7 +99,7 @@ class ErrorRetryState extends StatelessWidget {
             ],
           ),
         ),
-        TextButton(onPressed: onRetry, child: const Text('Retry')),
+        TextButton(onPressed: onRetry, child: Text(context.l10n.actionRetry)),
       ],
     ),
   );

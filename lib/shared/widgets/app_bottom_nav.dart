@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
+import '../../l10n/l10n_extensions.dart';
 
 class AppBottomNav extends StatelessWidget {
   const AppBottomNav({super.key});
@@ -27,31 +28,31 @@ class AppBottomNav extends StatelessWidget {
         }
         Navigator.pushReplacementNamed(context, target);
       },
-      destinations: const [
+      destinations: [
         NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home),
-          label: 'Home',
+          icon: const Icon(Icons.home_outlined),
+          selectedIcon: const Icon(Icons.home),
+          label: context.l10n.navHome,
         ),
         NavigationDestination(
-          icon: Icon(Icons.folder_outlined),
-          selectedIcon: Icon(Icons.folder),
-          label: 'Subjects',
+          icon: const Icon(Icons.folder_outlined),
+          selectedIcon: const Icon(Icons.folder),
+          label: context.l10n.navSubjects,
         ),
         NavigationDestination(
-          icon: Icon(Icons.star_outline),
-          selectedIcon: Icon(Icons.star),
-          label: 'Favorites',
+          icon: const Icon(Icons.star_outline),
+          selectedIcon: const Icon(Icons.star),
+          label: context.l10n.navFavorites,
         ),
         NavigationDestination(
-          icon: Icon(Icons.trending_up_outlined),
-          selectedIcon: Icon(Icons.trending_up),
-          label: 'Progress',
+          icon: const Icon(Icons.trending_up_outlined),
+          selectedIcon: const Icon(Icons.trending_up),
+          label: context.l10n.navProgress,
         ),
         NavigationDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings),
-          label: 'Settings',
+          icon: const Icon(Icons.settings_outlined),
+          selectedIcon: const Icon(Icons.settings),
+          label: context.l10n.navSettings,
         ),
       ],
     );

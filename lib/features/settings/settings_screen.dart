@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_config.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../l10n/l10n_extensions.dart';
 import '../auth/auth_controller.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
@@ -16,20 +17,24 @@ class SettingsScreen extends StatelessWidget {
     final auth = AuthScope.watch(context);
     final isSupabaseMode =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
+    final l10n = context.l10n;
     final accountEmail = auth.user?.email ?? 'alex.student@example.test';
     final accountName = isSupabaseMode
         ? auth.effectiveDisplayName
         : 'Alex Student';
 
     return ResponsiveAppScaffold(
-      title: 'Settings',
+      title: l10n.settingsTitle,
       activeRoute: AppRoutes.settings,
       body: ResponsiveContent(
         width: ResponsiveContentWidth.wide,
         child: ListView(
           key: const ValueKey('settings-scroll-view'),
           children: [
-            Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              l10n.settingsTitle,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
             Text(
               'Mock preferences for the local prototype.',
@@ -68,20 +73,20 @@ class SettingsScreen extends StatelessWidget {
             ),
             _SettingsSection(
               icon: Icons.language_outlined,
-              title: 'Language',
-              subtitle: 'Display preference only',
+              title: l10n.settingsLanguageTitle,
+              subtitle: l10n.settingsDisplayLanguage,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _PreferenceChips<AppLanguagePreference>(
                     values: AppLanguagePreference.values,
                     selected: state.languagePreference,
-                    labelFor: (value) => value.label,
+                    labelFor: (value) => _languageLabel(context, value),
                     onSelected: state.setLanguagePreference,
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Full translation comes later.',
+                    l10n.settingsDisplayLanguageDescription,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -124,18 +129,18 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.palette_outlined,
               title: 'App preferences',
               subtitle: 'Appearance options are planned',
-              child: const ListTile(
+              child: ListTile(
                 enabled: false,
                 contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.dark_mode_outlined),
-                title: Text('Appearance'),
-                subtitle: Text('Dark mode is not available yet.'),
+                leading: const Icon(Icons.dark_mode_outlined),
+                title: const Text('Appearance'),
+                subtitle: Text(l10n.settingsAppearanceUnavailable),
               ),
             ),
             _SettingsSection(
               icon: Icons.speed_outlined,
               title: 'Usage & Limits',
-              subtitle: 'Usage tracking is not connected',
+              subtitle: l10n.settingsUsageUnavailable,
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('View usage information'),
@@ -198,6 +203,16 @@ class SettingsScreen extends StatelessWidget {
     return switch (mode) {
       AppBackendMode.mock => 'mock',
       AppBackendMode.supabase => 'supabase',
+    };
+  }
+
+  String _languageLabel(BuildContext context, AppLanguagePreference value) {
+    final l10n = context.l10n;
+    return switch (value) {
+      AppLanguagePreference.system => l10n.languageSystem,
+      AppLanguagePreference.english => l10n.languageEnglish,
+      AppLanguagePreference.german => l10n.languageGerman,
+      AppLanguagePreference.russian => l10n.languageRussian,
     };
   }
 

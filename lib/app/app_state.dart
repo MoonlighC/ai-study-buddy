@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_config.dart';
+import 'app_preferences.dart';
 import '../core/models/flashcard.dart';
 import '../core/models/material.dart';
 import '../core/models/quiz.dart';
@@ -46,7 +49,10 @@ class AppState extends ChangeNotifier {
     SummaryRepository? summaryRepository,
     QuizRepository? quizRepository,
     WeakTopicRepository? weakTopicRepository,
+    AppPreferencesStore? preferencesStore,
   }) : config = config ?? AppConfig.fromValues(),
+       preferencesStore =
+           preferencesStore ?? const SharedPreferencesAppPreferencesStore(),
        subjectRepository =
            subjectRepository ??
            ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
@@ -150,6 +156,7 @@ class AppState extends ChangeNotifier {
   );
 
   final AppConfig config;
+  final AppPreferencesStore preferencesStore;
   final SubjectRepository subjectRepository;
   final MaterialRepository materialRepository;
   final MaterialUploadRepository materialUploadRepository;
@@ -340,6 +347,8 @@ class AppState extends ChangeNotifier {
   String? get weakTopicSyncErrorMessage => _weakTopicSyncErrorMessage;
 
   AppLanguagePreference get languagePreference => _languagePreference;
+
+  Locale? get appLocale => _languagePreference.locale;
 
   int get defaultFlashcardSessionSize => _defaultFlashcardSessionSize;
 
@@ -1136,12 +1145,29 @@ class AppState extends ChangeNotifier {
     clearSyncedSubjectsForSignOut();
   }
 
+  Future<void> loadPreferences() async {
+    AppLanguagePreference loadedPreference;
+    try {
+      loadedPreference = AppLanguagePreferenceX.fromPersistedCode(
+        await preferencesStore.loadLocaleCode(),
+      );
+    } catch (_) {
+      loadedPreference = AppLanguagePreference.system;
+    }
+    if (_languagePreference == loadedPreference) {
+      return;
+    }
+    _languagePreference = loadedPreference;
+    notifyListeners();
+  }
+
   void setLanguagePreference(AppLanguagePreference value) {
     if (_languagePreference == value) {
       return;
     }
     _languagePreference = value;
     notifyListeners();
+    preferencesStore.saveLocaleCode(value.persistedCode).ignore();
   }
 
   void setDefaultFlashcardSessionSize(int value) {
@@ -2199,14 +2225,44 @@ class AppState extends ChangeNotifier {
   }
 }
 
-enum AppLanguagePreference { system, english, german }
+enum AppLanguagePreference { system, english, german, russian }
 
-extension AppLanguagePreferenceLabel on AppLanguagePreference {
+extension AppLanguagePreferenceX on AppLanguagePreference {
+  static AppLanguagePreference fromPersistedCode(String? code) {
+    return switch (code) {
+      'en' => AppLanguagePreference.english,
+      'de' => AppLanguagePreference.german,
+      'ru' => AppLanguagePreference.russian,
+      'system' || null => AppLanguagePreference.system,
+      _ => AppLanguagePreference.system,
+    };
+  }
+
+  String get persistedCode {
+    return switch (this) {
+      AppLanguagePreference.system => 'system',
+      AppLanguagePreference.english => 'en',
+      AppLanguagePreference.german => 'de',
+      AppLanguagePreference.russian => 'ru',
+    };
+  }
+
+  Locale? get locale {
+    return switch (this) {
+      AppLanguagePreference.system => null,
+      AppLanguagePreference.english => const Locale('en'),
+      AppLanguagePreference.german => const Locale('de'),
+      AppLanguagePreference.russian => const Locale('ru'),
+    };
+  }
+
   String get label {
     return switch (this) {
       AppLanguagePreference.system => 'System default',
       AppLanguagePreference.english => 'English',
       AppLanguagePreference.german => 'Deutsch',
+      AppLanguagePreference.russian =>
+        '\u0420\u0443\u0441\u0441\u043a\u0438\u0439',
     };
   }
 }

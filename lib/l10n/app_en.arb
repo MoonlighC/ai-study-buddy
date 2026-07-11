@@ -1,0 +1,103 @@
+{
+  "@@locale": "en",
+  "appTitle": "AI Study Buddy",
+  "@appTitle": {
+    "description": "Application title used by the app shell and operating system."
+  },
+  "navHome": "Home",
+  "@navHome": {
+    "description": "Root navigation destination for the dashboard."
+  },
+  "navSubjects": "Subjects",
+  "@navSubjects": {
+    "description": "Root navigation destination for the subject list."
+  },
+  "navFavorites": "Favorites",
+  "@navFavorites": {
+    "description": "Root navigation destination for saved favorite materials and cards."
+  },
+  "navProgress": "Progress",
+  "@navProgress": {
+    "description": "Root navigation destination for learning progress."
+  },
+  "navSettings": "Settings",
+  "@navSettings": {
+    "description": "Root navigation destination for app settings."
+  },
+  "actionSearch": "Search",
+  "@actionSearch": {
+    "description": "Tooltip or label for opening search."
+  },
+  "actionBack": "Back",
+  "@actionBack": {
+    "description": "Tooltip or label for navigating back."
+  },
+  "actionCancel": "Cancel",
+  "@actionCancel": {
+    "description": "Common action that dismisses a dialog or cancels an operation."
+  },
+  "actionSave": "Save",
+  "@actionSave": {
+    "description": "Common action that saves a change."
+  },
+  "actionRetry": "Retry",
+  "@actionRetry": {
+    "description": "Common action for trying an operation again."
+  },
+  "statusLoading": "Loading",
+  "@statusLoading": {
+    "description": "Generic loading state text."
+  },
+  "statusError": "Error",
+  "@statusError": {
+    "description": "Generic error state title."
+  },
+  "settingsTitle": "Settings",
+  "@settingsTitle": {
+    "description": "Settings screen title."
+  },
+  "settingsLanguageTitle": "Language",
+  "@settingsLanguageTitle": {
+    "description": "Settings section title for display language."
+  },
+  "settingsDisplayLanguage": "Display language",
+  "@settingsDisplayLanguage": {
+    "description": "Label for the user-selectable display language preference."
+  },
+  "settingsDisplayLanguageDescription": "Choose the language for app navigation and controls.",
+  "@settingsDisplayLanguageDescription": {
+    "description": "Explains that only UI chrome changes language, not study content."
+  },
+  "languageSystem": "System default",
+  "@languageSystem": {
+    "description": "Locale preference that follows the operating system language."
+  },
+  "languageEnglish": "English",
+  "@languageEnglish": {
+    "description": "Locale preference label for English."
+  },
+  "languageGerman": "Deutsch",
+  "@languageGerman": {
+    "description": "Locale preference label for German, written in German."
+  },
+  "languageRussian": "Русский",
+  "@languageRussian": {
+    "description": "Locale preference label for Russian, written in Russian."
+  },
+  "settingsAppearanceUnavailable": "Dark mode is not available yet.",
+  "@settingsAppearanceUnavailable": {
+    "description": "Settings placeholder explaining that dark mode is not implemented."
+  },
+  "settingsUsageUnavailable": "Usage tracking is not connected",
+  "@settingsUsageUnavailable": {
+    "description": "Settings placeholder explaining that usage tracking is not connected."
+  },
+  "comingLater": "Coming later",
+  "@comingLater": {
+    "description": "Short placeholder for features planned for a later phase."
+  },
+  "genericLocalizedError": "Something went wrong. Please try again.",
+  "@genericLocalizedError": {
+    "description": "Generic localized fallback for safe errors when no specific mapping exists."
+  }
+}
