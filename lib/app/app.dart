@@ -120,7 +120,9 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
             onGenerateTitle: (context) =>
                 AppLocalizations.of(context)!.appTitle,
             debugShowCheckedModeBanner: false,
-            theme: buildAppTheme(),
+            theme: buildAppTheme(Brightness.light),
+            darkTheme: buildAppTheme(Brightness.dark),
+            themeMode: state.themeMode,
             initialRoute: AppRoutes.authGate,
             onGenerateRoute: AppRoutes.onGenerateRoute,
           ),

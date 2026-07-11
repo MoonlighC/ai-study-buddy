@@ -167,6 +167,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAppearanceUnavailable => 'Dark mode is not available yet.';
 
   @override
+  String get settingsAppearanceDescription =>
+      'Choose the app appearance. System default follows your device setting.';
+
+  @override
+  String get appearanceSystem => 'System default';
+
+  @override
+  String get appearanceLight => 'Light';
+
+  @override
+  String get appearanceDark => 'Dark';
+
+  @override
   String get settingsUsageTitle => 'Usage & Limits';
 
   @override

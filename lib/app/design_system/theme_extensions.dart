@@ -12,6 +12,8 @@ class AppGlassTheme extends ThemeExtension<AppGlassTheme> {
     required this.border,
     required this.highlight,
     required this.shadow,
+    required this.lowEffectsTint,
+    required this.focusRing,
   });
 
   const AppGlassTheme.light()
@@ -23,7 +25,22 @@ class AppGlassTheme extends ThemeExtension<AppGlassTheme> {
       activeLayerTint = const Color(0x30FFFFFF),
       border = const Color(0x70AFC2DD),
       highlight = const Color(0xF2FFFFFF),
-      shadow = const Color(0x2B263A5D);
+      shadow = const Color(0x2B263A5D),
+      lowEffectsTint = const Color(0xFFF2F6FC),
+      focusRing = const Color(0xFF315EA8);
+
+  const AppGlassTheme.dark()
+    : subtleTint = const Color(0xB8142134),
+      standardTint = const Color(0xC918263B),
+      prominentTint = const Color(0xE21B2A41),
+      readingTint = const Color(0xF2212E42),
+      navigationTint = const Color(0xE0162439),
+      activeLayerTint = const Color(0x663B6096),
+      border = const Color(0xCC718199),
+      highlight = const Color(0xFFD5E4FF),
+      shadow = const Color(0xB3000712),
+      lowEffectsTint = const Color(0xFF172438),
+      focusRing = const Color(0xFFA9C7FF);
 
   final Color subtleTint;
   final Color standardTint;
@@ -34,6 +51,8 @@ class AppGlassTheme extends ThemeExtension<AppGlassTheme> {
   final Color border;
   final Color highlight;
   final Color shadow;
+  final Color lowEffectsTint;
+  final Color focusRing;
 
   @override
   AppGlassTheme copyWith({
@@ -46,6 +65,8 @@ class AppGlassTheme extends ThemeExtension<AppGlassTheme> {
     Color? border,
     Color? highlight,
     Color? shadow,
+    Color? lowEffectsTint,
+    Color? focusRing,
   }) => AppGlassTheme(
     subtleTint: subtleTint ?? this.subtleTint,
     standardTint: standardTint ?? this.standardTint,
@@ -56,6 +77,8 @@ class AppGlassTheme extends ThemeExtension<AppGlassTheme> {
     border: border ?? this.border,
     highlight: highlight ?? this.highlight,
     shadow: shadow ?? this.shadow,
+    lowEffectsTint: lowEffectsTint ?? this.lowEffectsTint,
+    focusRing: focusRing ?? this.focusRing,
   );
 
   @override
@@ -71,6 +94,8 @@ class AppGlassTheme extends ThemeExtension<AppGlassTheme> {
       border: Color.lerp(border, other.border, t)!,
       highlight: Color.lerp(highlight, other.highlight, t)!,
       shadow: Color.lerp(shadow, other.shadow, t)!,
+      lowEffectsTint: Color.lerp(lowEffectsTint, other.lowEffectsTint, t)!,
+      focusRing: Color.lerp(focusRing, other.focusRing, t)!,
     );
   }
 }

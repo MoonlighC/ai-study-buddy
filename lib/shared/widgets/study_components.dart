@@ -198,7 +198,9 @@ class QuizChoiceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = correct
-        ? AppColors.success
+        ? (Theme.of(context).brightness == Brightness.dark
+              ? AppColors.darkSuccess
+              : AppColors.success)
         : incorrect
         ? scheme.error
         : selected

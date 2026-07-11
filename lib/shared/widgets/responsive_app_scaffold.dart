@@ -17,15 +17,30 @@ class AtmosphericBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subjectGlow = subjectColor ?? AppColors.atmosphericMint;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final subjectGlow = subjectColor == null
+        ? (dark ? AppColors.darkAtmosphericMint : AppColors.atmosphericMint)
+        : _safeAtmosphericColor(subjectColor!, dark);
+    final backgroundColors = dark
+        ? const [Color(0xFF0B1220), Color(0xFF101B2D), Color(0xFF17152A)]
+        : const [Color(0xFFF8FAFD), Color(0xFFDDE9F8), Color(0xFFF0E7F7)];
+    final blue = dark
+        ? AppColors.darkAtmosphericBlue
+        : AppColors.atmosphericBlue;
+    final lilac = dark
+        ? AppColors.darkAtmosphericLilac
+        : AppColors.atmosphericLilac;
+    final mint = dark
+        ? AppColors.darkAtmosphericMint
+        : AppColors.atmosphericMint;
     return ExcludeSemantics(
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF8FAFD), Color(0xFFDDE9F8), Color(0xFFF0E7F7)],
-            stops: [0, 0.52, 1],
+            colors: backgroundColors,
+            stops: const [0, 0.52, 1],
           ),
         ),
         child: Stack(
@@ -33,25 +48,21 @@ class AtmosphericBackground extends StatelessWidget {
             Positioned(
               top: -90,
               right: -40,
-              child: _Glow(
-                color: AppColors.atmosphericBlue,
-                size: 430,
-                opacity: 0.72,
-              ),
+              child: _Glow(color: blue, size: 430, opacity: dark ? 0.34 : 0.72),
             ),
             Positioned(
               bottom: -130,
               left: -80,
-              child: _Glow(
-                color: AppColors.atmosphericLilac,
-                size: 480,
-                opacity: 0.68,
-              ),
+              child: _Glow(color: lilac, size: 480, opacity: dark ? 0.3 : 0.68),
             ),
             Positioned(
               top: 170,
               left: 80,
-              child: _Glow(color: subjectGlow, size: 310, opacity: 0.62),
+              child: _Glow(
+                color: subjectGlow,
+                size: 310,
+                opacity: dark ? 0.26 : 0.62,
+              ),
             ),
             Positioned(
               bottom: -100,
@@ -60,9 +71,9 @@ class AtmosphericBackground extends StatelessWidget {
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: _Glow(
-                  color: AppColors.atmosphericMint,
+                  color: mint,
                   size: 390,
-                  opacity: 0.54,
+                  opacity: dark ? 0.24 : 0.54,
                 ),
               ),
             ),
@@ -70,6 +81,18 @@ class AtmosphericBackground extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _safeAtmosphericColor(Color color, bool dark) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl
+        .withSaturation(hsl.saturation.clamp(0.28, 0.58).toDouble())
+        .withLightness(
+          dark
+              ? hsl.lightness.clamp(0.28, 0.42).toDouble()
+              : hsl.lightness.clamp(0.62, 0.82).toDouble(),
+        )
+        .toColor();
   }
 }
 
@@ -513,7 +536,7 @@ class _NavigationDestinationState extends State<_NavigationDestination> {
                   borderRadius: BorderRadius.circular(AppRadii.prominent),
                   border: _focused
                       ? Border.all(
-                          color: Theme.of(context).colorScheme.primary,
+                          color: context.glassTheme.focusRing,
                           width: 2,
                         )
                       : null,

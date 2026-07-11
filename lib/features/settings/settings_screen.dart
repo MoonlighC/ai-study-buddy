@@ -128,13 +128,18 @@ class SettingsScreen extends StatelessWidget {
             _SettingsSection(
               icon: Icons.palette_outlined,
               title: l10n.settingsAppPreferencesTitle,
-              subtitle: l10n.settingsAppearancePlanned,
-              child: ListTile(
-                enabled: false,
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.dark_mode_outlined),
-                title: Text(l10n.settingsAppearance),
-                subtitle: Text(l10n.settingsAppearanceUnavailable),
+              subtitle: l10n.settingsAppearanceDescription,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _PreferenceLabel(l10n.settingsAppearance),
+                  _PreferenceChips<AppAppearancePreference>(
+                    values: AppAppearancePreference.values,
+                    selected: state.appearancePreference,
+                    labelFor: (value) => _appearanceLabel(context, value),
+                    onSelected: state.setAppearancePreference,
+                  ),
+                ],
               ),
             ),
             _SettingsSection(
@@ -227,6 +232,15 @@ class SettingsScreen extends StatelessWidget {
       StudyDifficultyPreference.exam => l10n.settingsDifficultyExam,
     };
   }
+
+  String _appearanceLabel(
+    BuildContext context,
+    AppAppearancePreference value,
+  ) => switch (value) {
+    AppAppearancePreference.system => context.l10n.appearanceSystem,
+    AppAppearancePreference.light => context.l10n.appearanceLight,
+    AppAppearancePreference.dark => context.l10n.appearanceDark,
+  };
 
   String _editableName(AuthController auth) {
     final profileName = _cleanName(auth.profile?.displayName);
@@ -432,7 +446,9 @@ class _PreferenceChips<T> extends StatelessWidget {
           ChoiceChip(
             label: Text(labelFor(value)),
             selected: selected == value,
-            onSelected: (_) => onSelected(value),
+            onSelected: (isSelected) {
+              if (isSelected) onSelected(value);
+            },
           ),
       ],
     );

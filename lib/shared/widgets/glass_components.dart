@@ -47,7 +47,7 @@ class GlassSurface extends StatelessWidget {
               });
     final effectiveTint = visualEffects.lowEffects
         ? Color.alphaBlend(
-            Colors.white.withValues(alpha: effects.lowEffectsTintBoost),
+            glass.lowEffectsTint.withValues(alpha: effects.lowEffectsTintBoost),
             baseTint,
           )
         : baseTint;
@@ -86,11 +86,21 @@ class GlassSurface extends StatelessWidget {
               : glass.border.withValues(alpha: 0.66),
           width: visualEffects.lowEffects ? 1 : 0.8,
         ),
-        boxShadow: switch (depth) {
-          GlassDepth.subtle => AppShadows.soft,
-          GlassDepth.standard => AppShadows.floating,
-          GlassDepth.prominent => AppShadows.modal,
-        },
+        boxShadow: [
+          BoxShadow(
+            color: glass.shadow,
+            blurRadius: switch (depth) {
+              GlassDepth.subtle => 22,
+              GlassDepth.standard => 30,
+              GlassDepth.prominent => 40,
+            },
+            offset: Offset(0, switch (depth) {
+              GlassDepth.subtle => 8,
+              GlassDepth.standard => 12,
+              GlassDepth.prominent => 18,
+            }),
+          ),
+        ],
       ),
       child: CustomPaint(
         foregroundPainter: _GlassEdgePainter(
@@ -275,11 +285,16 @@ class GlassDialog extends StatelessWidget {
   Widget build(BuildContext context) => Dialog(
     backgroundColor: Colors.transparent,
     elevation: 0,
-    child: GlassSurface(
-      depth: GlassDepth.prominent,
-      reading: true,
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: child,
+    child: ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
+      child: GlassSurface(
+        depth: GlassDepth.prominent,
+        reading: true,
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: SingleChildScrollView(child: child),
+      ),
     ),
   );
 }

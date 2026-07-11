@@ -17,6 +17,23 @@ abstract final class AppColors {
   static const atmosphericBlue = Color(0xFFB9D4FF);
   static const atmosphericLilac = Color(0xFFD8C9F2);
   static const atmosphericMint = Color(0xFFBDE3DC);
+
+  static const darkCanvas = Color(0xFF0B1220);
+  static const darkCanvasElevated = Color(0xFF111B2C);
+  static const darkPrimary = Color(0xFF91B7FF);
+  static const darkSecondary = Color(0xFF72C9C1);
+  static const darkAccent = Color(0xFFE7B56F);
+  static const darkSuccess = Color(0xFF72D6A5);
+  static const darkWarning = Color(0xFFF0BA6A);
+  static const darkError = Color(0xFFFF929C);
+  static const darkInfo = Color(0xFF84B9F1);
+  static const darkTextStrong = Color(0xFFF3F6FC);
+  static const darkText = Color(0xFFD6DEEA);
+  static const darkTextMuted = Color(0xFFAEB9CA);
+  static const darkBorder = Color(0xFF718199);
+  static const darkAtmosphericBlue = Color(0xFF294D8F);
+  static const darkAtmosphericLilac = Color(0xFF4B3678);
+  static const darkAtmosphericMint = Color(0xFF245D5B);
 }
 
 abstract final class AppSpacing {

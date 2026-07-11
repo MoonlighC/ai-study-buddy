@@ -406,6 +406,30 @@ abstract class AppLocalizations {
   /// **'Dark mode is not available yet.'**
   String get settingsAppearanceUnavailable;
 
+  /// Explains the persisted appearance selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the app appearance. System default follows your device setting.'**
+  String get settingsAppearanceDescription;
+
+  /// Appearance option that follows platform brightness.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get appearanceSystem;
+
+  /// Light appearance option.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get appearanceLight;
+
+  /// Dark appearance option.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get appearanceDark;
+
   /// Settings section linking to usage screen.
   ///
   /// In en, this message translates to:

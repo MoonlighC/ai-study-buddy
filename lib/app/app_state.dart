@@ -186,6 +186,8 @@ class AppState extends ChangeNotifier {
   int _materialCounter = 0;
   int _sessionCounter = 0;
   AppLanguagePreference _languagePreference = AppLanguagePreference.system;
+  AppAppearancePreference _appearancePreference =
+      AppAppearancePreference.system;
   int _defaultFlashcardSessionSize = 5;
   int _dailyStudyGoalMinutes = 20;
   StudyDifficultyPreference _defaultDifficulty =
@@ -349,6 +351,10 @@ class AppState extends ChangeNotifier {
   AppLanguagePreference get languagePreference => _languagePreference;
 
   Locale? get appLocale => _languagePreference.locale;
+
+  AppAppearancePreference get appearancePreference => _appearancePreference;
+
+  ThemeMode get themeMode => _appearancePreference.themeMode;
 
   int get defaultFlashcardSessionSize => _defaultFlashcardSessionSize;
 
@@ -1154,10 +1160,20 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       loadedPreference = AppLanguagePreference.system;
     }
-    if (_languagePreference == loadedPreference) {
+    AppAppearancePreference loadedAppearance;
+    try {
+      loadedAppearance = AppAppearancePreferenceX.fromPersistedCode(
+        await preferencesStore.loadAppearanceCode(),
+      );
+    } catch (_) {
+      loadedAppearance = AppAppearancePreference.system;
+    }
+    if (_languagePreference == loadedPreference &&
+        _appearancePreference == loadedAppearance) {
       return;
     }
     _languagePreference = loadedPreference;
+    _appearancePreference = loadedAppearance;
     notifyListeners();
   }
 
@@ -1168,6 +1184,13 @@ class AppState extends ChangeNotifier {
     _languagePreference = value;
     notifyListeners();
     preferencesStore.saveLocaleCode(value.persistedCode).ignore();
+  }
+
+  void setAppearancePreference(AppAppearancePreference value) {
+    if (_appearancePreference == value) return;
+    _appearancePreference = value;
+    notifyListeners();
+    preferencesStore.saveAppearanceCode(value.persistedCode).ignore();
   }
 
   void setDefaultFlashcardSessionSize(int value) {
@@ -2226,6 +2249,30 @@ class AppState extends ChangeNotifier {
 }
 
 enum AppLanguagePreference { system, english, german, russian }
+
+enum AppAppearancePreference { system, light, dark }
+
+extension AppAppearancePreferenceX on AppAppearancePreference {
+  static AppAppearancePreference fromPersistedCode(String? code) =>
+      switch (code) {
+        'light' => AppAppearancePreference.light,
+        'dark' => AppAppearancePreference.dark,
+        'system' || null => AppAppearancePreference.system,
+        _ => AppAppearancePreference.system,
+      };
+
+  String get persistedCode => switch (this) {
+    AppAppearancePreference.system => 'system',
+    AppAppearancePreference.light => 'light',
+    AppAppearancePreference.dark => 'dark',
+  };
+
+  ThemeMode get themeMode => switch (this) {
+    AppAppearancePreference.system => ThemeMode.system,
+    AppAppearancePreference.light => ThemeMode.light,
+    AppAppearancePreference.dark => ThemeMode.dark,
+  };
+}
 
 extension AppLanguagePreferenceX on AppLanguagePreference {
   static AppLanguagePreference fromPersistedCode(String? code) {

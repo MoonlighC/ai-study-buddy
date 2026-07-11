@@ -109,6 +109,43 @@ void main() {
     );
   });
 
+  testWidgets(
+    'appearance selector switches immediately and exposes selection',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final store = MemoryAppPreferencesStore();
+      await _setViewport(tester, const Size(800, 900));
+      await _enterDashboard(tester, preferencesStore: store);
+      await _openSettings(tester);
+
+      await tester.scrollUntilVisible(
+        find.text('Appearance'),
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('settings-scroll-view')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await _settle(tester);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Dark'));
+      await _settle(tester);
+
+      final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(app.themeMode, ThemeMode.dark);
+      expect(store.savedAppearanceCodes, ['dark']);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Dark'))
+            .selected,
+        isTrue,
+      );
+
+      semantics.dispose();
+    },
+  );
+
   testWidgets('Settings locale switch updates shared navigation immediately', (
     tester,
   ) async {

@@ -168,6 +168,19 @@ class AppLocalizationsDe extends AppLocalizations {
       'Der Dunkelmodus ist noch nicht verfügbar.';
 
   @override
+  String get settingsAppearanceDescription =>
+      'Wähle die Darstellung der App. Die Systemeinstellung folgt deinem Gerät.';
+
+  @override
+  String get appearanceSystem => 'Systemeinstellung';
+
+  @override
+  String get appearanceLight => 'Hell';
+
+  @override
+  String get appearanceDark => 'Dunkel';
+
+  @override
   String get settingsUsageTitle => 'Nutzung & Limits';
 
   @override

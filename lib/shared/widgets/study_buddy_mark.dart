@@ -34,7 +34,7 @@ class StudyBuddyMark extends StatelessWidget {
         color ??
         switch (variant) {
           StudyBuddyMarkVariant.fullColor => AppColors.primary,
-          StudyBuddyMarkVariant.flat => AppColors.textStrong,
+          StudyBuddyMarkVariant.flat => Theme.of(context).colorScheme.onSurface,
           StudyBuddyMarkVariant.monochrome => Theme.of(
             context,
           ).colorScheme.onSurface,

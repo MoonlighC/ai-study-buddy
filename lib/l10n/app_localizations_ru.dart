@@ -168,6 +168,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsAppearanceUnavailable => 'Темная тема пока недоступна.';
 
   @override
+  String get settingsAppearanceDescription =>
+      'Выберите оформление приложения. Системный вариант следует настройкам устройства.';
+
+  @override
+  String get appearanceSystem => 'Как в системе';
+
+  @override
+  String get appearanceLight => 'Светлая';
+
+  @override
+  String get appearanceDark => 'Тёмная';
+
+  @override
   String get settingsUsageTitle => 'Использование и лимиты';
 
   @override
