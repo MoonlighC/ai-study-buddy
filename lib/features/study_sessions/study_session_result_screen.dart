@@ -22,14 +22,22 @@ class StudySessionResultScreen extends StatelessWidget {
     final session = latest != null && latest.subjectId == subject.id
         ? latest
         : null;
-    final quizScore = session?.quizScorePercent ?? ai.quizScoreFor(subject);
-    final weakTopics = session?.weakTopics ?? ai.weakTopicsFor(subject);
-    final flashcards = session?.flashcards ?? state.flashcardsFor(subject.id);
-    final timeBlocks = session?.studyTimeBlocks ?? ai.studyTimeBlocks();
-    final quiz = session?.quizQuestion ?? ai.quizFor(subject).first;
     final material = session == null
         ? null
         : state.materialById(session.materialId);
+    final hasUsableSource =
+        session != null &&
+        material != null &&
+        material.subjectId == subject.id &&
+        state.canGenerateSummaryForMaterial(material);
+    if (!hasUsableSource) {
+      return _UnavailableStudySession(subject: subject);
+    }
+    final quizScore = session.quizScorePercent ?? ai.quizScoreFor(subject);
+    final weakTopics = session.weakTopics;
+    final flashcards = session.flashcards;
+    final timeBlocks = session.studyTimeBlocks;
+    final quiz = session.quizQuestion;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Study Session')),
@@ -38,9 +46,7 @@ class StudySessionResultScreen extends StatelessWidget {
           Text(subject.name, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
           Text(
-            material == null
-                ? 'Mock study session generated from your material.'
-                : 'Generated from: ${material.title}',
+            'Generated from: ${material.title}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
@@ -68,7 +74,7 @@ class StudySessionResultScreen extends StatelessWidget {
           SectionCard(
             icon: Icons.summarize_outlined,
             title: 'Summary',
-            child: Text(session?.summary ?? ai.summaryFor(subject)),
+            child: Text(session.summary),
           ),
           SectionCard(
             icon: Icons.schedule_outlined,
@@ -111,12 +117,10 @@ class StudySessionResultScreen extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: OutlinedButton(
-                      onPressed: session == null
-                          ? null
-                          : () => state.answerQuiz(
-                              sessionId: session.id,
-                              answer: option,
-                            ),
+                      onPressed: () => state.answerQuiz(
+                        sessionId: session.id,
+                        answer: option,
+                      ),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(_answerLabel(session, option)),
@@ -124,7 +128,7 @@ class StudySessionResultScreen extends StatelessWidget {
                     ),
                   ),
                 Text(
-                  session?.feedback ??
+                  session.feedback ??
                       'Quiz score: $quizScore%. Choose an answer to update this local session.',
                 ),
               ],
@@ -187,6 +191,39 @@ class StudySessionResultScreen extends StatelessWidget {
     final isCorrect = session?.answeredCorrectly == true;
     return isCorrect ? '$option - correct' : '$option - incorrect';
   }
+}
+
+class _UnavailableStudySession extends StatelessWidget {
+  const _UnavailableStudySession({required this.subject});
+
+  final Subject subject;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Study Session')),
+    body: AppPage(
+      children: [
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            'No study material available',
+            key: const ValueKey('study-session-unavailable'),
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Add a ready material with useful content to ${subject.name} before creating a study session.',
+        ),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(Icons.arrow_back),
+          label: const Text('Back to subject'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _MetricCard extends StatelessWidget {

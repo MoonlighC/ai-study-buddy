@@ -159,7 +159,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('nav-subjects')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Study Workspace'), findsOneWidget);
+    expect(find.text('Your subjects'), findsOneWidget);
     expect(
       tester.state<NavigatorState>(find.byType(Navigator)).widget.initialRoute,
       anyOf(isNull, AppRoutes.dashboard),
@@ -280,7 +280,70 @@ void main() {
     await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
 
-    expect(find.text('Study Workspace'), findsOneWidget);
+    expect(find.text('Your subjects'), findsOneWidget);
+  });
+
+  testWidgets('subjects adapt columns and keep one navigation system', (
+    tester,
+  ) async {
+    for (final entry in <(Size, int)>[
+      (const Size(390, 844), 1),
+      (const Size(800, 900), 2),
+      (const Size(1280, 900), 2),
+      (const Size(1600, 900), 3),
+    ]) {
+      await _setViewport(tester, entry.$1);
+      await _pumpWorkspace(tester);
+      await tester.tap(find.byKey(const ValueKey('nav-subjects')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(ValueKey('subjects-grid-${entry.$2}')), findsOneWidget);
+      expect(find.byType(AppBottomNav), findsNothing);
+      expect(
+        find.byType(GlassNavigationBar).evaluate().length +
+            find.byType(GlassNavigationRail).evaluate().length,
+        1,
+      );
+    }
+  });
+
+  testWidgets('large text gracefully reduces subject grid columns', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1600, 900));
+    await _pumpWorkspace(tester, textScale: 2);
+    await tester.tap(find.byKey(const ValueKey('nav-subjects')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('subjects-grid-2')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('create subject colors expose selected semantics', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(800, 900));
+    await _pumpWorkspace(tester);
+    await tester.tap(find.byKey(const ValueKey('nav-subjects')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('subjects-create-button')));
+    await tester.pumpAndSettle();
+
+    final semantics = tester.getSemantics(
+      find.bySemanticsLabel('Blue subject color'),
+    );
+    expect(semantics.label, 'Blue subject color');
+    expect(semantics.toString(), contains('isSelected'));
+    expect(semantics.toString(), contains('isButton'));
+
+    await tester.tap(find.byKey(const ValueKey('subject-color-green')));
+    await tester.pump();
+    final green = tester.getSemantics(
+      find.bySemanticsLabel('Green subject color'),
+    );
+    expect(green.label, 'Green subject color');
+    expect(green.toString(), contains('isSelected'));
+    expect(green.toString(), contains('isButton'));
   });
 }
 

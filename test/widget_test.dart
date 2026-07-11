@@ -1334,9 +1334,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('nav-subjects')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Study Workspace'), findsOneWidget);
+    expect(find.text('Your subjects'), findsOneWidget);
 
-    await tester.tap(find.text('Progress').last);
+    await tester.tap(find.byKey(const ValueKey('nav-progress')));
     await tester.pumpAndSettle();
 
     expect(find.text('Knowledge scores'), findsOneWidget);
@@ -1455,6 +1455,54 @@ void main() {
     expect(find.text('Continue with email'), findsNothing);
     expect(find.text('Google coming later'), findsOneWidget);
     expect(find.text('Apple coming later'), findsOneWidget);
+  });
+
+  testWidgets('auth layout uses constraints for phone and desktop', (
+    tester,
+  ) async {
+    await _setTestViewport(tester, const Size(390, 844));
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('auth-single-layout')), findsOneWidget);
+    expect(find.byKey(const ValueKey('auth-split-layout')), findsNothing);
+
+    await _setTestViewport(tester, const Size(1280, 900));
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        key: UniqueKey(),
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('auth-split-layout')), findsOneWidget);
+  });
+
+  testWidgets('auth layout falls back at 800 and large text scale', (
+    tester,
+  ) async {
+    await _setTestViewport(tester, const Size(800, 900));
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: _RecordingAuthRepository(),
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('auth-single-layout')), findsOneWidget);
+    expect(find.byKey(const ValueKey('auth-split-layout')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('login password visibility toggle works', (tester) async {
@@ -1931,7 +1979,7 @@ void main() {
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.subjects);
 
-    await tester.tap(find.text('Create subject'));
+    await tester.tap(find.byKey(const ValueKey('subjects-create-button')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'Subject name'),
@@ -1963,7 +2011,7 @@ void main() {
     await _pushRoute(tester, AppRoutes.subjects);
 
     expect(find.text('Could not sync subjects.'), findsOneWidget);
-    expect(find.text('No subjects yet'), findsOneWidget);
+    expect(find.text('Your app is still usable.'), findsOneWidget);
   });
 
   testWidgets('supabase materials load from fake repository after auth', (
@@ -2044,6 +2092,110 @@ void main() {
       find.text('No summaries yet. Generate one from a material.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('subject study session is disabled with no eligible material', (
+    tester,
+  ) async {
+    await _pumpSubjectDetailWithMaterials(tester, const []);
+
+    final action = tester.widget<GlassButton>(
+      find.ancestor(
+        of: find.text('Create study session'),
+        matching: find.byType(GlassButton),
+      ),
+    );
+    expect(action.onPressed, isNull);
+    expect(
+      find.text('Add a material to create a study session.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Create study session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Study Session'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pending PDF and failed image are not study-session sources', (
+    tester,
+  ) async {
+    for (final material in [
+      _studyMaterial(
+        id: 'pending-pdf',
+        kind: MaterialKind.pdf,
+        status: MaterialProcessingStatus.pending,
+      ),
+      _studyMaterial(
+        id: 'failed-image',
+        kind: MaterialKind.image,
+        status: MaterialProcessingStatus.failed,
+      ),
+    ]) {
+      await _pumpSubjectDetailWithMaterials(tester, [material]);
+      final action = tester.widget<GlassButton>(
+        find.ancestor(
+          of: find.text('Create study session'),
+          matching: find.byType(GlassButton),
+        ),
+      );
+      expect(action.onPressed, isNull);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('ready text PDF and image enable subject study sessions', (
+    tester,
+  ) async {
+    for (final material in [
+      _studyMaterial(id: 'ready-text', kind: MaterialKind.pastedText),
+      _studyMaterial(id: 'ready-pdf', kind: MaterialKind.pdf),
+      _studyMaterial(id: 'ready-image', kind: MaterialKind.image),
+    ]) {
+      await _pumpSubjectDetailWithMaterials(tester, [material]);
+      final action = tester.widget<GlassButton>(
+        find.ancestor(
+          of: find.text('Create study session'),
+          matching: find.byType(GlassButton),
+        ),
+      );
+      expect(action.onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('empty or stale study-session route shows safe state', (
+    tester,
+  ) async {
+    await _pumpSubjectDetailWithMaterials(tester, const []);
+    await _pushRoute(
+      tester,
+      AppRoutes.studySessionResult,
+      arguments: _studySessionSubject,
+    );
+
+    expect(
+      find.byKey(const ValueKey('study-session-unavailable')),
+      findsOneWidget,
+    );
+    expect(find.text('No study material available'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('eligible subject action creates and opens study session', (
+    tester,
+  ) async {
+    final material = _studyMaterial(
+      id: 'session-source',
+      kind: MaterialKind.pastedText,
+    );
+    await _pumpSubjectDetailWithMaterials(tester, [material]);
+
+    await tester.tap(find.text('Create study session'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Study Session'), findsOneWidget);
+    expect(find.text('Generated from: Session material'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('subject summary hub lists summaries and opens material detail', (
@@ -2782,6 +2934,64 @@ Future<void> _enterDashboard(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text('Continue with email'));
   await tester.pumpAndSettle();
+}
+
+Future<void> _setTestViewport(WidgetTester tester, Size size) async {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = size;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+const _studySessionSubject = Subject(
+  id: 'session-subject',
+  name: 'Session Subject',
+  description: 'Session eligibility tests',
+  colorValue: 0xFF2563EB,
+);
+
+StudyMaterial _studyMaterial({
+  required String id,
+  required MaterialKind kind,
+  MaterialProcessingStatus status = MaterialProcessingStatus.ready,
+}) => StudyMaterial(
+  id: id,
+  subjectId: _studySessionSubject.id,
+  title: 'Session material',
+  kind: kind,
+  content:
+      'Useful study content with enough detail to create summaries, flashcards, quizzes, and a focused study session safely.',
+  createdLabel: 'Now',
+  sourceKind: kind == MaterialKind.pastedText
+      ? MaterialSourceKind.manual
+      : MaterialSourceKind.upload,
+  processingStatus: status,
+);
+
+Future<void> _pumpSubjectDetailWithMaterials(
+  WidgetTester tester,
+  List<StudyMaterial> materials,
+) async {
+  await tester.pumpWidget(
+    StudyBuddyApp(
+      key: UniqueKey(),
+      config: _supabaseConfig(),
+      authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
+      profileRepository: _RecordingProfileRepository(),
+      subjectRepository: _RecordingSubjectRepository(
+        loadedSubjects: const [_studySessionSubject],
+      ),
+      materialRepository: _RecordingMaterialRepository(
+        loadedMaterials: materials,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  await _pushRoute(
+    tester,
+    AppRoutes.subjectDetail,
+    arguments: _studySessionSubject,
+  );
 }
 
 Future<void> _pushRoute(

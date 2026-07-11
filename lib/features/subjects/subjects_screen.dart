@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/app_state.dart';
+import '../../app/design_system/responsive.dart';
+import '../../app/design_system/theme_extensions.dart';
+import '../../app/design_system/tokens.dart';
 import '../../app/routes.dart';
+import '../../core/models/subject.dart';
+import '../../shared/widgets/glass_components.dart';
+import '../../shared/widgets/responsive_app_scaffold.dart';
+import '../../shared/widgets/state_views.dart';
 import '../auth/auth_controller.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
-import '../../shared/widgets/app_page.dart';
 
 class SubjectsScreen extends StatelessWidget {
   const SubjectsScreen({super.key});
@@ -14,124 +20,84 @@ class SubjectsScreen extends StatelessWidget {
     final state = AppStateScope.watch(context);
     final subjects = state.subjects;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Study Workspace'),
-        actions: [
-          IconButton(
-            tooltip: 'Search',
-            onPressed: () => Navigator.pushNamed(context, AppRoutes.search),
-            icon: const Icon(Icons.search),
-          ),
-          IconButton(
-            tooltip: 'Favorites',
-            onPressed: () => Navigator.pushNamed(context, AppRoutes.favorites),
-            icon: const Icon(Icons.star_outline),
-          ),
-          IconButton(
-            tooltip: 'Usage limits',
-            onPressed: () => Navigator.pushNamed(context, AppRoutes.usage),
-            icon: const Icon(Icons.speed_outlined),
-          ),
-        ],
-      ),
-      body: AppPage(
-        children: [
-          Text('Subjects', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(
-            'Create folders for lecture notes, summaries, quizzes, and exam prep.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-          if (state.isLoadingSubjects)
-            const Card(
-              child: ListTile(
-                leading: SizedBox.square(
-                  dimension: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+    return ResponsiveAppScaffold(
+      title: 'Subjects',
+      subtitle: 'Study workspace',
+      activeRoute: AppRoutes.subjects,
+      body: SingleChildScrollView(
+        key: const ValueKey('subjects-scroll-view'),
+        child: ResponsiveContent(
+          width: ResponsiveContentWidth.wide,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _SubjectsHeader(
+                creating: state.isCreatingSubject,
+                onCreate: () => _createSubject(context),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              if (state.isLoadingSubjects && subjects.isEmpty)
+                const GlassSurface(
+                  child: LoadingState(label: 'Loading synced subjects'),
                 ),
-                title: Text('Loading synced subjects'),
-              ),
-            ),
-          if (state.subjectSyncErrorMessage != null)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.cloud_off_outlined),
-                title: Text(state.subjectSyncErrorMessage!),
-                subtitle: const Text('Your app is still usable.'),
-                trailing: TextButton(
-                  onPressed: state.isLoadingSubjects
-                      ? null
-                      : () =>
-                            state.loadSubjectsFor(AuthScope.read(context).user),
-                  child: const Text('Retry'),
+              if (state.subjectSyncErrorMessage != null) ...[
+                GlassSurface(
+                  child: ErrorRetryState(
+                    message: state.subjectSyncErrorMessage!,
+                    supportingText: subjects.isEmpty
+                        ? 'Your app is still usable.'
+                        : 'Showing the subjects currently available.',
+                    onRetry: state.isLoadingSubjects
+                        ? null
+                        : () => state.loadSubjectsFor(
+                            AuthScope.read(context).user,
+                          ),
+                  ),
                 ),
-              ),
-            ),
-          if (!state.isLoadingSubjects && subjects.isEmpty)
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.folder_open_outlined),
-                title: Text('No subjects yet'),
-                subtitle: Text('Create your first subject to start syncing.'),
-              ),
-            )
-          else
-            for (final subject in subjects)
-              Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Color(subject.colorValue),
-                    child: Text(
-                      subject.name.characters.first.toUpperCase(),
-                      style: const TextStyle(color: Colors.white),
+                if (subjects.isNotEmpty) const SizedBox(height: AppSpacing.md),
+              ],
+              if (!state.isLoadingSubjects &&
+                  subjects.isEmpty &&
+                  state.subjectSyncErrorMessage == null)
+                GlassSurface(
+                  child: EmptyState(
+                    title: 'No subjects yet',
+                    message: 'Create your first subject to start syncing.',
+                    icon: Icons.folder_open_outlined,
+                    action: FilledButton.icon(
+                      onPressed: state.isCreatingSubject
+                          ? null
+                          : () => _createSubject(context),
+                      icon: const Icon(Icons.create_new_folder_outlined),
+                      label: const Text('Create subject'),
                     ),
                   ),
-                  title: Text(subject.name),
-                  subtitle: Text(
-                    subject.description.isEmpty
-                        ? 'No description yet'
-                        : subject.description,
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.pushNamed(
-                    context,
-                    AppRoutes.subjectDetail,
-                    arguments: subject,
-                  ),
                 ),
-              ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: state.isCreatingSubject
-                ? null
-                : () => _createSubject(context),
-            icon: const Icon(Icons.create_new_folder_outlined),
-            label: Text(
-              state.isCreatingSubject ? 'Creating subject' : 'Create subject',
-            ),
-          ),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _ModeButton(
-                icon: Icons.auto_stories_outlined,
-                label: 'After Lecture',
-                route: AppRoutes.afterLecture,
-              ),
-              _ModeButton(
-                icon: Icons.event_available_outlined,
-                label: 'Exam Prep',
-                route: AppRoutes.examPrep,
+              if (subjects.isNotEmpty)
+                _SubjectsGrid(subjects: subjects, state: state),
+              const SizedBox(height: AppSpacing.xl),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: () =>
+                        Navigator.pushNamed(context, AppRoutes.afterLecture),
+                    icon: const Icon(Icons.auto_stories_outlined),
+                    label: const Text('After Lecture'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () =>
+                        Navigator.pushNamed(context, AppRoutes.examPrep),
+                    icon: const Icon(Icons.event_available_outlined),
+                    label: const Text('Exam Prep'),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
-      bottomNavigationBar: const AppBottomNav(),
     );
   }
 
@@ -140,9 +106,7 @@ class SubjectsScreen extends StatelessWidget {
       context: context,
       builder: (_) => const _CreateSubjectDialog(),
     );
-    if (!context.mounted || request == null) {
-      return;
-    }
+    if (!context.mounted || request == null) return;
     final state = AppStateScope.read(context);
     final created = await state.createSubjectFor(
       AuthScope.read(context).user,
@@ -150,14 +114,177 @@ class SubjectsScreen extends StatelessWidget {
       description: request.description,
       colorValue: request.colorValue,
     );
-    if (!context.mounted || created) {
-      return;
-    }
+    if (!context.mounted || created) return;
     final message =
         state.subjectSyncErrorMessage ?? 'Could not create subject.';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _SubjectsHeader extends StatelessWidget {
+  const _SubjectsHeader({required this.creating, required this.onCreate});
+  final bool creating;
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: AppSpacing.xl,
+    runSpacing: AppSpacing.md,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    alignment: WrapAlignment.spaceBetween,
+    children: [
+      ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 650),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your subjects',
+              style: Theme.of(context).textTheme.displaySmall,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Create focused spaces for lecture notes, summaries, quizzes, and exam prep.',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ],
+        ),
+      ),
+      FilledButton.icon(
+        key: const ValueKey('subjects-create-button'),
+        onPressed: creating ? null : onCreate,
+        icon: const Icon(Icons.create_new_folder_outlined),
+        label: Text(creating ? 'Creating subject' : 'Create subject'),
+      ),
+    ],
+  );
+}
+
+class _SubjectsGrid extends StatelessWidget {
+  const _SubjectsGrid({required this.subjects, required this.state});
+  final List<Subject> subjects;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final scale = MediaQuery.textScalerOf(context).scale(1);
+      final minimum = scale >= 1.8 ? 480.0 : 260.0;
+      final gap = AppSpacing.md;
+      final possible = ((constraints.maxWidth + gap) / (minimum + gap)).floor();
+      final windowMax = switch (AppResponsive.windowClassFor(
+        constraints.maxWidth,
+      )) {
+        AppWindowClass.phone => 1,
+        AppWindowClass.tablet => 2,
+        AppWindowClass.desktop => 3,
+      };
+      final columns = possible.clamp(1, windowMax);
+      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+      return Wrap(
+        key: ValueKey('subjects-grid-$columns'),
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final subject in subjects)
+            SizedBox(
+              width: width,
+              child: _SubjectCard(
+                subject: subject,
+                materialCount:
+                    state.isLoadingMaterials ||
+                        state.materialSyncErrorMessage != null
+                    ? null
+                    : state.materialsFor(subject.id).length,
+              ),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class _SubjectCard extends StatelessWidget {
+  const _SubjectCard({required this.subject, required this.materialCount});
+  final Subject subject;
+  final int? materialCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = safeSubjectColor(subject.colorValue);
+    final initial = subject.name.trim().isEmpty
+        ? '?'
+        : subject.name.trim().characters.first.toUpperCase();
+    return Semantics(
+      button: true,
+      label: 'Open ${subject.name}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('subject-card-${subject.id}'),
+          borderRadius: BorderRadius.circular(AppRadii.card),
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.subjectDetail,
+            arguments: subject,
+          ),
+          child: GlassCard(
+            tint: color.withValues(alpha: 0.12),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 132),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(AppRadii.control),
+                      boxShadow: AppShadows.soft,
+                    ),
+                    child: Text(
+                      initial,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          subject.name,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          subject.description.isEmpty
+                              ? 'No description yet'
+                              : subject.description,
+                        ),
+                        if (materialCount != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            '$materialCount currently loaded ${materialCount == 1 ? 'material' : 'materials'}',
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -167,7 +294,6 @@ class _SubjectDraft {
     required this.description,
     required this.colorValue,
   });
-
   final String name;
   final String description;
   final int colorValue;
@@ -175,18 +301,22 @@ class _SubjectDraft {
 
 class _CreateSubjectDialog extends StatefulWidget {
   const _CreateSubjectDialog();
-
   @override
   State<_CreateSubjectDialog> createState() => _CreateSubjectDialogState();
 }
 
 class _CreateSubjectDialogState extends State<_CreateSubjectDialog> {
-  static const _colors = [0xFF2563EB, 0xFF16A34A, 0xFFDB2777, 0xFFF59E0B];
-
+  static const _colors = [
+    (value: 0xFF2563EB, name: 'Blue'),
+    (value: 0xFF16A34A, name: 'Green'),
+    (value: 0xFFDB2777, name: 'Pink'),
+    (value: 0xFFF59E0B, name: 'Amber'),
+  ];
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
-  int _selectedColor = _colors.first;
+  int _selectedColor = _colors.first.value;
   String? _errorText;
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -196,16 +326,22 @@ class _CreateSubjectDialogState extends State<_CreateSubjectDialog> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Create subject'),
-      content: SingleChildScrollView(
+  Widget build(BuildContext context) => GlassDialog(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Text(
+              'Create subject',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: AppSpacing.lg),
             TextField(
               controller: _nameController,
+              enabled: !_submitted,
               autofocus: true,
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(
@@ -213,57 +349,107 @@ class _CreateSubjectDialogState extends State<_CreateSubjectDialog> {
                 errorText: _errorText,
               ),
               onChanged: (_) {
-                if (_errorText == null) {
-                  return;
-                }
-                setState(() {
-                  _errorText = null;
-                });
+                if (_errorText != null) setState(() => _errorText = null);
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             TextField(
               controller: _descriptionController,
+              enabled: !_submitted,
               textInputAction: TextInputAction.done,
               decoration: const InputDecoration(labelText: 'Description'),
               onSubmitted: (_) => _save(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             Text('Color', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.xs),
             Wrap(
-              spacing: 8,
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
               children: [
-                for (final color in _colors)
-                  ChoiceChip(
-                    label: const SizedBox.square(dimension: 18),
-                    selected: _selectedColor == color,
-                    avatar: CircleAvatar(backgroundColor: Color(color)),
-                    onSelected: (_) => setState(() => _selectedColor = color),
+                for (final option in _colors)
+                  Semantics(
+                    button: true,
+                    selected: _selectedColor == option.value,
+                    label: '${option.name} subject color',
+                    child: Tooltip(
+                      message: option.name,
+                      child: Focus(
+                        onKeyEvent: (_, event) {
+                          if (!_submitted &&
+                              event is KeyDownEvent &&
+                              (event.logicalKey == LogicalKeyboardKey.enter ||
+                                  event.logicalKey ==
+                                      LogicalKeyboardKey.space)) {
+                            setState(() => _selectedColor = option.value);
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        },
+                        child: InkWell(
+                          key: ValueKey(
+                            'subject-color-${option.name.toLowerCase()}',
+                          ),
+                          onTap: _submitted
+                              ? null
+                              : () => setState(
+                                  () => _selectedColor = option.value,
+                                ),
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Color(option.value),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _selectedColor == option.value
+                                    ? Theme.of(context).colorScheme.onSurface
+                                    : Colors.transparent,
+                                width: 3,
+                              ),
+                            ),
+                            child: _selectedColor == option.value
+                                ? const Icon(Icons.check, color: Colors.white)
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.xs,
+              children: [
+                TextButton(
+                  key: const ValueKey('create-subject-cancel'),
+                  onPressed: _submitted ? null : () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  key: const ValueKey('create-subject-save'),
+                  onPressed: _submitted ? null : _save,
+                  child: const Text('Save'),
+                ),
               ],
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
-      ],
-    );
-  }
+    ),
+  );
 
   void _save() {
+    if (_submitted) return;
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() {
-        _errorText = 'Enter a subject name.';
-      });
+      setState(() => _errorText = 'Enter a subject name.');
       return;
     }
+    setState(() => _submitted = true);
     Navigator.pop(
       context,
       _SubjectDraft(
@@ -271,27 +457,6 @@ class _CreateSubjectDialogState extends State<_CreateSubjectDialog> {
         description: _descriptionController.text.trim(),
         colorValue: _selectedColor,
       ),
-    );
-  }
-}
-
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({
-    required this.icon,
-    required this.label,
-    required this.route,
-  });
-
-  final IconData icon;
-  final String label;
-  final String route;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton.tonalIcon(
-      onPressed: () => Navigator.pushNamed(context, route),
-      icon: Icon(icon),
-      label: Text(label),
     );
   }
 }

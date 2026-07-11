@@ -7,6 +7,7 @@ import '../../app/design_system/tokens.dart';
 import '../../app/routes.dart';
 import '../../core/models/material.dart';
 import '../../core/models/subject.dart';
+import '../../core/models/study_session.dart';
 import '../../core/models/weak_topic.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
@@ -32,6 +33,7 @@ class SubjectDetailScreen extends StatelessWidget {
         .take(3)
         .toList();
     final subjectColor = safeSubjectColor(subject.colorValue);
+    final eligibleMaterial = _firstEligibleStudyMaterial(state, materials);
 
     return ResponsiveAppScaffold(
       title: subject.name,
@@ -56,6 +58,7 @@ class SubjectDetailScreen extends StatelessWidget {
                 builder: (context, constraints) {
                   final twoColumns = constraints.maxWidth >= 820;
                   final main = Column(
+                    key: const ValueKey('subject-detail-main-column'),
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _SectionTitle(
@@ -86,9 +89,13 @@ class SubjectDetailScreen extends StatelessWidget {
                     ],
                   );
                   final side = Column(
+                    key: const ValueKey('subject-detail-side-column'),
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _StudyActions(subject: subject),
+                      _StudyActions(
+                        subject: subject,
+                        eligibleMaterial: eligibleMaterial,
+                      ),
                       const SizedBox(height: AppSpacing.lg),
                       _UploadActions(subject: subject),
                       if (focusTopics.isNotEmpty) ...[
@@ -111,9 +118,9 @@ class SubjectDetailScreen extends StatelessWidget {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(flex: 5, child: main),
+                      Expanded(flex: 8, child: main),
                       const SizedBox(width: AppSpacing.xl),
-                      Expanded(flex: 3, child: side),
+                      Expanded(flex: 5, child: side),
                     ],
                   );
                 },
@@ -159,9 +166,7 @@ class _SubjectHero extends StatelessWidget {
     depth: GlassDepth.prominent,
     tint: color.withValues(alpha: 0.14),
     padding: EdgeInsets.all(
-      AppResponsive.prominentSurfacePaddingFor(
-        MediaQuery.sizeOf(context).width,
-      ),
+      AppResponsive.isPhone(context) ? AppSpacing.lg : AppSpacing.xl,
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,9 +219,10 @@ class _SubjectHero extends StatelessWidget {
 }
 
 class _StudyActions extends StatelessWidget {
-  const _StudyActions({required this.subject});
+  const _StudyActions({required this.subject, required this.eligibleMaterial});
 
   final Subject subject;
+  final StudyMaterial? eligibleMaterial;
 
   @override
   Widget build(BuildContext context) => GlassCard(
@@ -240,14 +246,28 @@ class _StudyActions extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         GlassButton(
+          keyValue: const ValueKey('subject-create-study-session'),
           label: 'Create study session',
           icon: Icons.school_outlined,
-          onPressed: () => Navigator.pushNamed(
-            context,
-            AppRoutes.studySessionResult,
-            arguments: subject,
-          ),
+          onPressed: eligibleMaterial == null
+              ? null
+              : () {
+                  AppStateScope.read(context).createStudySession(
+                    subject: subject,
+                    confidence: LectureConfidence.mostly,
+                    materialId: eligibleMaterial!.id,
+                  );
+                  Navigator.pushNamed(
+                    context,
+                    AppRoutes.studySessionResult,
+                    arguments: subject,
+                  );
+                },
         ),
+        if (eligibleMaterial == null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          const Text('Add a material to create a study session.'),
+        ],
       ],
     ),
   );
@@ -481,4 +501,14 @@ String _materialSubtitle(StudyMaterial material) {
       ? 'Uploaded · Waiting for processing'
       : 'Uploaded';
   return '$type · $size · $status';
+}
+
+StudyMaterial? _firstEligibleStudyMaterial(
+  AppState state,
+  List<StudyMaterial> materials,
+) {
+  for (final material in materials) {
+    if (state.canGenerateSummaryForMaterial(material)) return material;
+  }
+  return null;
 }

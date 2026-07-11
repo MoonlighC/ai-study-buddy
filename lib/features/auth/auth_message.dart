@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/design_system/tokens.dart';
+
 class AuthMessage extends StatelessWidget {
   const AuthMessage({required this.message, this.isError = false, super.key});
 
@@ -16,13 +18,31 @@ class AuthMessage extends StatelessWidget {
         ? colorScheme.onErrorContainer
         : colorScheme.onSecondaryContainer;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
+    return Semantics(
+      liveRegion: true,
+      label: '${isError ? 'Error' : 'Status'}: $message',
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: background.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(AppRadii.control),
+          border: Border.all(color: foreground.withValues(alpha: 0.28)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.info_outline,
+              color: foreground,
+              semanticLabel: isError ? 'Error' : 'Status',
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(message, style: TextStyle(color: foreground)),
+            ),
+          ],
+        ),
       ),
-      child: Text(message, style: TextStyle(color: foreground)),
     );
   }
 }

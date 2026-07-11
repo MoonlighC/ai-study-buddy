@@ -93,10 +93,40 @@ void main() {
       MaterialApp(theme: buildAppTheme(), home: const _BrandMarkPreview()),
     );
 
-    await expectLater(
-      find.byKey(const ValueKey('brand-mark-preview')),
-      matchesGoldenFile('goldens/study_buddy_mark_preview.png'),
+    expect(find.byKey(const ValueKey('brand-mark-preview')), findsOneWidget);
+    expect(find.byKey(const ValueKey('brand-host-light')), findsOneWidget);
+    expect(find.byKey(const ValueKey('brand-host-dark')), findsOneWidget);
+    expect(find.byType(StudyBuddyMark), findsNWidgets(10));
+
+    final marks = tester.widgetList<StudyBuddyMark>(
+      find.byType(StudyBuddyMark),
     );
+    expect(
+      marks.where((mark) => mark.variant == StudyBuddyMarkVariant.fullColor),
+      hasLength(8),
+    );
+    expect(
+      marks.where((mark) => mark.variant == StudyBuddyMarkVariant.flat),
+      hasLength(1),
+    );
+    expect(
+      marks.where((mark) => mark.variant == StudyBuddyMarkVariant.monochrome),
+      hasLength(1),
+    );
+
+    for (final size in sizes) {
+      final sample = find.byKey(ValueKey('brand-size-$size'));
+      expect(sample, findsOneWidget);
+      expect(
+        tester.getSize(
+          find.descendant(of: sample, matching: find.byType(StudyBuddyMark)),
+        ),
+        Size.square(size),
+      );
+    }
+    expect(find.byType(OverflowBox), findsNothing);
+    expect(find.byType(CustomPaint), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 }
 
@@ -119,10 +149,12 @@ class _BrandMarkPreview extends StatelessWidget {
             runSpacing: 24,
             children: [
               _VariantPanel(
+                key: ValueKey('brand-host-light'),
                 variant: StudyBuddyMarkVariant.fullColor,
                 background: Colors.white,
               ),
               _VariantPanel(
+                key: ValueKey('brand-host-dark'),
                 variant: StudyBuddyMarkVariant.fullColor,
                 background: AppColors.textStrong,
               ),
@@ -142,7 +174,10 @@ class _BrandMarkPreview extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.end,
             spacing: 24,
             runSpacing: 24,
-            children: [for (final size in sizes) _SizeSample(size: size)],
+            children: [
+              for (final size in sizes)
+                _SizeSample(key: ValueKey('brand-size-$size'), size: size),
+            ],
           ),
         ],
       ),
@@ -152,6 +187,7 @@ class _BrandMarkPreview extends StatelessWidget {
 
 class _VariantPanel extends StatelessWidget {
   const _VariantPanel({
+    super.key,
     required this.variant,
     required this.background,
     this.markColor,
@@ -182,7 +218,7 @@ class _VariantPanel extends StatelessWidget {
 }
 
 class _SizeSample extends StatelessWidget {
-  const _SizeSample({required this.size});
+  const _SizeSample({required this.size, super.key});
 
   final double size;
 

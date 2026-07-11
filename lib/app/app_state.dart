@@ -2140,9 +2140,25 @@ class AppState extends ChangeNotifier {
     StudyMaterial? material,
     int sessionNumber,
   ) {
-    final fallback = _ai.quizFor(subject).first;
-    if (material == null) {
+    final fallback = _ai.quizFor(subject).firstOrNull;
+    if (material == null && fallback != null) {
       return fallback;
+    }
+    if (material == null) {
+      return QuizQuestion(
+        id: 'local-session-$sessionNumber-fallback-quiz',
+        subjectId: subject.id,
+        question: 'What is the next useful step for this subject?',
+        options: const [
+          'Review the available material',
+          'Skip every source',
+          'Delete the subject',
+          'Ignore the topic',
+        ],
+        correctAnswer: 'Review the available material',
+        explanation: 'A useful source is needed for a focused study session.',
+        difficulty: StudyDifficulty.medium,
+      );
     }
     return QuizQuestion(
       id: 'local-session-$sessionNumber-source-quiz',
@@ -2157,7 +2173,7 @@ class AppState extends ChangeNotifier {
       correctAnswer: material.title,
       explanation:
           'This local session was generated from "${material.title}", using its pasted content.',
-      difficulty: fallback.difficulty,
+      difficulty: fallback?.difficulty ?? StudyDifficulty.medium,
     );
   }
 
