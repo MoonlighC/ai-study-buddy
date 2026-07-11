@@ -225,6 +225,7 @@ class ResponsiveAppScaffold extends StatelessWidget {
     this.subtitle,
     this.activeRoute,
     this.showBack = false,
+    this.showNavigation = true,
     this.subjectColor,
     super.key,
   });
@@ -234,6 +235,7 @@ class ResponsiveAppScaffold extends StatelessWidget {
   final Widget body;
   final String? activeRoute;
   final bool showBack;
+  final bool showNavigation;
   final Color? subjectColor;
 
   @override
@@ -248,7 +250,9 @@ class ResponsiveAppScaffold extends StatelessWidget {
         showBack: showBack,
       );
       final mediaPadding = MediaQuery.paddingOf(context);
-      final railWorkspaceInset = extended
+      final railWorkspaceInset = !showNavigation
+          ? 0.0
+          : extended
           ? AppShellMetrics.extendedRailWorkspaceInset
           : AppShellMetrics.compactRailWorkspaceInset;
 
@@ -264,24 +268,29 @@ class ResponsiveAppScaffold extends StatelessWidget {
                     children: [
                       topBar,
                       Expanded(
-                        child: Stack(
-                          key: const ValueKey('phone-shell-overlay-stack'),
-                          children: [
-                            Positioned.fill(child: body),
-                            Positioned(
-                              left: AppShellMetrics
-                                  .phoneNavigationHorizontalInset,
-                              right: AppShellMetrics
-                                  .phoneNavigationHorizontalInset,
-                              bottom:
-                                  AppShellMetrics.phoneNavigationBottomInset +
-                                  mediaPadding.bottom,
-                              child: GlassNavigationBar(
-                                activeRoute: activeRoute,
+                        child: !showNavigation
+                            ? body
+                            : Stack(
+                                key: const ValueKey(
+                                  'phone-shell-overlay-stack',
+                                ),
+                                children: [
+                                  Positioned.fill(child: body),
+                                  Positioned(
+                                    left: AppShellMetrics
+                                        .phoneNavigationHorizontalInset,
+                                    right: AppShellMetrics
+                                        .phoneNavigationHorizontalInset,
+                                    bottom:
+                                        AppShellMetrics
+                                            .phoneNavigationBottomInset +
+                                        mediaPadding.bottom,
+                                    child: GlassNavigationBar(
+                                      activeRoute: activeRoute,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
                       ),
                     ],
                   )
@@ -297,14 +306,15 @@ class ResponsiveAppScaffold extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Positioned(
-                        left: 16 + mediaPadding.left,
-                        top: 16 + mediaPadding.top,
-                        child: GlassNavigationRail(
-                          activeRoute: activeRoute,
-                          extended: extended,
+                      if (showNavigation)
+                        Positioned(
+                          left: 16 + mediaPadding.left,
+                          top: 16 + mediaPadding.top,
+                          child: GlassNavigationRail(
+                            activeRoute: activeRoute,
+                            extended: extended,
+                          ),
                         ),
-                      ),
                     ],
                   ),
           ),

@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../core/models/material.dart';
 import '../../core/models/study_session.dart';
 import '../../core/models/study_time_block.dart';
+import '../../core/models/subject.dart';
 import '../../mock/mock_ai_service.dart';
-import '../../shared/widgets/app_bottom_nav.dart';
-import '../../shared/widgets/app_page.dart';
-import '../../shared/widgets/app_top_actions.dart';
-import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/glass_components.dart';
+import '../../shared/widgets/responsive_app_scaffold.dart';
+import '../../shared/widgets/state_views.dart';
+import '../../shared/widgets/study_components.dart';
 
 class AfterLectureScreen extends StatefulWidget {
   const AfterLectureScreen({super.key});
-
   @override
   State<AfterLectureScreen> createState() => _AfterLectureScreenState();
 }
@@ -20,158 +21,184 @@ class AfterLectureScreen extends StatefulWidget {
 class _AfterLectureScreenState extends State<AfterLectureScreen> {
   static const ai = MockAiService();
   LectureConfidence confidence = LectureConfidence.mostly;
+  Subject? selectedSubject;
+  StudyMaterial? selectedMaterial;
 
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
-    final subject = state.subjects.firstOrNull;
-    final materials = subject == null ? [] : state.materialsFor(subject.id);
-    final previewBlocks = _blocksFor(confidence);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('After Lecture'),
-        actions: const [AppTopActions()],
-      ),
-      body: AppPage(
-        children: [
-          Text(
-            'Turn today\'s lecture into a study session',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Start from pasted material and choose how confident you feel.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 12),
-          if (subject == null) ...[
-            const SectionCard(
-              icon: Icons.folder_open_outlined,
-              title: 'No subjects yet',
-              subtitle:
-                  'Create a subject before starting an after-lecture session.',
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.folder_outlined),
-                title: Text('Subjects will appear here after sync.'),
-              ),
+    final subjects = state.subjects;
+    final subject =
+        selectedSubject != null &&
+            subjects.any((s) => s.id == selectedSubject!.id)
+        ? selectedSubject
+        : null;
+    final materials = subject == null
+        ? <StudyMaterial>[]
+        : state.materialsFor(subject.id);
+    final material =
+        selectedMaterial != null &&
+            materials.any((m) => m.id == selectedMaterial!.id)
+        ? selectedMaterial
+        : null;
+    return ResponsiveAppScaffold(
+      title: 'After Lecture',
+      showBack: true,
+      showNavigation: false,
+      body: ResponsiveContent(
+        width: ResponsiveContentWidth.reading,
+        child: ListView(
+          children: [
+            const GlassStatusChip(
+              label: 'Local prototype guidance',
+              icon: Icons.science_outlined,
             ),
-          ] else ...[
-            SectionCard(
-              icon: Icons.article_outlined,
-              title: 'Choose material',
-              subtitle: 'Using the first subject for this scenario.',
-              child: Column(
-                children: [
-                  if (materials.isEmpty)
-                    const ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.article_outlined),
-                      title: Text('No materials yet'),
-                      subtitle: Text(
-                        'You can still create a subject-based session.',
+            const SizedBox(height: 12),
+            if (subjects.isEmpty)
+              EmptyState(
+                title: 'No subjects yet',
+                message:
+                    'Create a subject before starting an after-lecture session.',
+                icon: Icons.folder_open_outlined,
+                action: FilledButton(
+                  onPressed: () =>
+                      Navigator.pushNamed(context, AppRoutes.subjects),
+                  child: const Text('Open Subjects'),
+                ),
+              )
+            else ...[
+              StudyModeCard(
+                title: 'Choose a subject',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final item in subjects)
+                      ChoiceChip(
+                        label: Text(item.name),
+                        selected: subject?.id == item.id,
+                        onSelected: (_) => setState(() {
+                          selectedSubject = item;
+                          selectedMaterial = null;
+                        }),
                       ),
-                    )
-                  else
-                    for (final material in materials)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.article_outlined),
-                        title: Text(material.title),
-                        subtitle: Text(
-                          '${material.createdLabel} - pasted text',
-                        ),
-                        trailing: const Icon(Icons.check_circle_outline),
-                      ),
-                  const ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.post_add_outlined),
-                    title: Text('Add pasted text from a subject page'),
-                    subtitle: Text('Uploads and files come later.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (subject == null)
+                const GlassCard(
+                  child: EmptyState(
+                    title: 'Select a subject',
+                    message: 'Choose the lecture subject to continue.',
+                    icon: Icons.touch_app_outlined,
                   ),
-                ],
-              ),
-            ),
-            SectionCard(
-              icon: Icons.sentiment_satisfied_outlined,
-              title: 'How confident do you feel?',
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final option in [
-                    LectureConfidence.understoodEverything,
-                    LectureConfidence.mostly,
-                    LectureConfidence.aboutHalf,
-                    LectureConfidence.completelyLost,
-                  ])
-                    ChoiceChip(
-                      label: Text(option.label),
-                      selected: confidence == option,
-                      onSelected: (_) => setState(() => confidence = option),
-                    ),
-                ],
-              ),
-            ),
-            SectionCard(
-              icon: Icons.schedule_outlined,
-              title: 'Estimated study time',
-              child: Column(
-                children: [
-                  for (final block in previewBlocks)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: Text(block.label),
-                      trailing: Text('${block.minutes} min'),
-                    ),
-                ],
-              ),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                AppStateScope.read(context).createStudySession(
-                  subject: subject,
-                  confidence: confidence,
-                  materialId: materials.firstOrNull?.id,
-                );
-                Navigator.pushNamed(
-                  context,
-                  AppRoutes.studySessionResult,
-                  arguments: subject,
-                );
-              },
-              icon: const Icon(Icons.auto_awesome_outlined),
-              label: const Text('Create study session'),
-            ),
+                )
+              else if (materials.isEmpty)
+                const GlassCard(
+                  child: EmptyState(
+                    title: 'No materials available',
+                    message:
+                        'Add a usable material before creating this study session.',
+                    icon: Icons.article_outlined,
+                  ),
+                )
+              else
+                StudyModeCard(
+                  title: 'Choose material',
+                  child: Column(
+                    children: [
+                      for (final item in materials)
+                        ListTile(
+                          leading: Icon(
+                            material?.id == item.id
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                          ),
+                          title: Text(item.title),
+                          subtitle: Text(item.createdLabel),
+                          selected: material?.id == item.id,
+                          onTap: () => setState(() => selectedMaterial = item),
+                        ),
+                    ],
+                  ),
+                ),
+              if (material != null) ...[
+                const SizedBox(height: 12),
+                StudyModeCard(
+                  title: 'How confident do you feel?',
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final option in LectureConfidence.values)
+                        ChoiceChip(
+                          label: Text(option.label),
+                          selected: confidence == option,
+                          onSelected: (_) =>
+                              setState(() => confidence = option),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                StudyModeCard(
+                  title: 'Prototype study schedule',
+                  subtitle:
+                      'Estimated locally; this is not tracked study time.',
+                  child: Column(
+                    children: [
+                      for (final block in _blocksFor(confidence))
+                        ListTile(
+                          title: Text(block.label),
+                          trailing: Text('${block.minutes} min'),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: () {
+                    state.createStudySession(
+                      subject: subject!,
+                      confidence: confidence,
+                      materialId: material.id,
+                    );
+                    Navigator.pushNamed(
+                      context,
+                      AppRoutes.studySessionResult,
+                      arguments: subject,
+                    );
+                  },
+                  icon: const Icon(Icons.auto_awesome_outlined),
+                  label: const Text('Create study session'),
+                ),
+              ],
+            ],
           ],
-        ],
+        ),
       ),
-      bottomNavigationBar: const AppBottomNav(),
     );
   }
 
-  List<StudyTimeBlock> _blocksFor(LectureConfidence confidence) {
-    return switch (confidence) {
-      LectureConfidence.understoodEverything => const [
-        StudyTimeBlock(label: 'Summary', minutes: 3),
-        StudyTimeBlock(label: 'Flashcards', minutes: 5),
-        StudyTimeBlock(label: 'Quiz', minutes: 4),
-      ],
-      LectureConfidence.mostly => ai.studyTimeBlocks(),
-      LectureConfidence.aboutHalf => const [
-        StudyTimeBlock(label: 'Summary', minutes: 6),
-        StudyTimeBlock(label: 'Flashcards', minutes: 14),
-        StudyTimeBlock(label: 'Quiz', minutes: 10),
-        StudyTimeBlock(label: 'Review mistakes', minutes: 8),
-      ],
-      LectureConfidence.completelyLost => const [
-        StudyTimeBlock(label: 'Simple explanation', minutes: 10),
-        StudyTimeBlock(label: 'Guided flashcards', minutes: 15),
-        StudyTimeBlock(label: 'Quick quiz', minutes: 10),
-        StudyTimeBlock(label: 'Review mistakes', minutes: 10),
-      ],
-    }.toList();
-  }
+  List<StudyTimeBlock> _blocksFor(LectureConfidence value) => switch (value) {
+    LectureConfidence.understoodEverything => const [
+      StudyTimeBlock(label: 'Summary', minutes: 3),
+      StudyTimeBlock(label: 'Flashcards', minutes: 5),
+      StudyTimeBlock(label: 'Quiz', minutes: 4),
+    ],
+    LectureConfidence.mostly => ai.studyTimeBlocks(),
+    LectureConfidence.aboutHalf => const [
+      StudyTimeBlock(label: 'Summary', minutes: 6),
+      StudyTimeBlock(label: 'Flashcards', minutes: 14),
+      StudyTimeBlock(label: 'Quiz', minutes: 10),
+      StudyTimeBlock(label: 'Review mistakes', minutes: 8),
+    ],
+    LectureConfidence.completelyLost => const [
+      StudyTimeBlock(label: 'Simple explanation', minutes: 10),
+      StudyTimeBlock(label: 'Guided flashcards', minutes: 15),
+      StudyTimeBlock(label: 'Quick quiz', minutes: 10),
+      StudyTimeBlock(label: 'Review mistakes', minutes: 10),
+    ],
+  }.toList();
 }

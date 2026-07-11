@@ -9,8 +9,10 @@ import '../../core/models/quiz_attempt.dart';
 import '../../core/models/quiz_question.dart';
 import '../../core/utils/uuid.dart';
 import '../../core/models/subject.dart';
-import '../../shared/widgets/app_page.dart';
-import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/glass_components.dart';
+import '../../shared/widgets/responsive_app_scaffold.dart';
+import '../../shared/widgets/state_views.dart';
+import '../../shared/widgets/study_components.dart';
 import '../auth/auth_controller.dart';
 import 'quiz_attempt_presentation.dart';
 
@@ -61,86 +63,96 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
     final state = AppStateScope.watch(context);
     final questions = _attempt.quiz.questions;
     if (questions.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Quiz')),
-        body: const AppPage(
-          children: [
-            SectionCard(
-              icon: Icons.quiz_outlined,
-              title: 'Quiz',
-              child: Text('No questions available.'),
-            ),
-          ],
+      return const ResponsiveAppScaffold(
+        title: 'Quiz',
+        showBack: true,
+        showNavigation: false,
+        body: ResponsiveContent(
+          width: ResponsiveContentWidth.reading,
+          child: EmptyState(
+            title: 'No questions available',
+            message: 'Return to the material and generate a quiz first.',
+            icon: Icons.quiz_outlined,
+          ),
         ),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Quiz')),
-      body: AppPage(
-        children: [
-          Text(
-            widget.args.quiz.title,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.args.material.title,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 12),
-          if (_mode == _QuizMode.result)
-            _ResultView(
-              questions: questions,
-              answers: _answers,
-              attempt: state.latestQuizCompletion,
-              isSaving: state.isSavingQuizAttempt || _isCompleting,
-              warningMessage: state.quizAttemptSyncErrorMessage,
-              onReviewMaterial: () => Navigator.pop(context),
-              onRetry: _retry,
-              onReviewMissed: _missedQuestions.isEmpty
-                  ? null
-                  : _startMissedReview,
-            )
-          else if (_mode == _QuizMode.missedReview) ...[
+    return ResponsiveAppScaffold(
+      title: 'Quiz',
+      subtitle: widget.args.material.title,
+      showBack: true,
+      showNavigation: false,
+      subjectColor: Color(widget.args.subject.colorValue),
+      body: ResponsiveContent(
+        width: ResponsiveContentWidth.reading,
+        child: ListView(
+          children: [
             Text(
-              'Missed question review',
-              style: Theme.of(context).textTheme.titleMedium,
+              widget.args.quiz.title,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
-            const SizedBox(height: 8),
-            _QuestionView(
-              question: _missedQuestions[_reviewIndex],
-              questionNumber: _reviewIndex + 1,
-              totalQuestions: _missedQuestions.length,
-              selectedAnswer: _reviewAnswers[_missedQuestions[_reviewIndex].id],
-              onAnswer: (answer) => setState(
-                () =>
-                    _reviewAnswers[_missedQuestions[_reviewIndex].id] = answer,
+            const SizedBox(height: 4),
+            Text(
+              widget.args.material.title,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            if (_mode == _QuizMode.result)
+              _ResultView(
+                questions: questions,
+                answers: _answers,
+                attempt: state.latestQuizCompletion,
+                isSaving: state.isSavingQuizAttempt || _isCompleting,
+                warningMessage: state.quizAttemptSyncErrorMessage,
+                onReviewMaterial: () => Navigator.pop(context),
+                onRetry: _retry,
+                onReviewMissed: _missedQuestions.isEmpty
+                    ? null
+                    : _startMissedReview,
+              )
+            else if (_mode == _QuizMode.missedReview) ...[
+              Text(
+                'Missed question review',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              onNext: _reviewAnswers[_missedQuestions[_reviewIndex].id] == null
-                  ? null
-                  : _advanceMissedReview,
-              finalActionLabel: 'Finish review',
-            ),
-          ] else
-            _QuestionView(
-              question: questions[_index],
-              questionNumber: _index + 1,
-              totalQuestions: questions.length,
-              selectedAnswer: _answers[questions[_index].id],
-              onAnswer: (answer) =>
-                  setState(() => _answers[questions[_index].id] = answer),
-              onNext: _answers[questions[_index].id] == null
-                  ? null
-                  : () {
-                      if (_index == questions.length - 1) {
-                        _completeQuiz();
-                        return;
-                      }
-                      setState(() => _index += 1);
-                    },
-            ),
-        ],
+              const SizedBox(height: 8),
+              _QuestionView(
+                question: _missedQuestions[_reviewIndex],
+                questionNumber: _reviewIndex + 1,
+                totalQuestions: _missedQuestions.length,
+                selectedAnswer:
+                    _reviewAnswers[_missedQuestions[_reviewIndex].id],
+                onAnswer: (answer) => setState(
+                  () => _reviewAnswers[_missedQuestions[_reviewIndex].id] =
+                      answer,
+                ),
+                onNext:
+                    _reviewAnswers[_missedQuestions[_reviewIndex].id] == null
+                    ? null
+                    : _advanceMissedReview,
+                finalActionLabel: 'Finish review',
+              ),
+            ] else
+              _QuestionView(
+                question: questions[_index],
+                questionNumber: _index + 1,
+                totalQuestions: questions.length,
+                selectedAnswer: _answers[questions[_index].id],
+                onAnswer: (answer) =>
+                    setState(() => _answers[questions[_index].id] = answer),
+                onNext: _answers[questions[_index].id] == null
+                    ? null
+                    : () {
+                        if (_index == questions.length - 1) {
+                          _completeQuiz();
+                          return;
+                        }
+                        setState(() => _index += 1);
+                      },
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -237,12 +249,16 @@ class _QuestionView extends StatelessWidget {
     final hasAnswer = selected != null;
     final isCorrect = selected == question.correctAnswer;
 
-    return SectionCard(
-      icon: Icons.quiz_outlined,
-      title: '$questionNumber / $totalQuestions',
+    return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          StudyProgressHeader(
+            current: questionNumber,
+            total: totalQuestions,
+            label: 'Question progress',
+          ),
+          const SizedBox(height: 16),
           Text(
             question.question,
             style: Theme.of(context).textTheme.titleMedium,
@@ -251,12 +267,15 @@ class _QuestionView extends StatelessWidget {
           for (final option in question.options)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: OutlinedButton(
+              child: QuizChoiceTile(
+                label: _optionLabel(option),
+                selected: option == selected,
+                correct: hasAnswer && option == question.correctAnswer,
+                incorrect:
+                    hasAnswer &&
+                    option == selected &&
+                    option != question.correctAnswer,
                 onPressed: hasAnswer ? null : () => onAnswer(option),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(_optionLabel(option)),
-                ),
               ),
             ),
           if (hasAnswer) ...[
@@ -337,68 +356,72 @@ class _ResultView extends StatelessWidget {
         ((correctCount / questions.length) * 100).round();
     final weakTopics = result?.weakTopicsSnapshot ?? _weakTopics();
 
-    return SectionCard(
-      icon: Icons.emoji_events_outlined,
+    return StudyCompletionCard(
       title: 'Result',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Score: $percent%',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 4),
-          Text('$correctCount / ${questions.length} correct'),
-          const SizedBox(height: 16),
-          Text('Missed topics', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 6),
-          if (weakTopics.isEmpty)
-            const Text('No missed topics. Great work!')
-          else
-            for (final topic in weakTopics)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  topic.missCount > 1
-                      ? '${topic.topic} (${topic.missCount} misses)'
-                      : topic.topic,
-                ),
-              ),
-          if (isSaving) ...[
-            const SizedBox(height: 8),
-            const LinearProgressIndicator(),
-            const SizedBox(height: 4),
-            const Text('Saving quiz attempt…'),
-          ],
-          if (!isSaving && warningMessage != null) ...[
-            const SizedBox(height: 8),
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Text(
-              warningMessage!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              'Score: $percent%',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-          ],
-          const SizedBox(height: 12),
-          if (onReviewMissed != null) ...[
+            const SizedBox(height: 4),
+            Text('$correctCount / ${questions.length} correct'),
+            const SizedBox(height: 16),
+            Text(
+              'Missed topics',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            if (weakTopics.isEmpty)
+              const Text('No missed topics. Great work!')
+            else
+              for (final topic in weakTopics)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    topic.missCount > 1
+                        ? '${topic.topic} (${topic.missCount} misses)'
+                        : topic.topic,
+                  ),
+                ),
+            if (isSaving) ...[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(),
+              const SizedBox(height: 4),
+              const Text('Saving quiz attempt…'),
+            ],
+            if (!isSaving && warningMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${warningMessage!} This score is calculated locally and has not been synced.',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 12),
+            if (onReviewMissed != null) ...[
+              FilledButton.icon(
+                onPressed: onReviewMissed,
+                icon: const Icon(Icons.rate_review_outlined),
+                label: const Text('Review missed questions'),
+              ),
+              const SizedBox(height: 8),
+            ],
             FilledButton.icon(
-              onPressed: onReviewMissed,
-              icon: const Icon(Icons.rate_review_outlined),
-              label: const Text('Review missed questions'),
+              onPressed: onReviewMaterial,
+              icon: const Icon(Icons.menu_book_outlined),
+              label: const Text('Review material'),
             ),
             const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: isSaving ? null : onRetry,
+              icon: const Icon(Icons.replay_outlined),
+              label: const Text('Retry quiz'),
+            ),
           ],
-          FilledButton.icon(
-            onPressed: onReviewMaterial,
-            icon: const Icon(Icons.menu_book_outlined),
-            label: const Text('Review material'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: isSaving ? null : onRetry,
-            icon: const Icon(Icons.replay_outlined),
-            label: const Text('Retry quiz'),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

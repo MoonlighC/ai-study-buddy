@@ -59,6 +59,7 @@ void main() {
     expect(find.text('Due one'), findsNothing);
     expect(find.text('Other material'), findsNothing);
 
+    await tester.ensureVisible(find.text('Train weak cards'));
     await tester.tap(find.text('Train weak cards'));
     await tester.pumpAndSettle();
     expect(find.text('1 / 1'), findsOneWidget);
@@ -78,6 +79,7 @@ void main() {
     expect(find.text('Due one'), findsOneWidget);
     expect(find.text('Other material'), findsNothing);
 
+    await tester.ensureVisible(find.text('Review due cards'));
     await tester.tap(find.text('Review due cards'));
     await tester.pumpAndSettle();
     expect(find.text('1 / 1'), findsOneWidget);

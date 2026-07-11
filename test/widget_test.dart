@@ -15,6 +15,7 @@ import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/favorites/favorite_repository.dart';
 import 'package:ai_study_buddy/features/flashcards/flashcard_repository.dart';
 import 'package:ai_study_buddy/features/flashcards/flashcard_training_screen.dart';
+import 'package:ai_study_buddy/shared/widgets/study_components.dart';
 import 'package:ai_study_buddy/features/generation/summary_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/progress/weak_topic_repository.dart';
@@ -158,6 +159,7 @@ void main() {
       arguments: MockData.subjects.first,
     );
 
+    await tester.ensureVisible(find.byTooltip('Favorite').first);
     await tester.tap(find.byTooltip('Favorite').first);
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.favorites);
@@ -1050,6 +1052,7 @@ void main() {
       findsNothing,
     );
 
+    await tester.ensureVisible(find.byTooltip('Show answer').first);
     await tester.tap(find.byTooltip('Show answer').first);
     await tester.pumpAndSettle();
 
@@ -1060,6 +1063,7 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.ensureVisible(find.byTooltip('Hide answer').first);
     await tester.tap(find.byTooltip('Hide answer').first);
     await tester.pumpAndSettle();
 
@@ -1107,6 +1111,7 @@ void main() {
   ) async {
     await _pumpFlashcardsHarness(tester, [_weakReviewCard, _knownReviewCard]);
 
+    await tester.ensureVisible(find.text('Train weak cards'));
     await tester.tap(find.text('Train weak cards'));
     await tester.pumpAndSettle();
 
@@ -1120,6 +1125,7 @@ void main() {
   ) async {
     await _pumpFlashcardsHarness(tester, [_dueReviewCard, _futureReviewCard]);
 
+    await tester.ensureVisible(find.text('Review due cards'));
     await tester.tap(find.text('Review due cards'));
     await tester.pumpAndSettle();
 
@@ -1163,7 +1169,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byType(Card).first);
+    await tester.tap(find.byType(FlashcardSurface).first);
     await tester.pumpAndSettle();
 
     expect(find.text('Training back 1'), findsOneWidget);
@@ -1342,9 +1348,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('nav-progress')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Knowledge scores'), findsOneWidget);
+    expect(find.text('Knowledge scores'), findsNothing);
+    expect(find.text('Progress'), findsOneWidget);
 
-    await tester.tap(find.text('Settings').last);
+    await tester.tap(find.byKey(const ValueKey('nav-settings')));
     await tester.pumpAndSettle();
 
     expect(
@@ -2626,17 +2633,15 @@ void main() {
     await _enterDashboard(tester);
     await _pushRoute(tester, AppRoutes.afterLecture);
 
+    expect(find.byKey(const ValueKey('app-back-button')), findsOneWidget);
     expect(find.byTooltip('Search'), findsOneWidget);
-    expect(find.byTooltip('Favorites'), findsWidgets);
-    expect(find.byTooltip('Home'), findsWidgets);
-    expect(find.text('Subjects'), findsOneWidget);
+    expect(find.byKey(const ValueKey('glass-navigation-bar')), findsNothing);
 
     await _pushRoute(tester, AppRoutes.examPrep);
 
     expect(find.byTooltip('Search'), findsOneWidget);
-    expect(find.byTooltip('Favorites'), findsWidgets);
-    expect(find.byTooltip('Home'), findsWidgets);
-    expect(find.text('Progress'), findsOneWidget);
+    expect(find.byKey(const ValueKey('app-back-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('glass-navigation-bar')), findsNothing);
   });
 
   testWidgets('local search finds material and opens detail', (tester) async {
@@ -2674,6 +2679,10 @@ void main() {
     await _enterDashboard(tester);
 
     await _pushRoute(tester, AppRoutes.afterLecture);
+    await _tapVisible(tester, find.text('Biology'));
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('Photosynthesis lecture notes'));
+    await tester.pumpAndSettle();
     await _tapVisible(tester, find.text('I am completely lost'));
     await tester.pumpAndSettle();
     await _tapVisible(tester, find.text('Create study session'));
@@ -2703,6 +2712,10 @@ void main() {
     await _enterDashboard(tester);
 
     await _pushRoute(tester, AppRoutes.afterLecture);
+    await _tapVisible(tester, find.text('Biology'));
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('Photosynthesis lecture notes'));
+    await tester.pumpAndSettle();
     await _tapVisible(tester, find.text('I am completely lost'));
     await tester.pumpAndSettle();
     await _tapVisible(tester, find.text('Create study session'));
@@ -2715,7 +2728,7 @@ void main() {
 
     expect(find.text('Biology review'), findsOneWidget);
     expect(find.textContaining('Simple explanation'), findsOneWidget);
-    expect(find.text('Biology quick quiz: 0%'), findsOneWidget);
+    expect(find.text('Last score: 0%'), findsOneWidget);
   });
 }
 

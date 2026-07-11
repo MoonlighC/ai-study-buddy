@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/widgets/glass_components.dart';
+
 Future<int?> showFlashcardGenerationDialog(
   BuildContext context, {
   required int currentCardCount,
@@ -39,9 +41,10 @@ class _FlashcardGenerationDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Generate new flashcards'),
-      content: SingleChildScrollView(
+    return GlassDialog(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('Generate new flashcards', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 16),
+      SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,14 +103,15 @@ class _FlashcardGenerationDialogState
           ],
         ),
       ),
-      actions: [
+      const SizedBox(height: 12),
+      Wrap(alignment: WrapAlignment.end, spacing: 8, children: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton(onPressed: _generate, child: const Text('Generate')),
-      ],
-    );
+      ]),
+    ]));
   }
 
   int _displayedCount() {
