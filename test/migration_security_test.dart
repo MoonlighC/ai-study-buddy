@@ -3,6 +3,263 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('Phase 12.2 explicit client API privileges', () {
+    late String privileges;
+    late String initialSchema;
+    setUpAll(() async {
+      privileges = (await File(
+        'supabase/migrations/008_client_api_privileges.sql',
+      ).readAsString()).toLowerCase();
+      initialSchema = (await File(
+        'supabase/migrations/001_initial_schema.sql',
+      ).readAsString()).toLowerCase();
+    });
+
+    test('fresh projects receive explicit schema and exact table grants', () {
+      expect(
+        privileges,
+        contains('grant usage on schema public to authenticated'),
+      );
+      expect(
+        privileges,
+        contains('grant select on table public.profiles to authenticated'),
+      );
+      expect(
+        privileges,
+        contains(
+          'grant insert (id, email, display_name) on table public.profiles to authenticated',
+        ),
+      );
+      expect(
+        privileges,
+        contains('grant select on table public.subjects to authenticated'),
+      );
+      expect(
+        privileges,
+        contains('grant select on table public.materials to authenticated'),
+      );
+      expect(
+        privileges,
+        contains('grant select on table public.favorites to authenticated'),
+      );
+      expect(
+        privileges,
+        contains('grant delete on table public.favorites to authenticated'),
+      );
+      expect(
+        privileges,
+        contains('grant select on table public.flashcards to authenticated'),
+      );
+      for (final table in [
+        'quizzes',
+        'quiz_questions',
+        'quiz_attempts',
+        'weak_topics',
+      ]) {
+        expect(
+          privileges,
+          contains('grant select on table public.$table to authenticated'),
+        );
+      }
+      expect(privileges, isNot(contains('grant all on all tables')));
+      expect(privileges, isNot(contains('grant all on schema public')));
+      expect(privileges, isNot(contains('alter default privileges')));
+      expect(privileges, isNot(contains('grant usage on sequence')));
+    });
+
+    test('profile and subject creation remain owner-bound by RLS', () {
+      expect(
+        initialSchema,
+        contains('create policy "users can insert own profile"'),
+      );
+      expect(initialSchema, contains('id = (select auth.uid())'));
+      expect(
+        initialSchema,
+        contains('create policy "users can insert own subjects"'),
+      );
+      expect(initialSchema, contains('user_id = (select auth.uid())'));
+      expect(
+        privileges,
+        contains(
+          'revoke all on table public.profiles from public, anon, authenticated',
+        ),
+      );
+      expect(
+        privileges,
+        contains(
+          'revoke all on table public.subjects from public, anon, authenticated',
+        ),
+      );
+      expect(privileges, contains('revoke usage on schema public from anon'));
+    });
+
+    test('material and subject lifecycle authority stays protected', () {
+      expect(
+        privileges,
+        isNot(contains('grant update on table public.materials')),
+      );
+      expect(
+        privileges,
+        isNot(contains('grant delete on table public.materials')),
+      );
+      expect(privileges, isNot(contains('\n  summary,\n')));
+      expect(
+        RegExp(
+          r'grant insert \([^;]*deleted_at[^;]*\) on table',
+        ).hasMatch(privileges),
+        isFalse,
+      );
+      expect(
+        privileges,
+        contains(
+          'grant update (name, description, color_value, icon_name, sort_order)',
+        ),
+      );
+      expect(privileges, isNot(contains('grant update (deleted_at')));
+      expect(
+        RegExp(
+          r'grant update \([^;]*cleanup_status[^;]*\) on table',
+        ).hasMatch(privileges),
+        isFalse,
+      );
+    });
+
+    test('generated and progress data are read-only except review columns', () {
+      expect(
+        privileges,
+        contains(
+          'grant update (\n  correct_count,\n  incorrect_count,\n  last_reviewed_at,\n  next_review_at\n) on table public.flashcards',
+        ),
+      );
+      for (final table in [
+        'quizzes',
+        'quiz_questions',
+        'quiz_attempts',
+        'weak_topics',
+      ]) {
+        expect(
+          privileges,
+          contains(
+            'revoke all on table public.$table from public, anon, authenticated',
+          ),
+        );
+        expect(
+          privileges,
+          isNot(contains('grant insert on table public.$table')),
+        );
+        expect(
+          privileges,
+          isNot(contains('grant update on table public.$table')),
+        );
+        expect(
+          privileges,
+          isNot(contains('grant delete on table public.$table')),
+        );
+      }
+      for (final table in [
+        'study_sessions',
+        'daily_usage_limits',
+        'usage_logs',
+      ]) {
+        expect(
+          privileges,
+          contains('revoke all on table public.$table from authenticated'),
+        );
+      }
+    });
+
+    test('only intended authenticated RPCs are executable', () {
+      for (final functionName in [
+        'save_quiz_attempt_with_weak_topics',
+        'inspect_material_recovery',
+        'recover_stale_material',
+      ]) {
+        expect(
+          RegExp(
+            'grant execute on function public\\.$functionName\\([^;]+\\)\\s+to authenticated;',
+          ).hasMatch(privileges),
+          isTrue,
+        );
+      }
+      for (final helper in [
+        'begin_material_deletion_internal(uuid, uuid)',
+        'finalize_material_deletion_internal(uuid, uuid)',
+        'begin_subject_deletion_internal(uuid, uuid)',
+        'finalize_subject_deletion_internal(uuid, uuid)',
+        'begin_account_deletion_internal(uuid)',
+      ]) {
+        expect(privileges, contains('revoke all on function public.$helper'));
+        expect(
+          privileges,
+          isNot(
+            contains(
+              'grant execute on function public.$helper\nto authenticated',
+            ),
+          ),
+        );
+      }
+    });
+
+    test('operation tables stay inaccessible and every table keeps RLS', () {
+      for (final table in [
+        'subject_deletion_operations',
+        'account_deletion_operations',
+      ]) {
+        expect(privileges, contains('revoke all on table public.$table'));
+        expect(
+          privileges,
+          contains('alter table public.$table enable row level security'),
+        );
+        expect(
+          privileges,
+          isNot(contains('grant select on table public.$table')),
+        );
+      }
+      expect(
+        RegExp(
+          r'alter table public\.[a-z_]+ enable row level security;',
+        ).allMatches(privileges).length,
+        14,
+      );
+    });
+
+    test(
+      'repository operations are represented without automatic exposure',
+      () async {
+        final sources = (await Future.wait(
+          [
+            'lib/features/auth/supabase_auth_repository.dart',
+            'lib/features/subjects/supabase_subject_repository.dart',
+            'lib/features/materials/supabase_material_repository.dart',
+            'lib/features/materials/supabase_material_upload_repository.dart',
+            'lib/features/favorites/supabase_favorite_repository.dart',
+            'lib/features/flashcards/flashcard_repository.dart',
+            'lib/features/quizzes/quiz_repository.dart',
+            'lib/features/progress/weak_topic_repository.dart',
+          ].map((path) => File(path).readAsString()),
+        )).join('\n');
+        for (final table in [
+          'profiles',
+          'subjects',
+          'materials',
+          'favorites',
+          'flashcards',
+          'quizzes',
+          'quiz_questions',
+          'quiz_attempts',
+          'weak_topics',
+        ]) {
+          expect(sources, contains("from('$table')"));
+          expect(
+            privileges,
+            contains('grant select on table public.$table to authenticated'),
+          );
+        }
+        expect(privileges, contains("notify pgrst, 'reload schema'"));
+      },
+    );
+  });
+
   group('Phase 12.1 deletion migration', () {
     late String migration;
     setUpAll(

@@ -306,3 +306,18 @@ mode, exact owner/material/filename validation, bounded batches, protection for
 recent uploads, and reports containing identifiers/statuses only—never file or
 extracted content. Lifecycle-created tombstones are reconciled by retrying the
 normal authenticated delete operation.
+
+## Explicit authenticated PostgREST privileges
+
+Migration `008_client_api_privileges.sql` is required for fresh projects where
+automatic table exposure/default API grants are disabled. RLS policies alone do
+not grant table access: without explicit schema and table privileges, valid
+authenticated sessions receive HTTP 403 for profile and workspace requests.
+
+Apply migration 008 only after migrations 001 through 007, then reload the
+PostgREST schema cache and smoke-test profile creation, subject/material sync,
+favorites, flashcard review progress, quiz reads, and the quiz-attempt RPC with
+an isolated staging user. The migration does not expose anon access, generated
+data writes, lifecycle fields, deletion operation tables, or service-only
+helpers. Existing generic Flutter synchronization errors remain appropriate;
+raw PostgREST privilege errors must not be displayed.

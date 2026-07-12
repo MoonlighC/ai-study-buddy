@@ -116,7 +116,6 @@ class SupabaseMaterialUploadRepository implements MaterialUploadRepository {
         'kind': request.kind == MaterialKind.pdf ? 'pdf' : 'image',
         'source_kind': 'upload',
         'content_text': null,
-        'summary': null,
         'storage_bucket': request.bucket,
         'storage_path': path,
         'mime_type': request.mimeType,
