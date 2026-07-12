@@ -5,6 +5,7 @@ import {
   providerSafeCode,
   resolveProjectKeys,
   SafeConfigurationError,
+  safeDatabaseFailure,
   safeProviderToken,
 } from "../_shared/generation_runtime.ts";
 
@@ -57,9 +58,13 @@ serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   let supabaseAnonKey = "";
   let supabaseServiceRoleKey = "";
+  let trustedSource = "";
   try {
-    ({ publicKey: supabaseAnonKey, trustedKey: supabaseServiceRoleKey } =
-      resolveProjectKeys(Deno.env.get));
+    ({
+      publicKey: supabaseAnonKey,
+      trustedKey: supabaseServiceRoleKey,
+      trustedSource,
+    } = resolveProjectKeys(Deno.env.get));
   } catch (error) {
     if (!(error instanceof SafeConfigurationError)) throw error;
   }
@@ -99,7 +104,7 @@ serve(async (request) => {
     logKnownFailure("auth_invalid");
     return jsonResponse({ error: "Authentication required." }, 401);
   }
-  logStage("auth_verified");
+  logStage("auth_verified", { reason: trustedSource });
 
   const { data: material, error: materialError } = await supabaseClient
     .from("materials")
@@ -208,7 +213,10 @@ serve(async (request) => {
         .select("id,material_id,title")
         .single();
     if (quizInsertError || insertedQuiz === null) {
-      logKnownFailure("quiz_insert_failed");
+      logKnownFailure(
+        "database_write_failed",
+        safeDatabaseFailure(quizInsertError),
+      );
       return jsonResponse({
         error: "Could not save quiz.",
         code: "database_write_failed",
@@ -239,7 +247,10 @@ serve(async (request) => {
         )
         .order("sort_order", { ascending: true });
     if (questionInsertError || !Array.isArray(insertedQuestions)) {
-      logKnownFailure("quiz_questions_insert_failed");
+      logKnownFailure(
+        "database_write_failed",
+        safeDatabaseFailure(questionInsertError),
+      );
       await trustedWriteClient
         .from("quizzes")
         .delete()

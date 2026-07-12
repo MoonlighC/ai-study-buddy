@@ -13,6 +13,7 @@ import {
   providerSafeCode,
   resolveProjectKeys,
   SafeConfigurationError,
+  safeDatabaseFailure,
   safeProviderToken,
 } from "../_shared/generation_runtime.ts";
 
@@ -22,8 +23,9 @@ const openAiApiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
 const model = Deno.env.get("OPENAI_MODEL") ?? defaultModel;
 let publicKey = "";
 let trustedKey = "";
+let trustedSource = "";
 try {
-  ({ publicKey, trustedKey } = resolveProjectKeys(Deno.env.get));
+  ({ publicKey, trustedKey, trustedSource } = resolveProjectKeys(Deno.env.get));
 } catch (error) {
   if (!(error instanceof SafeConfigurationError)) throw error;
 }
@@ -119,12 +121,20 @@ serve(createGenerateFlashcardsHandler({
       .insert(rows)
       .select("id,subject_id,material_id,front,back,topic,difficulty");
     if (error || !Array.isArray(data)) {
+      generationLog("generate-flashcards", "known_failure", {
+        reason: "database_write_failed",
+        ...safeDatabaseFailure(error),
+      });
       throw new SafeGenerationError("database_write_failed");
     }
     return data;
   },
   model,
-  log: (stage, details) => generationLog("generate-flashcards", stage, details),
+  log: (stage, details) =>
+    generationLog("generate-flashcards", stage, {
+      ...details,
+      ...(stage === "auth_verified" ? { reason: trustedSource } : {}),
+    }),
 }));
 
 function clientFor(jwt: string) {

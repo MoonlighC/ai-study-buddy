@@ -7,6 +7,7 @@ import {
   providerSafeCode,
   resolveProjectKeys,
   SafeConfigurationError,
+  safeDatabaseFailure,
   safeProviderToken,
 } from "../_shared/generation_runtime.ts";
 
@@ -43,8 +44,9 @@ serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   let supabaseAnonKey = "";
   let serviceRoleKey = "";
+  let trustedSource = "";
   try {
-    ({ publicKey: supabaseAnonKey, trustedKey: serviceRoleKey } =
+    ({ publicKey: supabaseAnonKey, trustedKey: serviceRoleKey, trustedSource } =
       resolveProjectKeys(Deno.env.get));
   } catch (error) {
     if (!(error instanceof SafeConfigurationError)) throw error;
@@ -89,7 +91,7 @@ serve(async (request) => {
     logKnownFailure("auth_invalid");
     return jsonResponse({ error: "Authentication required." }, 401);
   }
-  logStage("auth_verified");
+  logStage("auth_verified", { reason: trustedSource });
 
   const { data: material, error: materialError } = await supabaseClient
     .from("materials")
@@ -148,7 +150,10 @@ serve(async (request) => {
       !Array.isArray(updatedMaterials) ||
       updatedMaterials.length !== 1
     ) {
-      logKnownFailure("material_update_failed");
+      logKnownFailure(
+        "database_write_failed",
+        safeDatabaseFailure(updateError),
+      );
       return jsonResponse({
         error: "Could not save summary.",
         code: "database_write_failed",

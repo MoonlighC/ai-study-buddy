@@ -9,18 +9,25 @@ export class SafeConfigurationError extends Error {
 export function resolveProjectKeys(read: EnvironmentReader): {
   publicKey: string;
   trustedKey: string;
+  trustedSource: "secret_keys_default" | "legacy_service_role";
 } {
+  const secretDictionary = read("SUPABASE_SECRET_KEYS")?.trim();
+  const trustedKey = secretDictionary
+    ? resolveDictionaryKey(secretDictionary)
+    : requiredFallback(read, "SUPABASE_SERVICE_ROLE_KEY");
+  if (!isTrustedCredential(trustedKey, Boolean(secretDictionary))) {
+    throw new SafeConfigurationError();
+  }
   return {
     publicKey: resolveKey(
       read,
       "SUPABASE_PUBLISHABLE_KEYS",
       "SUPABASE_ANON_KEY",
     ),
-    trustedKey: resolveKey(
-      read,
-      "SUPABASE_SECRET_KEYS",
-      "SUPABASE_SERVICE_ROLE_KEY",
-    ),
+    trustedKey,
+    trustedSource: secretDictionary
+      ? "secret_keys_default"
+      : "legacy_service_role",
   };
 }
 
@@ -31,23 +38,49 @@ function resolveKey(
 ) {
   const dictionary = read(dictionaryName)?.trim();
   if (dictionary) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(dictionary);
-    } catch (_) {
-      throw new SafeConfigurationError();
-    }
-    if (
-      !isRecord(parsed) || typeof parsed.default !== "string" ||
-      !parsed.default.trim()
-    ) {
-      throw new SafeConfigurationError();
-    }
-    return parsed.default.trim();
+    return resolveDictionaryKey(dictionary);
   }
-  const fallback = read(fallbackName)?.trim();
-  if (!fallback) throw new SafeConfigurationError();
-  return fallback;
+  return requiredFallback(read, fallbackName);
+}
+
+function resolveDictionaryKey(dictionary: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(dictionary);
+  } catch (_) {
+    throw new SafeConfigurationError();
+  }
+  if (
+    !isRecord(parsed) || typeof parsed.default !== "string" ||
+    !parsed.default.trim()
+  ) {
+    throw new SafeConfigurationError();
+  }
+  return parsed.default.trim();
+}
+
+function requiredFallback(read: EnvironmentReader, name: string) {
+  const value = read(name)?.trim();
+  if (!value) throw new SafeConfigurationError();
+  return value;
+}
+
+function isTrustedCredential(value: string, hostedSecret: boolean) {
+  if (hostedSecret && value.startsWith("sb_secret_")) return true;
+  const parts = value.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const payload = JSON.parse(decodeBase64Url(parts[1]));
+    return isRecord(payload) && payload.role === "service_role";
+  } catch (_) {
+    return false;
+  }
+}
+
+function decodeBase64Url(value: string) {
+  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  return atob(padded);
 }
 
 export type GenerationSafeCode =
@@ -72,6 +105,17 @@ export function safeProviderToken(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const token = value.trim().slice(0, 64);
   return /^[A-Za-z0-9_.-]+$/.test(token) ? token : undefined;
+}
+
+export function safeDatabaseFailure(value: unknown): {
+  code: string;
+  status?: number;
+} {
+  const rawCode = isRecord(value) ? safeProviderToken(value.code) : undefined;
+  return {
+    code: rawCode ?? "database_write_failed",
+    status: rawCode === "42501" ? 403 : undefined,
+  };
 }
 
 export function generationLog(
