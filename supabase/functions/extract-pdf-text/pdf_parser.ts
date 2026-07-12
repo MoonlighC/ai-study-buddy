@@ -1,4 +1,4 @@
-import { extractText, getDocumentProxy } from "unpdf";
+import { extractText, getDocumentProxy } from "npm:unpdf@1.6.2";
 
 export async function parseSelectablePdfText(
   bytes: Uint8Array,
