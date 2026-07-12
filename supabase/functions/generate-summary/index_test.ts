@@ -21,17 +21,21 @@ Deno.test("ready PDF uses expanded structured study summary behavior", () => {
   assertEquals(request.instructions, pdfStudySummaryInstructions);
   assertEquals(request.max_output_tokens, pdfStudySummaryOutputTokens);
   assert(request.max_output_tokens > conciseSummaryOutputTokens);
-  for (const heading of [
-    "Overview",
-    "Key concepts",
-    "Important formulas or relationships",
-    "Main examples/applications",
-    "What to remember",
-  ]) {
+  for (
+    const heading of [
+      "Overview",
+      "Key concepts",
+      "Important formulas or relationships",
+      "Main examples/applications",
+      "What to remember",
+    ]
+  ) {
     assert(request.instructions.includes(heading));
   }
   assert(request.instructions.includes("Preserve the language"));
-  assert(request.instructions.includes("Do not reconstruct unreadable formulas"));
+  assert(
+    request.instructions.includes("Do not reconstruct unreadable formulas"),
+  );
   assert(request.instructions.includes("Do not ask for more input"));
   assert(request.instructions.includes("supplied portion"));
 });

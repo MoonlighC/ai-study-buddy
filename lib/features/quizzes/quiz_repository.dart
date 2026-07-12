@@ -4,6 +4,7 @@ import '../../core/models/quiz.dart';
 import '../../core/models/quiz_attempt.dart';
 import '../../core/models/quiz_question.dart';
 import '../../features/auth/auth_models.dart';
+import '../generation/generation_function_error.dart';
 
 abstract class QuizRepository {
   Future<List<Quiz>> loadQuizzes(AuthUser user);
@@ -299,6 +300,13 @@ class SupabaseQuizRepository implements QuizRepository {
       );
     } on QuizRepositoryException {
       rethrow;
+    } on supabase.FunctionException catch (error) {
+      final failure = classifyGenerationFunctionException(
+        'generate-quiz',
+        error,
+        'Could not generate quiz. Try again.',
+      );
+      throw QuizRepositoryException(failure.message);
     } catch (_) {
       throw const QuizRepositoryException(
         'Could not generate quiz. Try again.',

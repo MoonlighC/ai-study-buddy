@@ -9,23 +9,27 @@ const materialId = "22222222-2222-4222-8222-222222222222";
 
 Deno.test("requires authentication and exact count request shape", async () => {
   const fixture = createFixture();
-  let response = await fixture.handler(new Request("http://local", {
-    method: "POST",
-  }));
+  let response = await fixture.handler(
+    new Request("http://local", {
+      method: "POST",
+    }),
+  );
   assertEquals(response.status, 401);
 
-  for (const body of [
-    {},
-    { material_id: materialId },
-    { material_id: materialId, count: 5, extra: true },
-    { material_id: materialId, count: "5" },
-    { material_id: materialId, count: null },
-    { material_id: materialId, count: true },
-    { material_id: materialId, count: 1.5 },
-    { material_id: materialId, count: 0 },
-    { material_id: materialId, count: -1 },
-    { material_id: materialId, count: 31 },
-  ]) {
+  for (
+    const body of [
+      {},
+      { material_id: materialId },
+      { material_id: materialId, count: 5, extra: true },
+      { material_id: materialId, count: "5" },
+      { material_id: materialId, count: null },
+      { material_id: materialId, count: true },
+      { material_id: materialId, count: 1.5 },
+      { material_id: materialId, count: 0 },
+      { material_id: materialId, count: -1 },
+      { material_id: materialId, count: 31 },
+    ]
+  ) {
     response = await fixture.handler(request(JSON.stringify(body)));
     assertEquals(response.status, 400);
   }
@@ -127,6 +131,34 @@ Deno.test("existing-card load failure stops before OpenAI", async () => {
   assertEquals(fixture.insertCalls(), 0);
 });
 
+Deno.test("active ownership is rechecked before the trusted insert", async () => {
+  const fixture = createFixture();
+  const response = await fixture.handler(request(JSON.stringify({
+    material_id: materialId,
+    count: 1,
+  })));
+  assertEquals(response.status, 200);
+  assertEquals(fixture.calls(), [
+    "verify",
+    "material_read",
+    "existing_read",
+    "openai",
+    "active_recheck",
+    "trusted_insert",
+  ]);
+  assertEquals(fixture.insertedRows()[0].user_id, "user-1");
+});
+
+Deno.test("inactive material stops before trusted insert", async () => {
+  const fixture = createFixture({ activeOnRecheck: false });
+  const response = await fixture.handler(request(JSON.stringify({
+    material_id: materialId,
+    count: 1,
+  })));
+  assertEquals(response.status, 404);
+  assertEquals(fixture.insertCalls(), 0);
+});
+
 Deno.test("OpenAI request uses exact structured count and bounded tokens", () => {
   const small = buildOpenAiRequestBody("model", "text", 5);
   const large = buildOpenAiRequestBody("model", "text", 30);
@@ -146,19 +178,23 @@ function createFixture(options: {
   existing?: Record<string, unknown>[];
   generated?: string;
   throwOnExistingLoad?: boolean;
+  activeOnRecheck?: boolean;
 } = {}) {
   const existing = [...(options.existing ?? [])];
   const inserted: FlashcardInsert[] = [];
   const counts: number[] = [];
   let generationCalls = 0;
   let insertCalls = 0;
+  const calls: string[] = [];
 
   const deps: GenerateFlashcardsDependencies = {
     model: "test-model",
     async verifyJwt(jwt) {
+      calls.push("verify");
       return jwt === "valid" ? "user-1" : null;
     },
     async loadOwnedMaterial() {
+      calls.push("material_read");
       return {
         id: materialId,
         user_id: "user-1",
@@ -171,15 +207,22 @@ function createFixture(options: {
       };
     },
     async loadExistingCards() {
+      calls.push("existing_read");
       if (options.throwOnExistingLoad) throw new Error("load failed");
       return existing;
     },
     async generateCandidates(input) {
+      calls.push("openai");
       generationCalls += 1;
       counts.push(input.count);
       return options.generated ?? cardsJson([card("Default")]);
     },
+    async recheckActiveMaterial() {
+      calls.push("active_recheck");
+      return options.activeOnRecheck ?? true;
+    },
     async insertCards(rows) {
+      calls.push("trusted_insert");
       insertCalls += 1;
       inserted.push(...rows);
       return rows.map((row, index) => ({ id: `new-${index}`, ...row }));
@@ -193,6 +236,7 @@ function createFixture(options: {
     insertCalls: () => insertCalls,
     insertedRows: () => inserted,
     existingRows: () => existing,
+    calls: () => calls,
   };
 }
 

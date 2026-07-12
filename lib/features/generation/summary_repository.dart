@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../auth/auth_models.dart';
+import 'generation_function_error.dart';
 
 abstract class SummaryRepository {
   Future<String> generateSummary({
@@ -59,6 +60,13 @@ class SupabaseSummaryRepository implements SummaryRepository {
       return summary.trim();
     } on SummaryRepositoryException {
       rethrow;
+    } on supabase.FunctionException catch (error) {
+      final failure = classifyGenerationFunctionException(
+        'generate-summary',
+        error,
+        'Could not generate summary. Try again.',
+      );
+      throw SummaryRepositoryException(failure.message);
     } catch (_) {
       throw const SummaryRepositoryException(
         'Could not generate summary. Try again.',

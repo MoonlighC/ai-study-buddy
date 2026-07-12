@@ -1,9 +1,17 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import {
+  generationLog,
+  providerSafeCode,
+  resolveProjectKeys,
+  SafeConfigurationError,
+  safeProviderToken,
+} from "../_shared/generation_runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -47,9 +55,14 @@ serve(async (request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const supabaseServiceRoleKey =
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  let supabaseAnonKey = "";
+  let supabaseServiceRoleKey = "";
+  try {
+    ({ publicKey: supabaseAnonKey, trustedKey: supabaseServiceRoleKey } =
+      resolveProjectKeys(Deno.env.get));
+  } catch (error) {
+    if (!(error instanceof SafeConfigurationError)) throw error;
+  }
   const openAiApiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
   const model = Deno.env.get("OPENAI_MODEL") ?? defaultModel;
   if (supabaseUrl.length === 0 || supabaseAnonKey.length === 0) {
@@ -61,7 +74,9 @@ serve(async (request) => {
   let requestedCount = 5;
   try {
     const body = await request.json();
-    materialId = typeof body.material_id === "string" ? body.material_id.trim() : "";
+    materialId = typeof body.material_id === "string"
+      ? body.material_id.trim()
+      : "";
     requestedCount = clampCount(body.count);
   } catch (_) {
     logKnownFailure("invalid_json");
@@ -75,19 +90,22 @@ serve(async (request) => {
   const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
-  const { data: userData, error: userError } = await supabaseClient.auth.getUser(
-    jwt,
-  );
+  const { data: userData, error: userError } = await supabaseClient.auth
+    .getUser(
+      jwt,
+    );
   const user = userData.user;
   if (userError || user === null) {
     logKnownFailure("auth_invalid");
     return jsonResponse({ error: "Authentication required." }, 401);
   }
-  logStage("auth_verified", { user_id: user.id });
+  logStage("auth_verified");
 
   const { data: material, error: materialError } = await supabaseClient
     .from("materials")
-    .select("id,user_id,subject_id,title,kind,source_kind,content_text,processing_status")
+    .select(
+      "id,user_id,subject_id,title,kind,source_kind,content_text,processing_status",
+    )
     .eq("id", materialId)
     .eq("user_id", user.id)
     .is("deleted_at", null)
@@ -114,6 +132,10 @@ serve(async (request) => {
     });
     return jsonResponse({ error: shortInputMessage }, 400);
   }
+  logStage("material_loaded", {
+    content_length: contentText.length,
+    requested_count: requestedCount,
+  });
 
   const existingQuiz = await loadExistingQuiz(
     supabaseClient,
@@ -122,11 +144,7 @@ serve(async (request) => {
     requestedCount,
   );
   if (existingQuiz !== null) {
-    logStage("existing_quiz_returned", {
-      material_id: materialId,
-      quiz_id: existingQuiz.quiz_id,
-      count: existingQuiz.questions.length,
-    });
+    logStage("completed", { created_count: existingQuiz.questions.length });
     return jsonResponse(existingQuiz);
   }
 
@@ -157,25 +175,24 @@ serve(async (request) => {
       requestedCount,
       materialTitle,
     );
-    logStage("quiz_parsed", {
-      material_id: materialId,
-      count: draft.questions.length,
-    });
+    logStage("parsed", { created_count: draft.questions.length });
 
     const subjectId = typeof material.subject_id === "string"
       ? material.subject_id
       : null;
-    const { data: activeMaterial, error: activeMaterialError } = await supabaseClient
-      .from("materials")
-      .select("id")
-      .eq("id", materialId)
-      .eq("user_id", user.id)
-      .is("deleted_at", null)
-      .maybeSingle();
+    const { data: activeMaterial, error: activeMaterialError } =
+      await supabaseClient
+        .from("materials")
+        .select("id")
+        .eq("id", materialId)
+        .eq("user_id", user.id)
+        .is("deleted_at", null)
+        .maybeSingle();
     if (activeMaterialError || activeMaterial === null) {
       logKnownFailure("material_inactive_before_write");
       return jsonResponse({ error: "Material unavailable." }, 404);
     }
+    logStage("database_write_started", { requested_count: requestedCount });
     const { data: insertedQuiz, error: quizInsertError } =
       await trustedWriteClient
         .from("quizzes")
@@ -192,7 +209,10 @@ serve(async (request) => {
         .single();
     if (quizInsertError || insertedQuiz === null) {
       logKnownFailure("quiz_insert_failed");
-      return jsonResponse({ error: "Could not save quiz." }, 500);
+      return jsonResponse({
+        error: "Could not save quiz.",
+        code: "database_write_failed",
+      }, 500);
     }
 
     const quizId = typeof insertedQuiz.id === "string" ? insertedQuiz.id : "";
@@ -225,13 +245,12 @@ serve(async (request) => {
         .delete()
         .eq("id", quizId)
         .eq("user_id", user.id);
-      return jsonResponse({ error: "Could not save quiz questions." }, 500);
+      return jsonResponse({
+        error: "Could not save quiz questions.",
+        code: "database_write_failed",
+      }, 500);
     }
-    logStage("quiz_inserted", {
-      material_id: materialId,
-      quiz_id: quizId,
-      count: insertedQuestions.length,
-    });
+    logStage("completed", { created_count: insertedQuestions.length });
 
     return jsonResponse({
       quiz_id: quizId,
@@ -244,7 +263,10 @@ serve(async (request) => {
       ? error.reason
       : "unexpected_generation_failure";
     logKnownFailure(reason);
-    return jsonResponse({ error: "Could not generate quiz." }, 500);
+    return jsonResponse(
+      { error: "Could not generate quiz.", code: reason },
+      500,
+    );
   }
 });
 
@@ -295,7 +317,12 @@ async function generateQuiz(
   count: number,
   materialTitle: string,
 ): Promise<QuizDraft> {
-  const data = await fetchOpenAiResponseWithRetry(apiKey, model, inputText, count);
+  const data = await fetchOpenAiResponseWithRetry(
+    apiKey,
+    model,
+    inputText,
+    count,
+  );
   const text = extractResponseText(data);
   return parseQuiz(text, count, materialTitle);
 }
@@ -314,7 +341,11 @@ async function fetchOpenAiResponseWithRetry(
     max_output_tokens: 2200,
   });
 
-  for (let attempt = 1; attempt <= openAiRetryBackoffsMs.length + 1; attempt += 1) {
+  for (
+    let attempt = 1;
+    attempt <= openAiRetryBackoffsMs.length + 1;
+    attempt += 1
+  ) {
     logStage("openai_request_started", { model, count, attempt });
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -336,7 +367,9 @@ async function fetchOpenAiResponseWithRetry(
     }
 
     const backoffMs = openAiRetryBackoffsMs[attempt - 1];
-    if (retryableOpenAiStatuses.has(response.status) && backoffMs !== undefined) {
+    if (
+      retryableOpenAiStatuses.has(response.status) && backoffMs !== undefined
+    ) {
       logStage("openai_retry_scheduled", {
         attempt,
         status: response.status,
@@ -346,21 +379,25 @@ async function fetchOpenAiResponseWithRetry(
       continue;
     }
 
-    throw new SafeFunctionError("openai_request_failed");
+    throw new SafeFunctionError(providerSafeCode(response.status));
   }
 
-  throw new SafeFunctionError("openai_request_failed");
+  throw new SafeFunctionError("openai_unavailable");
 }
 
-function parseQuiz(text: string, count: number, materialTitle: string): QuizDraft {
+function parseQuiz(
+  text: string,
+  count: number,
+  materialTitle: string,
+): QuizDraft {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch (_) {
-    throw new SafeFunctionError("quiz_json_invalid");
+    throw new SafeFunctionError("response_parse_failed");
   }
   if (!isRecord(parsed) || !Array.isArray(parsed.questions)) {
-    throw new SafeFunctionError("quiz_shape_invalid");
+    throw new SafeFunctionError("response_parse_failed");
   }
 
   const questions: QuizQuestionDraft[] = [];
@@ -396,7 +433,7 @@ function parseQuiz(text: string, count: number, materialTitle: string): QuizDraf
     }
   }
   if (questions.length === 0) {
-    throw new SafeFunctionError("quiz_questions_invalid");
+    throw new SafeFunctionError("response_parse_failed");
   }
 
   return {
@@ -480,9 +517,13 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
-function isEligibleAiMaterial(material: Record<string, unknown>, content: string) {
+function isEligibleAiMaterial(
+  material: Record<string, unknown>,
+  content: string,
+) {
   if (content.length === 0) return false;
-  return (material.kind === "pasted_text" && material.source_kind === "manual") ||
+  return (material.kind === "pasted_text" &&
+    material.source_kind === "manual") ||
     (material.kind === "pdf" && material.source_kind === "upload" &&
       material.processing_status === "ready") ||
     (material.kind === "image" && material.source_kind === "upload" &&
@@ -496,10 +537,13 @@ class SafeFunctionError extends Error {
 }
 
 function logStage(stage: string, details: Record<string, unknown> = {}) {
-  console.log(JSON.stringify({ stage, ...details }));
+  generationLog("generate-quiz", stage, details);
 }
 
-function logKnownFailure(reason: string, details: Record<string, unknown> = {}) {
+function logKnownFailure(
+  reason: string,
+  details: Record<string, unknown> = {},
+) {
   logStage("known_failure", { reason, ...details });
 }
 
@@ -507,16 +551,9 @@ function logOpenAiResponse(status: number, data: unknown) {
   const error = isRecord(data) && isRecord(data.error) ? data.error : null;
   logStage("openai_response_received", {
     status,
-    error_type: typeof error?.type === "string" ? error.type : undefined,
-    error_message: safeErrorMessage(error?.message),
+    code: safeProviderToken(error?.code) ?? providerSafeCode(status),
+    reason: safeProviderToken(error?.type),
   });
-}
-
-function safeErrorMessage(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  return value.replace(/\s+/g, " ").slice(0, 160);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

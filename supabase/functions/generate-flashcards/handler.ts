@@ -34,8 +34,14 @@ export type GenerateFlashcardsDependencies = {
     jwt: string,
   ): Promise<FlashcardRow[]>;
   generateCandidates(input: { text: string; count: number }): Promise<string>;
-  insertCards(rows: FlashcardInsert[], jwt: string): Promise<FlashcardRow[]>;
+  recheckActiveMaterial(
+    userId: string,
+    materialId: string,
+    jwt: string,
+  ): Promise<boolean>;
+  insertCards(rows: FlashcardInsert[]): Promise<FlashcardRow[]>;
   model: string;
+  log?: (stage: string, details?: Record<string, unknown>) => void;
 };
 
 const corsHeaders = {
@@ -49,6 +55,8 @@ export function createGenerateFlashcardsHandler(
   deps: GenerateFlashcardsDependencies,
 ) {
   return async (request: Request): Promise<Response> => {
+    const log = deps.log ?? (() => {});
+    log("request_received");
     if (request.method === "OPTIONS") {
       return new Response("ok", { headers: corsHeaders });
     }
@@ -64,16 +72,19 @@ export function createGenerateFlashcardsHandler(
 
     const userId = await deps.verifyJwt(jwt);
     if (!userId) return json({ error: "Authentication required." }, 401);
+    log("auth_verified");
 
     let materialId = "";
     let requestedNewCount = 0;
     try {
       const body: unknown = await request.json();
-      if (!isRecord(body) || Object.keys(body).length !== 2 ||
+      if (
+        !isRecord(body) || Object.keys(body).length !== 2 ||
         typeof body.material_id !== "string" ||
         typeof body.count !== "number" || !Number.isFinite(body.count) ||
         !Number.isInteger(body.count) || body.count < 1 ||
-        body.count > maxRequestedNewCount) {
+        body.count > maxRequestedNewCount
+      ) {
         return json({ error: "Invalid request." }, 400);
       }
       materialId = body.material_id.trim();
@@ -89,6 +100,10 @@ export function createGenerateFlashcardsHandler(
       if (!material || !isEligibleAiMaterial(material, contentText)) {
         return json({ error: "Material unavailable." }, 404);
       }
+      log("material_loaded", {
+        content_length: contentText.length,
+        requested_count: requestedNewCount,
+      });
       if (contentText.length < minFlashcardInputChars) {
         return json({ error: shortInputMessage }, 400);
       }
@@ -99,11 +114,17 @@ export function createGenerateFlashcardsHandler(
         jwt,
       );
       const existingKeys = new Set(existingCards.map(duplicateKeyForRow));
+      log("openai_request_started", {
+        model: deps.model,
+        requested_count: requestedNewCount,
+      });
       const generatedText = await deps.generateCandidates({
         text: contentText.slice(0, maxInputChars),
         count: requestedNewCount,
       });
+      log("openai_response_received");
       const parsed = parseFlashcardCandidates(generatedText, requestedNewCount);
+      log("parsed", { requested_count: requestedNewCount });
       const uniqueKeys = new Set<string>();
       const uniqueDrafts = parsed.filter((card) => {
         const key = duplicateKey(card.front, card.back);
@@ -125,25 +146,55 @@ export function createGenerateFlashcardsHandler(
         difficulty: card.difficulty,
         metadata: { source: "generate-flashcards", model: deps.model },
       }));
+      if (
+        rows.length > 0 &&
+        !await deps.recheckActiveMaterial(userId, materialId, jwt)
+      ) {
+        return json({
+          error: "Material unavailable.",
+          code: "material_unavailable",
+        }, 404);
+      }
+      log("database_write_started", {
+        requested_count: requestedNewCount,
+        created_count: rows.length,
+      });
       const insertedCards = rows.length === 0
         ? []
-        : await deps.insertCards(rows, jwt);
+        : await deps.insertCards(rows);
       if (insertedCards.length !== rows.length) {
         throw new Error("flashcard_insert_count_mismatch");
       }
 
       // TODO: Feed requested_count and created_count into daily_usage_limits
       // and usage_logs when quota enforcement is implemented.
+      log("completed", {
+        requested_count: requestedNewCount,
+        created_count: insertedCards.length,
+      });
       return json({
         material_id: materialId,
         requested_count: requestedNewCount,
         created_count: insertedCards.length,
         flashcards: insertedCards,
       });
-    } catch (_) {
-      return json({ error: "Could not generate flashcards." }, 500);
+    } catch (error) {
+      const code = error instanceof SafeGenerationError
+        ? error.code
+        : "generation_failed";
+      log("known_failure", {
+        code,
+        status: error instanceof SafeGenerationError ? error.status : undefined,
+      });
+      return json({ error: "Could not generate flashcards.", code }, 500);
     }
   };
+}
+
+export class SafeGenerationError extends Error {
+  constructor(readonly code: string, readonly status?: number) {
+    super(code);
+  }
 }
 
 export function buildOpenAiRequestBody(
@@ -204,10 +255,10 @@ export function parseFlashcardCandidates(
   try {
     parsed = JSON.parse(text);
   } catch (_) {
-    throw new Error("flashcards_json_invalid");
+    throw new SafeGenerationError("response_parse_failed");
   }
   if (!isRecord(parsed) || !Array.isArray(parsed.flashcards)) {
-    throw new Error("flashcards_shape_invalid");
+    throw new SafeGenerationError("response_parse_failed");
   }
 
   const cards: FlashcardDraft[] = [];
@@ -282,7 +333,8 @@ function stringValue(value: unknown) {
 
 function isEligibleAiMaterial(material: MaterialRow, content: string) {
   if (!content) return false;
-  return (material.kind === "pasted_text" && material.source_kind === "manual") ||
+  return (material.kind === "pasted_text" &&
+    material.source_kind === "manual") ||
     (material.kind === "pdf" && material.source_kind === "upload" &&
       material.processing_status === "ready") ||
     (material.kind === "image" && material.source_kind === "upload" &&

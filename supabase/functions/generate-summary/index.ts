@@ -2,10 +2,18 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 import { buildSummaryRequestBody } from "./summary_prompt.ts";
+import {
+  generationLog,
+  providerSafeCode,
+  resolveProjectKeys,
+  SafeConfigurationError,
+  safeProviderToken,
+} from "../_shared/generation_runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -33,11 +41,20 @@ serve(async (request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  let supabaseAnonKey = "";
+  let serviceRoleKey = "";
+  try {
+    ({ publicKey: supabaseAnonKey, trustedKey: serviceRoleKey } =
+      resolveProjectKeys(Deno.env.get));
+  } catch (error) {
+    if (!(error instanceof SafeConfigurationError)) throw error;
+  }
   const openAiApiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
   const model = Deno.env.get("OPENAI_MODEL") ?? defaultModel;
-  if (supabaseUrl.length === 0 || supabaseAnonKey.length === 0 || serviceRoleKey.length === 0) {
+  if (
+    supabaseUrl.length === 0 || supabaseAnonKey.length === 0 ||
+    serviceRoleKey.length === 0
+  ) {
     logKnownFailure("supabase_env_missing");
     return jsonResponse({ error: "Summary generation is unavailable." }, 500);
   }
@@ -45,7 +62,9 @@ serve(async (request) => {
   let materialId = "";
   try {
     const body = await request.json();
-    materialId = typeof body.material_id === "string" ? body.material_id.trim() : "";
+    materialId = typeof body.material_id === "string"
+      ? body.material_id.trim()
+      : "";
   } catch (_) {
     logKnownFailure("invalid_json");
     return jsonResponse({ error: "Invalid request." }, 400);
@@ -61,15 +80,16 @@ serve(async (request) => {
   const trustedClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: userData, error: userError } = await supabaseClient.auth.getUser(
-    jwt,
-  );
+  const { data: userData, error: userError } = await supabaseClient.auth
+    .getUser(
+      jwt,
+    );
   const user = userData.user;
   if (userError || user === null) {
     logKnownFailure("auth_invalid");
     return jsonResponse({ error: "Authentication required." }, 401);
   }
-  logStage("auth_verified", { user_id: user.id });
+  logStage("auth_verified");
 
   const { data: material, error: materialError } = await supabaseClient
     .from("materials")
@@ -82,14 +102,14 @@ serve(async (request) => {
   const contentText = typeof material?.content_text === "string"
     ? material.content_text.trim()
     : "";
-  if (materialError || material === null || !isEligibleAiMaterial(material, contentText)) {
+  if (
+    materialError || material === null ||
+    !isEligibleAiMaterial(material, contentText)
+  ) {
     logKnownFailure("material_unavailable");
     return jsonResponse({ error: "Material unavailable." }, 404);
   }
-  logStage("material_loaded", {
-    material_id: materialId,
-    content_length: contentText.length,
-  });
+  logStage("material_loaded", { content_length: contentText.length });
   if (contentText.length < minSummaryInputChars) {
     logKnownFailure("material_content_too_short", {
       content_length: contentText.length,
@@ -103,7 +123,8 @@ serve(async (request) => {
 
   try {
     // TODO: Enforce daily_usage_limits server-side before making this request.
-    const isReadyUpload = (material.kind === "pdf" || material.kind === "image") &&
+    const isReadyUpload =
+      (material.kind === "pdf" || material.kind === "image") &&
       material.source_kind === "upload" &&
       material.processing_status === "ready";
     // Phase 9B.1 intentionally summarizes only the current capped input.
@@ -113,7 +134,8 @@ serve(async (request) => {
       contentText.slice(0, maxInputChars),
       isReadyUpload,
     );
-    logStage("summary_parsed", { material_id: materialId });
+    logStage("parsed");
+    logStage("database_write_started");
     const { data: updatedMaterials, error: updateError } = await trustedClient
       .from("materials")
       .update({ summary })
@@ -127,9 +149,12 @@ serve(async (request) => {
       updatedMaterials.length !== 1
     ) {
       logKnownFailure("material_update_failed");
-      return jsonResponse({ error: "Could not save summary." }, 500);
+      return jsonResponse({
+        error: "Could not save summary.",
+        code: "database_write_failed",
+      }, 500);
     }
-    logStage("material_updated", { material_id: materialId });
+    logStage("completed");
 
     return jsonResponse({ material_id: materialId, summary });
   } catch (error) {
@@ -137,7 +162,10 @@ serve(async (request) => {
       ? error.reason
       : "unexpected_generation_failure";
     logKnownFailure(reason);
-    return jsonResponse({ error: "Could not generate summary." }, 500);
+    return jsonResponse(
+      { error: "Could not generate summary.", code: reason },
+      500,
+    );
   }
 });
 
@@ -154,7 +182,9 @@ async function generateSummary(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(buildSummaryRequestBody(model, inputText, isReadyUpload)),
+    body: JSON.stringify(
+      buildSummaryRequestBody(model, inputText, isReadyUpload),
+    ),
   });
   let data: unknown;
   try {
@@ -164,11 +194,11 @@ async function generateSummary(
   }
   logOpenAiResponse(response.status, data);
   if (!response.ok) {
-    throw new SafeFunctionError("openai_request_failed");
+    throw new SafeFunctionError(providerSafeCode(response.status));
   }
   const summary = extractSummaryText(data);
   if (summary.length === 0) {
-    throw new SafeFunctionError("summary_parse_failed");
+    throw new SafeFunctionError("response_parse_failed");
   }
   return summary;
 }
@@ -217,9 +247,13 @@ function collectResponseText(value: unknown, textParts: string[]) {
   }
 }
 
-function isEligibleAiMaterial(material: Record<string, unknown>, content: string) {
+function isEligibleAiMaterial(
+  material: Record<string, unknown>,
+  content: string,
+) {
   if (content.length === 0) return false;
-  return (material.kind === "pasted_text" && material.source_kind === "manual") ||
+  return (material.kind === "pasted_text" &&
+    material.source_kind === "manual") ||
     (material.kind === "pdf" && material.source_kind === "upload" &&
       material.processing_status === "ready") ||
     (material.kind === "image" && material.source_kind === "upload" &&
@@ -243,10 +277,13 @@ class SafeFunctionError extends Error {
 }
 
 function logStage(stage: string, details: Record<string, unknown> = {}) {
-  console.log(JSON.stringify({ stage, ...details }));
+  generationLog("generate-summary", stage, details);
 }
 
-function logKnownFailure(reason: string, details: Record<string, unknown> = {}) {
+function logKnownFailure(
+  reason: string,
+  details: Record<string, unknown> = {},
+) {
   logStage("known_failure", { reason, ...details });
 }
 
@@ -254,16 +291,9 @@ function logOpenAiResponse(status: number, data: unknown) {
   const error = isRecord(data) && isRecord(data.error) ? data.error : null;
   logStage("openai_response_received", {
     status,
-    error_type: typeof error?.type === "string" ? error.type : undefined,
-    error_message: safeErrorMessage(error?.message),
+    code: safeProviderToken(error?.code) ?? providerSafeCode(status),
+    reason: safeProviderToken(error?.type),
   });
-}
-
-function safeErrorMessage(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  return value.replace(/\s+/g, " ").slice(0, 160);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

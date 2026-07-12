@@ -371,7 +371,12 @@ void main() {
     final summary = await File(
       'supabase/functions/generate-summary/index.ts',
     ).readAsString();
-    expect(summary, contains('SUPABASE_SERVICE_ROLE_KEY'));
+    final runtime = await File(
+      'supabase/functions/_shared/generation_runtime.ts',
+    ).readAsString();
+    expect(summary, contains('resolveProjectKeys(Deno.env.get)'));
+    expect(runtime, contains('SUPABASE_SECRET_KEYS'));
+    expect(runtime, contains('SUPABASE_SERVICE_ROLE_KEY'));
     expect(summary, contains('.update({ summary })'));
     expect(summary, contains('.select("id")'));
     expect(summary, contains('updatedMaterials.length !== 1'));
@@ -489,18 +494,23 @@ void main() {
       'supabase/functions/generate-quiz/index.ts',
     ).readAsString();
 
-    expect(edgeFunction, contains('SUPABASE_SERVICE_ROLE_KEY'));
+    final runtime = await File(
+      'supabase/functions/_shared/generation_runtime.ts',
+    ).readAsString();
+    expect(edgeFunction, contains('resolveProjectKeys(Deno.env.get)'));
+    expect(runtime, contains('SUPABASE_SECRET_KEYS'));
+    expect(runtime, contains('SUPABASE_SERVICE_ROLE_KEY'));
     expect(edgeFunction, contains('materialOwnerId !== user.id'));
     expect(edgeFunction, contains('const trustedWriteClient = createClient'));
     expect(
       RegExp(
-        r'trustedWriteClient[\s\S]{0,120}\.from\("quizzes"\)[\s\S]{0,80}\.insert\(',
+        r'trustedWriteClient[\s\S]{0,200}\.from\("quizzes"\)[\s\S]{0,100}\.insert\(',
       ).hasMatch(edgeFunction),
       isTrue,
     );
     expect(
       RegExp(
-        r'trustedWriteClient[\s\S]{0,160}\.from\("quiz_questions"\)[\s\S]{0,80}\.insert\(',
+        r'trustedWriteClient[\s\S]{0,240}\.from\("quiz_questions"\)[\s\S]{0,100}\.insert\(',
       ).hasMatch(edgeFunction),
       isTrue,
     );

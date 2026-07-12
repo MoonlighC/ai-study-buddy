@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../../core/models/flashcard.dart';
 import '../../features/auth/auth_models.dart';
 import '../../mock/mock_data.dart';
+import '../generation/generation_function_error.dart';
 
 abstract class FlashcardRepository {
   Future<List<Flashcard>> loadFlashcards(AuthUser user);
@@ -172,6 +173,13 @@ class SupabaseFlashcardRepository implements FlashcardRepository {
       );
     } on FlashcardRepositoryException {
       rethrow;
+    } on supabase.FunctionException catch (error) {
+      final failure = classifyGenerationFunctionException(
+        'generate-flashcards',
+        error,
+        'Could not generate flashcards. Try again.',
+      );
+      throw FlashcardRepositoryException(failure.message);
     } catch (_) {
       throw const FlashcardRepositoryException(
         'Could not generate flashcards. Try again.',
