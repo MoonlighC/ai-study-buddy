@@ -166,7 +166,13 @@ class _LoginScreenState extends State<LoginScreen> {
       context,
     ).loadSyncedWorkspaceFor(AuthScope.read(context).user);
     if (!mounted) return;
-    Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+    final auth = AuthScope.read(context);
+    Navigator.pushReplacementNamed(
+      context,
+      auth.pendingAccountDeletionReauth
+          ? AppRoutes.settings
+          : AppRoutes.dashboard,
+    );
   }
 
   Future<void> _createAccount() async {
@@ -201,6 +207,12 @@ class _LoginScreenState extends State<LoginScreen> {
       context,
     ).loadSyncedWorkspaceFor(AuthScope.read(context).user);
     if (!mounted) return;
-    Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+    final auth = AuthScope.read(context);
+    Navigator.pushReplacementNamed(
+      context,
+      auth.pendingAccountDeletionReauth
+          ? AppRoutes.settings
+          : AppRoutes.dashboard,
+    );
   }
 }

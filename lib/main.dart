@@ -4,6 +4,8 @@ import 'app/app.dart';
 import 'app/app_config.dart';
 import 'app/supabase_bootstrap.dart';
 import 'features/auth/supabase_auth_repository.dart';
+import 'features/deletion/account_deletion_repository.dart';
+import 'features/deletion/subject_deletion_repository.dart';
 import 'features/favorites/supabase_favorite_repository.dart';
 import 'features/flashcards/flashcard_repository.dart';
 import 'features/generation/summary_repository.dart';
@@ -33,6 +35,12 @@ Future<void> main() async {
       subjectRepository: supabaseClient == null
           ? null
           : SupabaseSubjectRepository(supabaseClient),
+      subjectDeletionRepository: supabaseClient == null
+          ? null
+          : SupabaseSubjectDeletionRepository(supabaseClient),
+      accountDeletionRepository: supabaseClient == null
+          ? null
+          : SupabaseAccountDeletionRepository(supabaseClient),
       materialRepository: supabaseClient == null
           ? null
           : SupabaseMaterialRepository(supabaseClient),

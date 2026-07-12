@@ -5,11 +5,18 @@ import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../../l10n/l10n_extensions.dart';
 import '../auth/auth_controller.dart';
+import '../deletion/deletion_models.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _checkedReauthIntent = false;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +29,16 @@ class SettingsScreen extends StatelessWidget {
     final accountName = isSupabaseMode
         ? auth.effectiveDisplayName
         : 'Alex Student';
+    if (!_checkedReauthIntent &&
+        auth.pendingAccountDeletionReauth &&
+        auth.isAuthenticated) {
+      _checkedReauthIntent = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        AuthScope.read(context).consumeAccountDeletionReauthIntent();
+        _deleteAccount(context);
+      });
+    }
 
     return ResponsiveAppScaffold(
       title: l10n.settingsTitle,
@@ -198,6 +215,32 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (isSupabaseMode)
+              _SettingsSection(
+                icon: Icons.warning_amber_rounded,
+                title: l10n.accountDangerTitle,
+                subtitle: l10n.accountDangerSubtitle,
+                child: Semantics(
+                  liveRegion: true,
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('account-delete-action'),
+                    onPressed: auth.isDeletingAccount || auth.user == null
+                        ? null
+                        : () => _deleteAccount(context),
+                    icon: auth.isDeletingAccount
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_forever_outlined),
+                    label: Text(
+                      auth.isDeletingAccount
+                          ? l10n.accountDeleting
+                          : l10n.accountDeleteAction,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -298,6 +341,113 @@ class SettingsScreen extends StatelessWidget {
       context,
       AppRoutes.login,
       (route) => false,
+    );
+  }
+
+  Future<void> _deleteAccount(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _DeleteAccountDialog(),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final deleted = await AuthScope.read(context).deleteAccount();
+    if (!context.mounted) return;
+    final auth = AuthScope.read(context);
+    if (deleted) {
+      AppStateScope.read(context).clearSyncedWorkspaceForSignOut();
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
+      return;
+    }
+    if (auth.pendingAccountDeletionReauth) {
+      AppStateScope.read(context).clearSyncedWorkspaceForSignOut();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.accountDeleteReauth)));
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
+      return;
+    }
+    final code = auth.accountDeletionError ?? DeletionSafeCode.unknown;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_deletionMessage(context, code))));
+  }
+
+  String _deletionMessage(
+    BuildContext context,
+    DeletionSafeCode code,
+  ) => switch (code) {
+    DeletionSafeCode.deletionInProgress => context.l10n.deletionErrorInProgress,
+    DeletionSafeCode.storageCleanupFailed => context.l10n.deletionErrorStorage,
+    DeletionSafeCode.databaseCleanupFailed =>
+      context.l10n.deletionErrorDatabase,
+    DeletionSafeCode.authCleanupFailed => context.l10n.deletionErrorAuth,
+    DeletionSafeCode.recentAuthRequired => context.l10n.deletionErrorRecentAuth,
+    DeletionSafeCode.unauthorized => context.l10n.deletionErrorUnauthorized,
+    DeletionSafeCode.retryLater => context.l10n.deletionErrorRetry,
+    DeletionSafeCode.unknown => context.l10n.deletionErrorUnknown,
+  };
+}
+
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog();
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _controller = TextEditingController();
+  final _focus = FocusNode();
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final valid = _controller.text.trim() == 'DELETE';
+    return AlertDialog(
+      scrollable: true,
+      title: Text(l.accountDeleteTitle),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l.accountDeleteBody),
+          const SizedBox(height: 12),
+          Text(l.accountDeleteRecentAuth),
+          const SizedBox(height: 16),
+          Text(l.accountDeleteTypePrompt),
+          const SizedBox(height: 8),
+          TextField(
+            key: const ValueKey('account-delete-confirmation'),
+            controller: _controller,
+            focusNode: _focus,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: l.accountDeleteConfirmationLabel,
+            ),
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) {
+              if (valid) Navigator.pop(context, true);
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(l.actionCancel),
+        ),
+        FilledButton(
+          key: const ValueKey('account-delete-confirm'),
+          onPressed: valid ? () => Navigator.pop(context, true) : null,
+          child: Text(l.accountDeleteAction),
+        ),
+      ],
     );
   }
 }

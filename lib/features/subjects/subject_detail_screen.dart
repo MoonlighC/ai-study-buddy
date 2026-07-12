@@ -15,6 +15,7 @@ import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../auth/auth_controller.dart';
+import '../deletion/deletion_models.dart';
 import '../materials/upload_material_screen.dart';
 
 class SubjectDetailScreen extends StatelessWidget {
@@ -54,6 +55,8 @@ class SubjectDetailScreen extends StatelessWidget {
                 subject: subject,
                 materialCount: materials.length,
                 color: subjectColor,
+                deleting: state.isDeletingSubject(subject.id),
+                onDelete: () => _confirmDelete(context, materials.length),
               ),
               const SizedBox(height: AppSpacing.xl),
               LayoutBuilder(
@@ -148,6 +151,70 @@ class SubjectDetailScreen extends StatelessWidget {
       SnackBar(content: Text(context.localizedSafeMessage(message))),
     );
   }
+
+  Future<void> _confirmDelete(BuildContext context, int materialCount) async {
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        title: Text(l10n.subjectDeleteTitle(subject.name)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.subjectDeleteCount(materialCount)),
+            const SizedBox(height: AppSpacing.sm),
+            Text(l10n.subjectDeleteBody),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.actionCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(l10n.subjectDeleteAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final deleted = await AppStateScope.read(
+      context,
+    ).deleteSubjectFor(AuthScope.read(context).user, subject.id);
+    if (!context.mounted) return;
+    if (deleted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.subjectDeleted)));
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.subjects,
+        (route) => route.isFirst,
+      );
+      return;
+    }
+    final code =
+        AppStateScope.read(context).subjectDeletionErrorFor(subject.id) ??
+        DeletionSafeCode.unknown;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_deletionMessage(l10n, code))));
+  }
+
+  String _deletionMessage(dynamic l10n, DeletionSafeCode code) =>
+      switch (code) {
+        DeletionSafeCode.deletionInProgress => l10n.deletionErrorInProgress,
+        DeletionSafeCode.storageCleanupFailed => l10n.deletionErrorStorage,
+        DeletionSafeCode.databaseCleanupFailed => l10n.deletionErrorDatabase,
+        DeletionSafeCode.authCleanupFailed => l10n.deletionErrorAuth,
+        DeletionSafeCode.recentAuthRequired => l10n.deletionErrorRecentAuth,
+        DeletionSafeCode.unauthorized => l10n.deletionErrorUnauthorized,
+        DeletionSafeCode.retryLater => l10n.deletionErrorRetry,
+        DeletionSafeCode.unknown => l10n.deletionErrorUnknown,
+      };
 }
 
 class _SubjectHero extends StatelessWidget {
@@ -155,11 +222,15 @@ class _SubjectHero extends StatelessWidget {
     required this.subject,
     required this.materialCount,
     required this.color,
+    required this.deleting,
+    required this.onDelete,
   });
 
   final Subject subject;
   final int materialCount;
   final Color color;
+  final bool deleting;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) => GlassCard(
@@ -211,6 +282,23 @@ class _SubjectHero extends StatelessWidget {
                 color: color,
               ),
             ],
+          ),
+        ),
+        Semantics(
+          liveRegion: true,
+          label: deleting
+              ? context.l10n.subjectDeleting
+              : context.l10n.subjectDeleteAction,
+          child: IconButton(
+            key: const ValueKey('subject-delete-action'),
+            tooltip: context.l10n.subjectDeleteAction,
+            onPressed: deleting ? null : onDelete,
+            icon: deleting
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.delete_outline),
           ),
         ),
       ],

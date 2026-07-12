@@ -2019,6 +2019,107 @@ class AppLocalizationsDe extends AppLocalizations {
   String get materialDeleting => 'Material wird gelöscht';
 
   @override
+  String get subjectDeleteAction => 'Fach löschen';
+
+  @override
+  String subjectDeleteTitle(Object subject) {
+    return '$subject löschen?';
+  }
+
+  @override
+  String get subjectDeleteBody =>
+      'Dadurch werden das Fach, hochgeladene Dateien, Zusammenfassungen, generierte Lerninhalte, Quizversuche, Lernsitzungen und Schwerpunktthemen dauerhaft gelöscht.';
+
+  @override
+  String subjectDeleteCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count geladene Materialien',
+      one: '1 geladenes Material',
+      zero: 'Keine geladenen Materialien',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get subjectDeleting => 'Fach wird gelöscht';
+
+  @override
+  String get subjectDeleted => 'Fach gelöscht.';
+
+  @override
+  String get accountDangerTitle => 'Gefahrenbereich';
+
+  @override
+  String get accountDangerSubtitle =>
+      'Konto und alle Lerndaten dauerhaft löschen.';
+
+  @override
+  String get accountDeleteAction => 'Konto löschen';
+
+  @override
+  String get accountDeleteTitle => 'Konto löschen?';
+
+  @override
+  String get accountDeleteBody =>
+      'Profil, Fächer, Lernverlauf, generierte Inhalte und private Uploads werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.';
+
+  @override
+  String get accountDeleteRecentAuth =>
+      'Zur Sicherheit musst du dich möglicherweise erneut anmelden.';
+
+  @override
+  String get accountDeleteTypePrompt => 'Zum Bestätigen DELETE eingeben';
+
+  @override
+  String get accountDeleteConfirmationLabel => 'Bestätigung';
+
+  @override
+  String get accountDeleting => 'Konto wird gelöscht';
+
+  @override
+  String get accountDeleted => 'Konto gelöscht.';
+
+  @override
+  String get accountDeleteReauth =>
+      'Melde dich erneut an und bestätige die Kontolöschung noch einmal.';
+
+  @override
+  String get deletionErrorInProgress => 'Die Löschung läuft bereits.';
+
+  @override
+  String get deletionErrorStorage =>
+      'Private Dateien konnten nicht entfernt werden. Versuche es erneut.';
+
+  @override
+  String get deletionErrorDatabase =>
+      'Die Lerndaten konnten nicht vollständig gelöscht werden. Versuche es erneut.';
+
+  @override
+  String get deletionErrorAuth =>
+      'Das Konto konnte nicht vollständig entfernt werden. Versuche es erneut.';
+
+  @override
+  String get deletionErrorRecentAuth =>
+      'Melde dich erneut an, bevor du dein Konto löschst.';
+
+  @override
+  String get deletionErrorUnauthorized =>
+      'Deine Sitzung ist nicht mehr gültig.';
+
+  @override
+  String get deletionErrorRetry =>
+      'Die Löschung kann noch nicht fortgesetzt werden. Versuche es später erneut.';
+
+  @override
+  String get deletionErrorUnknown =>
+      'Die Löschung konnte nicht abgeschlossen werden. Versuche es erneut.';
+
+  @override
+  String get deletionRetry => 'Löschung wiederholen';
+
+  @override
   String get generatedPreviewTitle => 'Prototyp-Vorschau';
 
   @override

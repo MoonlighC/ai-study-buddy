@@ -3334,6 +3334,162 @@ abstract class AppLocalizations {
   /// **'Deleting material'**
   String get materialDeleting;
 
+  /// No description provided for @subjectDeleteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete subject'**
+  String get subjectDeleteAction;
+
+  /// No description provided for @subjectDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {subject}?'**
+  String subjectDeleteTitle(Object subject);
+
+  /// No description provided for @subjectDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently deletes the subject, uploaded files, summaries, generated study content, quiz attempts, study sessions, and focus-topic history.'**
+  String get subjectDeleteBody;
+
+  /// No description provided for @subjectDeleteCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0 {No loaded materials} one {1 loaded material} other {{count} loaded materials}}'**
+  String subjectDeleteCount(num count);
+
+  /// No description provided for @subjectDeleting.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting subject'**
+  String get subjectDeleting;
+
+  /// No description provided for @subjectDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject deleted.'**
+  String get subjectDeleted;
+
+  /// No description provided for @accountDangerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Danger zone'**
+  String get accountDangerTitle;
+
+  /// No description provided for @accountDangerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently delete your account and all study data.'**
+  String get accountDangerSubtitle;
+
+  /// No description provided for @accountDeleteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get accountDeleteAction;
+
+  /// No description provided for @accountDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account?'**
+  String get accountDeleteTitle;
+
+  /// No description provided for @accountDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently deletes your profile, subjects, study history, generated content, and private uploaded files. This cannot be undone.'**
+  String get accountDeleteBody;
+
+  /// No description provided for @accountDeleteRecentAuth.
+  ///
+  /// In en, this message translates to:
+  /// **'For security, you may need to sign in again before deletion can begin.'**
+  String get accountDeleteRecentAuth;
+
+  /// No description provided for @accountDeleteTypePrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Type DELETE to confirm'**
+  String get accountDeleteTypePrompt;
+
+  /// No description provided for @accountDeleteConfirmationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmation'**
+  String get accountDeleteConfirmationLabel;
+
+  /// No description provided for @accountDeleting.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting account'**
+  String get accountDeleting;
+
+  /// No description provided for @accountDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Account deleted.'**
+  String get accountDeleted;
+
+  /// No description provided for @accountDeleteReauth.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again, then confirm account deletion once more.'**
+  String get accountDeleteReauth;
+
+  /// No description provided for @deletionErrorInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion is already in progress.'**
+  String get deletionErrorInProgress;
+
+  /// No description provided for @deletionErrorStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Private files could not be removed. Try again.'**
+  String get deletionErrorStorage;
+
+  /// No description provided for @deletionErrorDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'Study data cleanup could not finish. Try again.'**
+  String get deletionErrorDatabase;
+
+  /// No description provided for @deletionErrorAuth.
+  ///
+  /// In en, this message translates to:
+  /// **'Account removal could not finish. Try again.'**
+  String get deletionErrorAuth;
+
+  /// No description provided for @deletionErrorRecentAuth.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in again before deleting your account.'**
+  String get deletionErrorRecentAuth;
+
+  /// No description provided for @deletionErrorUnauthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'Your session is no longer valid.'**
+  String get deletionErrorUnauthorized;
+
+  /// No description provided for @deletionErrorRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion cannot continue yet. Try again shortly.'**
+  String get deletionErrorRetry;
+
+  /// No description provided for @deletionErrorUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion could not be completed. Try again.'**
+  String get deletionErrorUnknown;
+
+  /// No description provided for @deletionRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry deletion'**
+  String get deletionRetry;
+
   /// No description provided for @generatedPreviewTitle.
   ///
   /// In en, this message translates to:

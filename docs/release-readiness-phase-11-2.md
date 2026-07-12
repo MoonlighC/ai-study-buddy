@@ -206,7 +206,11 @@ basis, export, and user-access processes remain owner/legal decisions.
   workflow must enumerate and remove user-owned objects, handle retries, then
   remove database/Auth state in an approved order.
 
-Subject/account deletion is not implemented in this phase.
+Phase 12.1 now implements subject and account deletion locally through migration
+007, trusted Edge Functions, and localized Flutter flows. Remote migration and
+function deployment remain pending. Provider logs, backups/PITR, vendor
+retention, and legal review remain unresolved; local implementation does not
+establish complete-erasure or legal compliance.
 
 ## Supabase production release runbook
 

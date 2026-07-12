@@ -1980,6 +1980,106 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialDeleting => 'Deleting material';
 
   @override
+  String get subjectDeleteAction => 'Delete subject';
+
+  @override
+  String subjectDeleteTitle(Object subject) {
+    return 'Delete $subject?';
+  }
+
+  @override
+  String get subjectDeleteBody =>
+      'This permanently deletes the subject, uploaded files, summaries, generated study content, quiz attempts, study sessions, and focus-topic history.';
+
+  @override
+  String subjectDeleteCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count loaded materials',
+      one: '1 loaded material',
+      zero: 'No loaded materials',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get subjectDeleting => 'Deleting subject';
+
+  @override
+  String get subjectDeleted => 'Subject deleted.';
+
+  @override
+  String get accountDangerTitle => 'Danger zone';
+
+  @override
+  String get accountDangerSubtitle =>
+      'Permanently delete your account and all study data.';
+
+  @override
+  String get accountDeleteAction => 'Delete account';
+
+  @override
+  String get accountDeleteTitle => 'Delete your account?';
+
+  @override
+  String get accountDeleteBody =>
+      'This permanently deletes your profile, subjects, study history, generated content, and private uploaded files. This cannot be undone.';
+
+  @override
+  String get accountDeleteRecentAuth =>
+      'For security, you may need to sign in again before deletion can begin.';
+
+  @override
+  String get accountDeleteTypePrompt => 'Type DELETE to confirm';
+
+  @override
+  String get accountDeleteConfirmationLabel => 'Confirmation';
+
+  @override
+  String get accountDeleting => 'Deleting account';
+
+  @override
+  String get accountDeleted => 'Account deleted.';
+
+  @override
+  String get accountDeleteReauth =>
+      'Sign in again, then confirm account deletion once more.';
+
+  @override
+  String get deletionErrorInProgress => 'Deletion is already in progress.';
+
+  @override
+  String get deletionErrorStorage =>
+      'Private files could not be removed. Try again.';
+
+  @override
+  String get deletionErrorDatabase =>
+      'Study data cleanup could not finish. Try again.';
+
+  @override
+  String get deletionErrorAuth =>
+      'Account removal could not finish. Try again.';
+
+  @override
+  String get deletionErrorRecentAuth =>
+      'Please sign in again before deleting your account.';
+
+  @override
+  String get deletionErrorUnauthorized => 'Your session is no longer valid.';
+
+  @override
+  String get deletionErrorRetry =>
+      'Deletion cannot continue yet. Try again shortly.';
+
+  @override
+  String get deletionErrorUnknown =>
+      'Deletion could not be completed. Try again.';
+
+  @override
+  String get deletionRetry => 'Retry deletion';
+
+  @override
   String get generatedPreviewTitle => 'Prototype preview';
 
   @override

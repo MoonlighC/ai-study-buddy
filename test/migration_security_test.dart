@@ -3,6 +3,70 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('Phase 12.1 deletion migration', () {
+    late String migration;
+    setUpAll(
+      () => migration = File(
+        'supabase/migrations/007_subject_account_deletion.sql',
+      ).readAsStringSync().toLowerCase(),
+    );
+    test('operation state is RLS protected and service-only', () {
+      expect(
+        migration,
+        contains('create table public.subject_deletion_operations'),
+      );
+      expect(
+        migration,
+        contains('create table public.account_deletion_operations'),
+      );
+      expect(migration, contains('enable row level security'));
+      expect(
+        migration,
+        contains(
+          'revoke all on public.subject_deletion_operations from public, anon, authenticated',
+        ),
+      );
+      expect(
+        migration,
+        contains(
+          'grant execute on function public.begin_account_deletion_internal(uuid) to service_role',
+        ),
+      );
+    });
+    test('protects lifecycle fields and uses fixed definer search paths', () {
+      expect(
+        migration,
+        contains('revoke update on public.subjects from authenticated'),
+      );
+      expect(
+        migration,
+        contains(
+          'grant update (name, description, color_value, icon_name, sort_order)',
+        ),
+      );
+      expect(
+        RegExp(
+          r'security definer set search_path = pg_catalog, public',
+        ).allMatches(migration).length,
+        greaterThanOrEqualTo(5),
+      );
+    });
+    test(
+      'has idempotency, bounded counters, stale indexes, and auth cascade',
+      () {
+        expect(migration, contains('unique (user_id, subject_id)'));
+        expect(
+          migration,
+          contains(
+            'user_id uuid not null unique references auth.users(id) on delete cascade',
+          ),
+        );
+        expect(migration, contains('objects_found between 0 and 1000000'));
+        expect(migration, contains('subject_deletion_operations_stale_idx'));
+        expect(migration, contains('account_deletion_operations_stale_idx'));
+      },
+    );
+  });
   test('material processing migration revokes update only', () async {
     final migration = await File(
       'supabase/migrations/005_material_processing_authority.sql',

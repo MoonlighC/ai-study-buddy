@@ -8,6 +8,8 @@ import 'theme.dart';
 import '../l10n/app_localizations.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_repository.dart';
+import '../features/deletion/account_deletion_repository.dart';
+import '../features/deletion/subject_deletion_repository.dart';
 import '../features/favorites/favorite_repository.dart';
 import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
@@ -28,6 +30,8 @@ class StudyBuddyApp extends StatefulWidget {
     this.authRepository,
     this.profileRepository,
     this.subjectRepository,
+    this.subjectDeletionRepository,
+    this.accountDeletionRepository,
     this.materialRepository,
     this.materialUploadRepository,
     this.pdfTextExtractionRepository,
@@ -49,6 +53,8 @@ class StudyBuddyApp extends StatefulWidget {
   final AuthRepository? authRepository;
   final ProfileRepository? profileRepository;
   final SubjectRepository? subjectRepository;
+  final SubjectDeletionRepository? subjectDeletionRepository;
+  final AccountDeletionRepository? accountDeletionRepository;
   final MaterialRepository? materialRepository;
   final MaterialUploadRepository? materialUploadRepository;
   final PdfTextExtractionRepository? pdfTextExtractionRepository;
@@ -73,6 +79,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
   late final AppState state = AppState(
     config: config,
     subjectRepository: widget.subjectRepository,
+    subjectDeletionRepository: widget.subjectDeletionRepository,
     materialRepository: widget.materialRepository,
     materialUploadRepository: widget.materialUploadRepository,
     pdfTextExtractionRepository: widget.pdfTextExtractionRepository,
@@ -91,6 +98,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
   late final AuthController authController = AuthController(
     authRepository: widget.authRepository ?? MockAuthRepository(),
     profileRepository: widget.profileRepository ?? NoopProfileRepository(),
+    accountDeletionRepository: widget.accountDeletionRepository,
   );
 
   @override

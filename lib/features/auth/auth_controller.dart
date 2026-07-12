@@ -2,21 +2,29 @@ import 'package:flutter/widgets.dart';
 
 import 'auth_models.dart';
 import 'auth_repository.dart';
+import '../deletion/account_deletion_repository.dart';
+import '../deletion/deletion_models.dart';
 
 class AuthController extends ChangeNotifier {
   AuthController({
     required this.authRepository,
     required this.profileRepository,
-  });
+    AccountDeletionRepository? accountDeletionRepository,
+  }) : accountDeletionRepository =
+           accountDeletionRepository ?? const MockAccountDeletionRepository();
 
   final AuthRepository authRepository;
   final ProfileRepository profileRepository;
+  final AccountDeletionRepository accountDeletionRepository;
 
   AuthUser? _user;
   AuthProfile? _profile;
   bool _hasInitialized = false;
   bool _isInitializing = true;
   bool _isLoading = false;
+  bool _isDeletingAccount = false;
+  bool _pendingAccountDeletionReauth = false;
+  DeletionSafeCode? _accountDeletionError;
   String? _errorMessage;
   String? _noticeMessage;
 
@@ -50,6 +58,61 @@ class AuthController extends ChangeNotifier {
   bool get isInitializing => _isInitializing;
 
   bool get isLoading => _isLoading;
+  bool get isDeletingAccount => _isDeletingAccount;
+  bool get pendingAccountDeletionReauth => _pendingAccountDeletionReauth;
+  DeletionSafeCode? get accountDeletionError => _accountDeletionError;
+
+  void consumeAccountDeletionReauthIntent() {
+    _pendingAccountDeletionReauth = false;
+    notifyListeners();
+  }
+
+  Future<bool> deleteAccount() async {
+    final current = _user;
+    if (current == null || _isDeletingAccount) return false;
+    _isDeletingAccount = true;
+    _accountDeletionError = null;
+    notifyListeners();
+    try {
+      final result = await accountDeletionRepository.deleteAccount(
+        user: current,
+      );
+      if (result.completed) {
+        try {
+          await authRepository.signOut();
+        } catch (_) {}
+        _user = null;
+        _profile = null;
+        _pendingAccountDeletionReauth = false;
+        return true;
+      }
+      _accountDeletionError = result.code ?? DeletionSafeCode.unknown;
+      return false;
+    } on DeletionException catch (error) {
+      if (error.code == DeletionSafeCode.recentAuthRequired) {
+        _pendingAccountDeletionReauth = true;
+        _accountDeletionError = error.code;
+        await authRepository.signOut();
+        _user = null;
+        _profile = null;
+      } else if (error.code == DeletionSafeCode.unauthorized &&
+          _isDeletingAccount) {
+        _user = null;
+        _profile = null;
+        _pendingAccountDeletionReauth = false;
+        return true;
+      } else {
+        _accountDeletionError = error.code;
+      }
+      return false;
+    } catch (_) {
+      _accountDeletionError = DeletionSafeCode.unknown;
+      return false;
+    } finally {
+      _isDeletingAccount = false;
+      notifyListeners();
+    }
+  }
 
   bool get isAuthenticated => _user != null;
 

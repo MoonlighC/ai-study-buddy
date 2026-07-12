@@ -15,6 +15,8 @@ import '../core/models/subject.dart';
 import '../core/models/weak_topic.dart';
 import '../core/utils/uuid.dart';
 import '../features/auth/auth_models.dart';
+import '../features/deletion/deletion_models.dart';
+import '../features/deletion/subject_deletion_repository.dart';
 import '../features/favorites/favorite_repository.dart';
 import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
@@ -49,6 +51,7 @@ class AppState extends ChangeNotifier {
     SummaryRepository? summaryRepository,
     QuizRepository? quizRepository,
     WeakTopicRepository? weakTopicRepository,
+    SubjectDeletionRepository? subjectDeletionRepository,
     AppPreferencesStore? preferencesStore,
   }) : config = config ?? AppConfig.fromValues(),
        preferencesStore =
@@ -128,6 +131,12 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyWeakTopicRepository()
                : const MockWeakTopicRepository()),
+       subjectDeletionRepository =
+           subjectDeletionRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptySubjectDeletionRepository()
+               : const MockSubjectDeletionRepository()),
        _subjects =
            (config ?? AppConfig.fromValues()).effectiveBackendMode ==
                AppBackendMode.supabase
@@ -171,6 +180,7 @@ class AppState extends ChangeNotifier {
   final SummaryRepository summaryRepository;
   final QuizRepository quizRepository;
   final WeakTopicRepository weakTopicRepository;
+  final SubjectDeletionRepository subjectDeletionRepository;
   List<Subject> _subjects;
   List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
@@ -181,6 +191,8 @@ class AppState extends ChangeNotifier {
   final Set<String> _favoriteMaterialIds = {};
   final List<StudySession> _studySessions = [];
   final Set<String> _deletingMaterialIds = {};
+  final Set<String> _deletingSubjectIds = {};
+  final Map<String, DeletionSafeCode> _subjectDeletionErrors = {};
   final Map<String, String> _materialLifecycleErrors = {};
   final Map<String, String> _staleMaterialProcessors = {};
   int _materialCounter = 0;
@@ -257,6 +269,13 @@ class AppState extends ChangeNotifier {
       _deletingMaterialIds.contains(materialId);
   String? materialLifecycleErrorFor(String materialId) =>
       _materialLifecycleErrors[materialId];
+  bool isDeletingSubject(String subjectId) =>
+      _deletingSubjectIds.contains(subjectId);
+  DeletionSafeCode? subjectDeletionErrorFor(String subjectId) =>
+      _subjectDeletionErrors[subjectId];
+  bool isSubjectAvailable(String subjectId) =>
+      !_deletingSubjectIds.contains(subjectId) &&
+      _subjects.any((item) => item.id == subjectId);
   bool isMaterialRecoveryEligible(String materialId) =>
       _staleMaterialProcessors.containsKey(materialId);
 
@@ -807,6 +826,77 @@ class AppState extends ChangeNotifier {
     ];
   }
 
+  Future<bool> deleteSubjectFor(AuthUser? user, String subjectId) async {
+    if (_deletingSubjectIds.contains(subjectId)) return false;
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      _subjectDeletionErrors[subjectId] = DeletionSafeCode.unauthorized;
+      notifyListeners();
+      return false;
+    }
+    final effectiveUser =
+        user ??
+        const AuthUser(id: 'mock-user', email: 'alex.student@example.test');
+    _deletingSubjectIds.add(subjectId);
+    _subjectDeletionErrors.remove(subjectId);
+    notifyListeners();
+    try {
+      final result = await subjectDeletionRepository.deleteSubject(
+        user: effectiveUser,
+        subjectId: subjectId,
+      );
+      if (!result.completed) {
+        _subjectDeletionErrors[subjectId] =
+            result.code ?? DeletionSafeCode.unknown;
+        return false;
+      }
+      final materialIds = _materials
+          .where((item) => item.subjectId == subjectId)
+          .map((item) => item.id)
+          .toSet();
+      _subjects.removeWhere((item) => item.id == subjectId);
+      _materials.removeWhere((item) => item.subjectId == subjectId);
+      _flashcards.removeWhere(
+        (item) =>
+            item.subjectId == subjectId ||
+            materialIds.contains(item.materialId),
+      );
+      _quizzes.removeWhere(
+        (item) =>
+            item.subjectId == subjectId ||
+            materialIds.contains(item.materialId),
+      );
+      _quizAttempts.removeWhere((item) => item.subjectId == subjectId);
+      _studySessions.removeWhere(
+        (item) =>
+            item.subjectId == subjectId ||
+            materialIds.contains(item.materialId),
+      );
+      _cumulativeWeakTopics.removeWhere((item) => item.subjectId == subjectId);
+      _favoriteMaterialIds.removeAll(materialIds);
+      if (_latestQuizCompletion?.subjectId == subjectId) {
+        _latestQuizCompletion = null;
+      }
+      for (final id in materialIds) {
+        _materialLifecycleErrors.remove(id);
+        _pdfExtractionErrors.remove(id);
+        _scannedPdfOcrErrors.remove(id);
+        _imageExtractionErrors.remove(id);
+        _staleMaterialProcessors.remove(id);
+      }
+      return true;
+    } on DeletionException catch (error) {
+      _subjectDeletionErrors[subjectId] = error.code;
+      return false;
+    } catch (_) {
+      _subjectDeletionErrors[subjectId] = DeletionSafeCode.unknown;
+      return false;
+    } finally {
+      _deletingSubjectIds.remove(subjectId);
+      notifyListeners();
+    }
+  }
+
   Future<bool> deleteMaterialFor(AuthUser? user, String materialId) async {
     if (_deletingMaterialIds.contains(materialId)) return false;
     final material = materialById(materialId);
@@ -1136,6 +1226,8 @@ class AppState extends ChangeNotifier {
     _extractingImageIds.clear();
     _imageExtractionErrors.clear();
     _deletingMaterialIds.clear();
+    _deletingSubjectIds.clear();
+    _subjectDeletionErrors.clear();
     _materialLifecycleErrors.clear();
     _staleMaterialProcessors.clear();
     _favoriteMaterialIds.clear();

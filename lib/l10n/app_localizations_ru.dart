@@ -2056,6 +2056,108 @@ class AppLocalizationsRu extends AppLocalizations {
   String get materialDeleting => 'Материал удаляется';
 
   @override
+  String get subjectDeleteAction => 'Удалить предмет';
+
+  @override
+  String subjectDeleteTitle(Object subject) {
+    return 'Удалить «$subject»?';
+  }
+
+  @override
+  String get subjectDeleteBody =>
+      'Предмет, загруженные файлы, резюме, созданные учебные материалы, попытки тестов, учебные сессии и слабые темы будут удалены безвозвратно.';
+
+  @override
+  String subjectDeleteCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Загружено $count материала',
+      many: 'Загружено $count материалов',
+      few: 'Загружено $count материала',
+      one: 'Загружен 1 материал',
+      zero: 'Нет загруженных материалов',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get subjectDeleting => 'Предмет удаляется';
+
+  @override
+  String get subjectDeleted => 'Предмет удалён.';
+
+  @override
+  String get accountDangerTitle => 'Опасная зона';
+
+  @override
+  String get accountDangerSubtitle =>
+      'Безвозвратно удалить аккаунт и все учебные данные.';
+
+  @override
+  String get accountDeleteAction => 'Удалить аккаунт';
+
+  @override
+  String get accountDeleteTitle => 'Удалить аккаунт?';
+
+  @override
+  String get accountDeleteBody =>
+      'Профиль, предметы, история обучения, созданные материалы и приватные файлы будут удалены безвозвратно. Это действие нельзя отменить.';
+
+  @override
+  String get accountDeleteRecentAuth =>
+      'В целях безопасности может потребоваться повторный вход.';
+
+  @override
+  String get accountDeleteTypePrompt => 'Введите DELETE для подтверждения';
+
+  @override
+  String get accountDeleteConfirmationLabel => 'Подтверждение';
+
+  @override
+  String get accountDeleting => 'Аккаунт удаляется';
+
+  @override
+  String get accountDeleted => 'Аккаунт удалён.';
+
+  @override
+  String get accountDeleteReauth =>
+      'Войдите снова и ещё раз подтвердите удаление аккаунта.';
+
+  @override
+  String get deletionErrorInProgress => 'Удаление уже выполняется.';
+
+  @override
+  String get deletionErrorStorage =>
+      'Не удалось удалить приватные файлы. Повторите попытку.';
+
+  @override
+  String get deletionErrorDatabase =>
+      'Не удалось завершить удаление учебных данных. Повторите попытку.';
+
+  @override
+  String get deletionErrorAuth =>
+      'Не удалось завершить удаление аккаунта. Повторите попытку.';
+
+  @override
+  String get deletionErrorRecentAuth =>
+      'Войдите снова перед удалением аккаунта.';
+
+  @override
+  String get deletionErrorUnauthorized => 'Сеанс больше недействителен.';
+
+  @override
+  String get deletionErrorRetry =>
+      'Удаление пока нельзя продолжить. Повторите попытку позже.';
+
+  @override
+  String get deletionErrorUnknown =>
+      'Не удалось завершить удаление. Повторите попытку.';
+
+  @override
+  String get deletionRetry => 'Повторить удаление';
+
+  @override
   String get generatedPreviewTitle => 'Предварительный просмотр прототипа';
 
   @override
