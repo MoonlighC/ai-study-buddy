@@ -6,7 +6,8 @@ param(
   [int]$BuildNumber = 0,
   [string]$ExpectedProjectRef = '',
   [string]$ExpectedSignerSha256 = '',
-  [ValidateSet('apk','aab')][string[]]$Artifacts = @('apk','aab')
+  [ValidateSet('apk','aab')][string[]]$Artifacts = @('apk','aab'),
+  [switch]$Execute
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -50,7 +51,26 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Signer fingerprint structure validation failed.' }
     Write-Output 'Staging Android validation completed using fields: APP_ENV, APP_BACKEND_MODE, SUPABASE_URL, SUPABASE_ANON_KEY.'
     Write-Output 'Planned artifacts: APK/AAB as selected; package metadata; release signer; SHA-256; manifest; migration revisions.'
-    Write-Output 'Execution is disabled. No build, signing, packaging, checksum, manifest, or distribution occurred.'
+    if (-not $Execute) {
+      Write-Output 'Execution is disabled. No build, signing, packaging, checksum, manifest, or distribution occurred.'
+      exit 0
+    }
+    $signingFile = Join-Path $root 'android/key.properties'
+    if (-not (Test-Path -LiteralPath $signingFile -PathType Leaf)) { throw 'Ignored local signing configuration is required for execution.' }
+    git -c "safe.directory=$($root.Replace('\','/'))" check-ignore --quiet android/key.properties
+    if ($LASTEXITCODE -ne 0) { throw 'Local signing configuration must be ignored by Git.' }
+    $flutter = 'C:\src\flutter\bin\flutter.bat'; if (-not (Test-Path $flutter)) { $flutter = 'flutter' }
+    $resolvedDefines = (Resolve-Path -LiteralPath $DartDefinesFile).Path
+    $env:RELEASE_SIGNING_SOURCE = 'local'
+    if ($Artifacts -contains 'apk') {
+      & $flutter build apk --release '--build-name=1.0.0' "--build-number=$BuildNumber" "--dart-define-from-file=$resolvedDefines"
+      if ($LASTEXITCODE -ne 0) { throw 'Signed staging APK build failed.' }
+    }
+    if ($Artifacts -contains 'aab') {
+      & $flutter build appbundle --release '--build-name=1.0.0' "--build-number=$BuildNumber" "--dart-define-from-file=$resolvedDefines"
+      if ($LASTEXITCODE -ne 0) { throw 'Signed staging AAB build failed.' }
+    }
+    Write-Output 'Approved staging Android build completed. Verification and packaging are still required before distribution.'
     exit 0
   }
   if ($Mode -eq 'production-android') { throw 'Production Android execution requires separately approved real signing material and is intentionally disabled.' }

@@ -66,7 +66,9 @@ void main(List<String> args) {
         stdout.writeln('reserved build number: valid');
       case 'signing-presence':
         SigningConfiguration.parse(
-          local: const {},
+          local: options['source'] == 'local'
+              ? _localSigningProperties()
+              : const {},
           environment: Platform.environment,
           selectedSource: options['source'] ?? 'ci',
         );
@@ -76,7 +78,13 @@ void main(List<String> args) {
         stdout.writeln('${sha256File(file)}  ${file.uri.pathSegments.last}');
       case 'manifest':
         final file = File(_required(options, 'artifact'));
-        final v = _pubspecVersion();
+        final v =
+            options.containsKey('build-name') ||
+                options.containsKey('build-number')
+            ? AppVersion.parse(
+                '${_required(options, 'build-name')}+${_required(options, 'build-number')}',
+              )
+            : _pubspecVersion();
         final manifest = buildManifest(
           gitCommit: _required(options, 'commit'),
           version: v,
@@ -92,6 +100,7 @@ void main(List<String> args) {
           artifactSize: file.lengthSync(),
           sha256: sha256File(file),
           signingStatus: options['signing-status'] ?? 'unsigned',
+          signerCertificateSha256: options['signer-sha256'],
           migrationRevisions: _migrationRevisions(),
         );
         stdout.writeln(canonicalJson(manifest));
@@ -137,6 +146,23 @@ void main(List<String> args) {
     stderr.writeln('validation failed without exposing supplied values');
     exitCode = 2;
   }
+}
+
+Map<String, String> _localSigningProperties() {
+  final file = File('android/key.properties');
+  if (!file.existsSync()) return const {};
+  final values = <String, String>{};
+  for (final line in file.readAsLinesSync()) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty || trimmed.startsWith('#') || !trimmed.contains('=')) {
+      continue;
+    }
+    final separator = trimmed.indexOf('=');
+    values[trimmed.substring(0, separator).trim()] = trimmed
+        .substring(separator + 1)
+        .trim();
+  }
+  return values;
 }
 
 Directory _repositoryRoot() {
