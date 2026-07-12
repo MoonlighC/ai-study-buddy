@@ -1,5 +1,7 @@
 # Phase 11.2 release readiness
 
+Phase 12.2's approved private staging-beta workflow, free owner-device iOS boundary, tester evidence, and production exit criteria are documented in [staging-beta-distribution-phase-12-2.md](staging-beta-distribution-phase-12-2.md).
+
 Phase 11.2 provides structural release validation, packaging orchestration, CI
 checks, and factual submission runbooks. It does not prove that any build is
 signed, accepted by a store, legally compliant, or certified on physical

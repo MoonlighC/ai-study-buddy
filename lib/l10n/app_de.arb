@@ -66,6 +66,8 @@
   "settingsSendFeedbackPlaceholder": "Platzhalter: Feedback senden",
   "settingsAboutDebugTitle": "Info / Debug",
   "settingsAboutDebugSubtitle": "Prototyp-Diagnose",
+  "settingsStagingBuildLabel": "Staging-Build",
+  "settingsStagingBuildSemantics": "Staging-Betaversion",
   "settingsBackendMode": "Backend-Modus",
   "settingsSecurityNote": "Sicherheitshinweis",
   "settingsSecurityNoteValue": "Keine Server-Secrets oder OpenAI-Schlüssel in Flutter.",

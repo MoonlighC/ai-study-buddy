@@ -66,6 +66,8 @@
   "settingsSendFeedbackPlaceholder": "Заглушка: отправить отзыв",
   "settingsAboutDebugTitle": "О приложении / отладка",
   "settingsAboutDebugSubtitle": "Диагностика прототипа",
+  "settingsStagingBuildLabel": "Тестовая сборка",
+  "settingsStagingBuildSemantics": "Тестовая бета-сборка",
   "settingsBackendMode": "Режим backend",
   "settingsSecurityNote": "Заметка о безопасности",
   "settingsSecurityNoteValue": "В Flutter нет серверных секретов или ключа OpenAI.",

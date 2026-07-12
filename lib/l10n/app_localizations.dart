@@ -496,6 +496,18 @@ abstract class AppLocalizations {
   /// **'Prototype diagnostics'**
   String get settingsAboutDebugSubtitle;
 
+  /// Small diagnostic label shown only for staging builds.
+  ///
+  /// In en, this message translates to:
+  /// **'Staging build'**
+  String get settingsStagingBuildLabel;
+
+  /// Accessible description for the staging-only diagnostic label.
+  ///
+  /// In en, this message translates to:
+  /// **'Staging beta build'**
+  String get settingsStagingBuildSemantics;
+
   /// Diagnostics label for backend mode.
   ///
   /// In en, this message translates to:

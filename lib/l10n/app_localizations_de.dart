@@ -217,6 +217,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsAboutDebugSubtitle => 'Prototyp-Diagnose';
 
   @override
+  String get settingsStagingBuildLabel => 'Staging-Build';
+
+  @override
+  String get settingsStagingBuildSemantics => 'Staging-Betaversion';
+
+  @override
   String get settingsBackendMode => 'Backend-Modus';
 
   @override

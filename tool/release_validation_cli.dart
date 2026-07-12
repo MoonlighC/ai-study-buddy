@@ -1,5 +1,6 @@
 // ignore_for_file: curly_braces_in_flow_control_structures
 
+import 'dart:convert';
 import 'dart:io';
 import 'release_validation.dart';
 
@@ -27,6 +28,42 @@ void main(List<String> args) {
       case 'production-config':
         validateProductionConfiguration(Platform.environment);
         stdout.writeln('production configuration: valid');
+      case 'staging-beta-config':
+        validateStagingBetaConfiguration(
+          Platform.environment,
+          expectedProjectRef: _required(options, 'expected-project-ref'),
+          productionProjectRef: options['production-project-ref'],
+        );
+        stdout.writeln('staging beta configuration: valid');
+      case 'signer-fingerprint':
+        validateSignerFingerprint(
+          _required(options, 'actual'),
+          _required(options, 'expected'),
+        );
+        stdout.writeln('signer fingerprint: valid');
+      case 'reserved-build':
+        final ledger = jsonDecode(
+          File(_required(options, 'ledger')).readAsStringSync(),
+        );
+        if (ledger is! Map<String, dynamic> || ledger['records'] is! List) {
+          throw const ValidationException('build ledger: invalid document');
+        }
+        final records = (ledger['records'] as List).map((raw) {
+          if (raw is! Map<String, dynamic>) {
+            throw const ValidationException('build ledger: invalid record');
+          }
+          final state = switch (raw['state']) {
+            'reserved' => BuildNumberState.reserved,
+            'distributed' => BuildNumberState.distributed,
+            _ => throw const ValidationException('build ledger: invalid state'),
+          };
+          return BuildNumberRecord(raw['buildNumber'] as int, state);
+        }).toList();
+        validateReservedBuildNumber(
+          int.parse(_required(options, 'number')),
+          records,
+        );
+        stdout.writeln('reserved build number: valid');
       case 'signing-presence':
         SigningConfiguration.parse(
           local: const {},

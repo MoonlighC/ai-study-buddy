@@ -76,6 +76,60 @@ void main() {
     );
   });
 
+  test(
+    'staging beta configuration is pinned to the injectable project ref',
+    () {
+      const fixture = {
+        'APP_ENV': 'staging',
+        'APP_BACKEND_MODE': 'supabase',
+        'SUPABASE_URL': 'https://fixture-ref.supabase.co',
+        'SUPABASE_ANON_KEY': 'FAKE_TEST_FIXTURE_PUBLIC_CLIENT_KEY',
+      };
+      expect(
+        () => validateStagingBetaConfiguration(
+          fixture,
+          expectedProjectRef: 'fixture-ref',
+        ),
+        returnsNormally,
+      );
+      for (final bad in [
+        {...fixture, 'APP_ENV': 'production'},
+        {...fixture, 'APP_BACKEND_MODE': 'mock'},
+        {...fixture, 'SUPABASE_URL': 'https://localhost:54321'},
+        {...fixture, 'SUPABASE_URL': 'https://production-ref.supabase.co'},
+        {...fixture, 'SUPABASE_ANON_KEY': 'sb_secret_FAKE_TEST_FIXTURE'},
+      ]) {
+        expect(
+          () => validateStagingBetaConfiguration(
+            bad,
+            expectedProjectRef: 'fixture-ref',
+            productionProjectRef: 'production-ref',
+          ),
+          throwsA(isA<ValidationException>()),
+        );
+      }
+    },
+  );
+
+  test('shared build ledger reserves build 2 without distribution', () {
+    const records = [BuildNumberRecord(2, BuildNumberState.reserved)];
+    expect(() => validateReservedBuildNumber(2, records), returnsNormally);
+    expect(() => validateNewBuildNumber(3, records), returnsNormally);
+    for (final number in [0, 1, 2]) {
+      expect(
+        () => validateNewBuildNumber(number, records),
+        throwsA(isA<ValidationException>()),
+      );
+    }
+    expect(
+      () => validateBuildNumberLedger(const [
+        BuildNumberRecord(2, BuildNumberState.reserved),
+        BuildNumberRecord(2, BuildNumberState.distributed),
+      ]),
+      throwsA(isA<ValidationException>()),
+    );
+  });
+
   test('version and final or RC tags must agree', () {
     final version = AppVersion.parse('1.0.0+1');
     expect(() => validateTag(version, 'v1.0.0'), returnsNormally);
@@ -92,6 +146,22 @@ void main() {
 
   test('artifact names are validated', () {
     final version = AppVersion.parse('1.0.0+1');
+    expect(
+      artifactName(
+        version: AppVersion.parse('1.0.0+2'),
+        environment: 'staging',
+        platform: 'android-apk',
+      ),
+      'AI-Study-Buddy-1.0.0+2-staging-android.apk',
+    );
+    expect(
+      artifactName(
+        version: AppVersion.parse('1.0.0+2'),
+        environment: 'staging',
+        platform: 'android-aab',
+      ),
+      'AI-Study-Buddy-1.0.0+2-staging-android.aab',
+    );
     expect(
       artifactName(
         version: version,
@@ -124,6 +194,74 @@ void main() {
     );
   });
 
+  test('Android artifact metadata rejects debug and signer mismatch', () {
+    const fingerprint =
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    expect(
+      () => validateAndroidArtifactMetadata(
+        packageId: 'com.moonlightc.aistudybuddy',
+        versionName: '1.0.0',
+        versionCode: 2,
+        debugSigned: false,
+        signerSha256: fingerprint,
+        expectedSignerSha256: fingerprint,
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validateAndroidArtifactMetadata(
+        packageId: 'com.moonlightc.aistudybuddy',
+        versionName: '1.0.0',
+        versionCode: 2,
+        debugSigned: true,
+        signerSha256: fingerprint,
+        expectedSignerSha256: fingerprint,
+      ),
+      throwsA(isA<ValidationException>()),
+    );
+  });
+
+  test('beta ledger and ignore coverage remain auditable', () {
+    final ledger =
+        jsonDecode(File('docs/beta-build-history.json').readAsStringSync())
+            as Map<String, dynamic>;
+    final record = (ledger['records'] as List).single as Map<String, dynamic>;
+    expect(record['buildNumber'], 2);
+    expect(record['state'], 'reserved');
+    expect(record['distributedAtUtc'], isNull);
+    final ignores =
+        File('.gitignore').readAsStringSync() +
+        File('android/.gitignore').readAsStringSync();
+    for (final pattern in [
+      '*.dart-defines.json',
+      'key.properties',
+      '*.jks',
+      '*.apk',
+      '*.aab',
+    ]) {
+      expect(ignores, contains(pattern));
+    }
+  });
+
+  test('beta guide preserves direct APK and Personal Team boundaries', () {
+    final guide = File(
+      'docs/staging-beta-distribution-phase-12-2.md',
+    ).readAsStringSync();
+    for (final required in [
+      'private, direct signed Android APK',
+      'unknown-source warning',
+      'do not forward it',
+      'same developer signing key',
+      'Personal Team',
+      'Free provisioning generally expires',
+      'TestFlight',
+      'do not silently change the permanent release ID',
+    ]) {
+      expect(guide, contains(required));
+    }
+    expect(guide, contains('not distributed'));
+  });
+
   test('manifest is deterministic and excludes sensitive fields', () {
     final manifest = buildManifest(
       gitCommit: 'abc123',
@@ -153,6 +291,30 @@ void main() {
     ]) {
       expect(json, isNot(contains(forbidden)));
     }
+  });
+
+  test('migration evidence is exactly 001 through 009', () {
+    final names =
+        Directory('supabase/migrations')
+            .listSync()
+            .whereType<File>()
+            .map((file) => file.uri.pathSegments.last)
+            .toList()
+          ..sort();
+    expect(names, hasLength(9));
+    expect(names.first, startsWith('001_'));
+    expect(names.last, startsWith('009_'));
+    expect(names.map((name) => name.substring(0, 3)).toList(), [
+      '001',
+      '002',
+      '003',
+      '004',
+      '005',
+      '006',
+      '007',
+      '008',
+      '009',
+    ]);
   });
 
   test('SHA-256 and combined checksum output match known values', () {

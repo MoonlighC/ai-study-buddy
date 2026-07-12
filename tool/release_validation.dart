@@ -123,6 +123,145 @@ void validateProductionConfiguration(Map<String, String> values) {
   }
 }
 
+void validateStagingBetaConfiguration(
+  Map<String, String> values, {
+  required String expectedProjectRef,
+  String? productionProjectRef,
+}) {
+  if (expectedProjectRef.trim().isEmpty) {
+    throw const ValidationException('expected project ref: required');
+  }
+  if (values['APP_ENV'] != 'staging') {
+    throw const ValidationException('APP_ENV: staging is required');
+  }
+  if (values['APP_BACKEND_MODE'] != 'supabase') {
+    throw const ValidationException('APP_BACKEND_MODE: supabase is required');
+  }
+  final uri = Uri.tryParse(values['SUPABASE_URL'] ?? '');
+  final host = uri?.host.toLowerCase() ?? '';
+  if (uri == null || uri.scheme != 'https' || host.isEmpty) {
+    throw const ValidationException(
+      'SUPABASE_URL: public HTTPS URL is required',
+    );
+  }
+  if (host == 'localhost' ||
+      host == '127.0.0.1' ||
+      host == '::1' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.contains('placeholder') ||
+      host.contains('example')) {
+    throw const ValidationException(
+      'SUPABASE_URL: public staging host is required',
+    );
+  }
+  if (!host.split('.').contains(expectedProjectRef.toLowerCase())) {
+    throw const ValidationException(
+      'SUPABASE_URL: expected staging project ref is required',
+    );
+  }
+  final productionRef = productionProjectRef?.trim().toLowerCase();
+  if (productionRef != null &&
+      productionRef.isNotEmpty &&
+      host.contains(productionRef)) {
+    throw const ValidationException(
+      'SUPABASE_URL: production project ref is forbidden',
+    );
+  }
+  final key = values['SUPABASE_ANON_KEY']?.trim() ?? '';
+  final lower = key.toLowerCase();
+  if (key.isEmpty ||
+      lower.contains('placeholder') ||
+      lower.contains('example') ||
+      lower.startsWith('sb_secret_') ||
+      lower.contains('service_role')) {
+    throw const ValidationException(
+      'SUPABASE_ANON_KEY: public client key is required',
+    );
+  }
+}
+
+enum BuildNumberState { reserved, distributed }
+
+class BuildNumberRecord {
+  const BuildNumberRecord(this.number, this.state);
+  final int number;
+  final BuildNumberState state;
+}
+
+void validateBuildNumberLedger(List<BuildNumberRecord> records) {
+  final seen = <int>{};
+  var previous = 0;
+  for (final record in records) {
+    if (record.number <= 0 ||
+        !seen.add(record.number) ||
+        record.number <= previous) {
+      throw const ValidationException(
+        'build ledger: numbers must be positive, unique, and increasing',
+      );
+    }
+    previous = record.number;
+  }
+}
+
+void validateNewBuildNumber(int number, List<BuildNumberRecord> records) {
+  validateBuildNumberLedger(records);
+  if (number <= 0 ||
+      records.any((record) => record.number == number) ||
+      (records.isNotEmpty && number <= records.last.number)) {
+    throw const ValidationException(
+      'build number: must be new and greater than the ledger',
+    );
+  }
+}
+
+void validateReservedBuildNumber(int number, List<BuildNumberRecord> records) {
+  validateBuildNumberLedger(records);
+  final matches = records.where((record) => record.number == number).toList();
+  if (matches.length != 1 ||
+      matches.single.state != BuildNumberState.reserved) {
+    throw const ValidationException(
+      'build number: must have one reserved record',
+    );
+  }
+}
+
+String normalizeSha256Fingerprint(String value) {
+  final normalized = value.replaceAll(':', '').trim().toLowerCase();
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(normalized)) {
+    throw const ValidationException('signer fingerprint: expected SHA-256');
+  }
+  return normalized;
+}
+
+void validateSignerFingerprint(String actual, String expected) {
+  if (normalizeSha256Fingerprint(actual) !=
+      normalizeSha256Fingerprint(expected)) {
+    throw const ValidationException('signer fingerprint: mismatch');
+  }
+}
+
+void validateAndroidArtifactMetadata({
+  required String packageId,
+  required String versionName,
+  required int versionCode,
+  required bool debugSigned,
+  required String signerSha256,
+  required String expectedSignerSha256,
+}) {
+  if (packageId != 'com.moonlightc.aistudybuddy') {
+    throw const ValidationException('Android artifact: package ID mismatch');
+  }
+  if (versionName != '1.0.0' || versionCode <= 0) {
+    throw const ValidationException('Android artifact: version mismatch');
+  }
+  if (debugSigned)
+    throw const ValidationException(
+      'Android artifact: debug signing forbidden',
+    );
+  validateSignerFingerprint(signerSha256, expectedSignerSha256);
+}
+
 String artifactName({
   required AppVersion version,
   required String environment,
@@ -186,6 +325,7 @@ Map<String, Object?> buildManifest({
   required int artifactSize,
   required String sha256,
   required String signingStatus,
+  String? signerCertificateSha256,
   required List<String> migrationRevisions,
 }) {
   final revisions = [...migrationRevisions]..sort();
@@ -206,6 +346,10 @@ Map<String, Object?> buildManifest({
     'artifactSize': artifactSize,
     'sha256': sha256.toLowerCase(),
     'signingStatus': signingStatus,
+    if (signerCertificateSha256 != null)
+      'signerCertificateSha256': normalizeSha256Fingerprint(
+        signerCertificateSha256,
+      ),
     'migrationRevisions': revisions,
   };
 }

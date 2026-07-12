@@ -204,6 +204,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: l10n.settingsAboutDebugSubtitle,
               child: Column(
                 children: [
+                  if (state.config.environment == AppEnvironment.staging)
+                    Semantics(
+                      key: const ValueKey('staging-build-indicator'),
+                      label: l10n.settingsStagingBuildSemantics,
+                      readOnly: true,
+                      child: Chip(
+                        avatar: const Icon(Icons.science_outlined, size: 18),
+                        label: Text(l10n.settingsStagingBuildLabel),
+                      ),
+                    ),
+                  if (state.config.environment == AppEnvironment.staging)
+                    const SizedBox(height: 8),
                   _InfoRow(
                     label: l10n.settingsBackendMode,
                     value: _backendModeLabel(state.config.effectiveBackendMode),

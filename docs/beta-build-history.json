@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "sequence": "shared-android-ios",
+  "records": [
+    {
+      "semanticVersion": "1.0.0",
+      "buildNumber": 2,
+      "state": "reserved",
+      "purpose": "Phase 12.2 first staging beta",
+      "distributedAtUtc": null
+    }
+  ]
+}

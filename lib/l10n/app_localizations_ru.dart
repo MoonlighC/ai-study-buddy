@@ -217,6 +217,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsAboutDebugSubtitle => 'Диагностика прототипа';
 
   @override
+  String get settingsStagingBuildLabel => 'Тестовая сборка';
+
+  @override
+  String get settingsStagingBuildSemantics => 'Тестовая бета-сборка';
+
+  @override
   String get settingsBackendMode => 'Режим backend';
 
   @override

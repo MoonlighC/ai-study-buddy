@@ -1,7 +1,12 @@
 param(
-  [ValidateSet('validate','dry-run','package-web','package-windows','production-android')][string]$Mode = 'validate',
+  [ValidateSet('validate','dry-run','package-web','package-windows','production-android','staging-android')][string]$Mode = 'validate',
   [ValidateSet('local','staging','production')][string]$Environment = 'production',
-  [string]$RcLabel = ''
+  [string]$RcLabel = '',
+  [string]$DartDefinesFile = '',
+  [int]$BuildNumber = 0,
+  [string]$ExpectedProjectRef = '',
+  [string]$ExpectedSignerSha256 = '',
+  [ValidateSet('apk','aab')][string[]]$Artifacts = @('apk','aab')
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -18,6 +23,35 @@ try {
     Write-Output 'Dry run signing fields: keystorePath, keyAlias, storePassword, keyPassword.'
     Write-Output 'Planned steps: validate metadata; validate configuration; build; validate output; package; checksum; manifest.'
     Write-Output 'No supplied values, build, signing, or packaging operation was performed.'; exit 0
+  }
+  if ($Mode -eq 'staging-android') {
+    if (-not $DartDefinesFile -or -not (Test-Path -LiteralPath $DartDefinesFile -PathType Leaf)) { throw 'Ignored staging dart-defines file is required.' }
+    if ($BuildNumber -le 0) { throw 'A positive reserved build number is required.' }
+    if (-not $ExpectedProjectRef) { throw 'ExpectedProjectRef is required.' }
+    if (-not $ExpectedSignerSha256) { throw 'ExpectedSignerSha256 is required.' }
+    $config = Get-Content -LiteralPath $DartDefinesFile -Raw | ConvertFrom-Json
+    foreach ($field in @('APP_ENV','APP_BACKEND_MODE','SUPABASE_URL','SUPABASE_ANON_KEY')) {
+      if (-not $config.PSObject.Properties[$field]) { throw "Staging configuration is missing field: $field." }
+    }
+    $previous = @{}
+    foreach ($field in @('APP_ENV','APP_BACKEND_MODE','SUPABASE_URL','SUPABASE_ANON_KEY')) {
+      $previous[$field] = [Environment]::GetEnvironmentVariable($field, 'Process')
+      [Environment]::SetEnvironmentVariable($field, [string]$config.$field, 'Process')
+    }
+    try {
+      & $dart run tool/release_validation_cli.dart staging-beta-config "--expected-project-ref=$ExpectedProjectRef"
+      if ($LASTEXITCODE -ne 0) { throw 'Staging beta configuration validation failed.' }
+    } finally {
+      foreach ($field in $previous.Keys) { [Environment]::SetEnvironmentVariable($field, $previous[$field], 'Process') }
+    }
+    & $dart run tool/release_validation_cli.dart reserved-build '--ledger=docs/beta-build-history.json' "--number=$BuildNumber"
+    if ($LASTEXITCODE -ne 0) { throw 'Reserved build-number validation failed.' }
+    & $dart run tool/release_validation_cli.dart signer-fingerprint "--actual=$ExpectedSignerSha256" "--expected=$ExpectedSignerSha256"
+    if ($LASTEXITCODE -ne 0) { throw 'Signer fingerprint structure validation failed.' }
+    Write-Output 'Staging Android validation completed using fields: APP_ENV, APP_BACKEND_MODE, SUPABASE_URL, SUPABASE_ANON_KEY.'
+    Write-Output 'Planned artifacts: APK/AAB as selected; package metadata; release signer; SHA-256; manifest; migration revisions.'
+    Write-Output 'Execution is disabled. No build, signing, packaging, checksum, manifest, or distribution occurred.'
+    exit 0
   }
   if ($Mode -eq 'production-android') { throw 'Production Android execution requires separately approved real signing material and is intentionally disabled.' }
   if ($Mode -eq 'package-web') { $source=Join-Path $root 'build/web'; $platform='web' }
