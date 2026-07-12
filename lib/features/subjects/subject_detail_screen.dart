@@ -211,6 +211,8 @@ class SubjectDetailScreen extends StatelessWidget {
         DeletionSafeCode.databaseCleanupFailed => l10n.deletionErrorDatabase,
         DeletionSafeCode.authCleanupFailed => l10n.deletionErrorAuth,
         DeletionSafeCode.recentAuthRequired => l10n.deletionErrorRecentAuth,
+        DeletionSafeCode.recentAuthVerificationFailed =>
+          l10n.deletionErrorRecentAuthVerificationFailed,
         DeletionSafeCode.unauthorized => l10n.deletionErrorUnauthorized,
         DeletionSafeCode.retryLater => l10n.deletionErrorRetry,
         DeletionSafeCode.unknown => l10n.deletionErrorUnknown,

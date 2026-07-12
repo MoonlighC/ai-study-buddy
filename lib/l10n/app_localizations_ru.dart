@@ -2144,6 +2144,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'Войдите снова перед удалением аккаунта.';
 
   @override
+  String get deletionErrorRecentAuthVerificationFailed =>
+      'Не удалось подтвердить недавний вход. Повторите попытку вручную.';
+
+  @override
   String get deletionErrorUnauthorized => 'Сеанс больше недействителен.';
 
   @override

@@ -382,6 +382,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context.l10n.deletionErrorDatabase,
     DeletionSafeCode.authCleanupFailed => context.l10n.deletionErrorAuth,
     DeletionSafeCode.recentAuthRequired => context.l10n.deletionErrorRecentAuth,
+    DeletionSafeCode.recentAuthVerificationFailed =>
+      context.l10n.deletionErrorRecentAuthVerificationFailed,
     DeletionSafeCode.unauthorized => context.l10n.deletionErrorUnauthorized,
     DeletionSafeCode.retryLater => context.l10n.deletionErrorRetry,
     DeletionSafeCode.unknown => context.l10n.deletionErrorUnknown,

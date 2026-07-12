@@ -24,6 +24,7 @@ class AuthController extends ChangeNotifier {
   bool _isLoading = false;
   bool _isDeletingAccount = false;
   bool _pendingAccountDeletionReauth = false;
+  bool _accountDeletionReauthContinuationActive = false;
   DeletionSafeCode? _accountDeletionError;
   String? _errorMessage;
   String? _noticeMessage;
@@ -64,12 +65,24 @@ class AuthController extends ChangeNotifier {
 
   void consumeAccountDeletionReauthIntent() {
     _pendingAccountDeletionReauth = false;
+    _accountDeletionReauthContinuationActive = true;
+    accountDeletionDebugLog('account_delete_recent_auth_continuation_resumed');
     notifyListeners();
   }
 
   Future<bool> deleteAccount() async {
     final current = _user;
-    if (current == null || _isDeletingAccount) return false;
+    if (current == null) {
+      accountDeletionDebugLog('account_delete_safe_failure_unauthorized');
+      _accountDeletionError = DeletionSafeCode.unauthorized;
+      return false;
+    }
+    if (_isDeletingAccount) {
+      accountDeletionDebugLog(
+        'account_delete_safe_failure_deletion_in_progress',
+      );
+      return false;
+    }
     _isDeletingAccount = true;
     _accountDeletionError = null;
     notifyListeners();
@@ -84,28 +97,46 @@ class AuthController extends ChangeNotifier {
         _user = null;
         _profile = null;
         _pendingAccountDeletionReauth = false;
+        _accountDeletionReauthContinuationActive = false;
         return true;
       }
       _accountDeletionError = result.code ?? DeletionSafeCode.unknown;
       return false;
     } on DeletionException catch (error) {
       if (error.code == DeletionSafeCode.recentAuthRequired) {
-        _pendingAccountDeletionReauth = true;
-        _accountDeletionError = error.code;
-        await authRepository.signOut();
-        _user = null;
-        _profile = null;
+        if (_accountDeletionReauthContinuationActive) {
+          accountDeletionDebugLog('account_delete_recent_auth_loop_prevented');
+          _pendingAccountDeletionReauth = false;
+          _accountDeletionReauthContinuationActive = false;
+          _accountDeletionError = DeletionSafeCode.recentAuthVerificationFailed;
+        } else {
+          accountDeletionDebugLog(
+            'account_delete_recent_auth_redirect_started',
+          );
+          _pendingAccountDeletionReauth = true;
+          _accountDeletionError = error.code;
+          await authRepository.signOut();
+          _user = null;
+          _profile = null;
+        }
       } else if (error.code == DeletionSafeCode.unauthorized &&
-          _isDeletingAccount) {
+          error.completedDeletion) {
         _user = null;
         _profile = null;
         _pendingAccountDeletionReauth = false;
+        _accountDeletionReauthContinuationActive = false;
         return true;
       } else {
         _accountDeletionError = error.code;
       }
+      accountDeletionDebugLog(
+        'account_delete_safe_failure_${accountDeletionSafeCodeName(error.code)}',
+      );
       return false;
-    } catch (_) {
+    } catch (error) {
+      accountDeletionDebugLog(
+        'account_delete_exception_${_accountDeletionExceptionType(error)}',
+      );
       _accountDeletionError = DeletionSafeCode.unknown;
       return false;
     } finally {
@@ -358,6 +389,11 @@ class AuthController extends ChangeNotifier {
     }
     return 'Something went wrong. Please try again.';
   }
+}
+
+String _accountDeletionExceptionType(Object error) {
+  final value = error.runtimeType.toString();
+  return RegExp(r'^[A-Za-z0-9_]{1,64}$').hasMatch(value) ? value : 'unknown';
 }
 
 class AuthScope extends InheritedNotifier<AuthController> {

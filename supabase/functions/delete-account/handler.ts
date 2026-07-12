@@ -1,6 +1,6 @@
 export interface AccountPrincipal {
   userId: string;
-  authTime: number | null;
+  lastSignInAt: string | null;
 }
 export interface AccountDependencies {
   verifyJwt(jwt: string): Promise<AccountPrincipal | null>;
@@ -22,12 +22,14 @@ export interface AccountDependencies {
   deleteAuthUser(
     userId: string,
   ): Promise<{ error: boolean; notFound?: boolean }>;
-  nowSeconds(): number;
+  nowMilliseconds(): number;
   operationId(): string;
   log(event: Record<string, unknown>): void;
 }
 const buckets = ["study-materials", "study-images"] as const;
 const pageSize = 100;
+const recentAuthWindowMs = 10 * 60 * 1000;
+const allowedFutureSkewMs = 60 * 1000;
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function createDeleteAccountHandler(deps: AccountDependencies) {
@@ -43,10 +45,27 @@ export function createDeleteAccountHandler(deps: AccountDependencies) {
       return reply({ code: "unauthorized" }, 401);
     }
     if (!principal) return reply({ code: "unauthorized" }, 401);
-    if (
-      principal.authTime == null || principal.authTime > deps.nowSeconds() ||
-      deps.nowSeconds() - principal.authTime > 600
-    ) return reply({ code: "recent_auth_required" }, 403);
+    const freshness = recentAuthFreshness(
+      principal.lastSignInAt,
+      deps.nowMilliseconds(),
+    );
+    try {
+      deps.log({
+        operation: "delete-account",
+        stage: "recent_auth_checked",
+        code: freshness === "fresh"
+          ? "recent_auth_accepted"
+          : "recent_auth_required",
+        timestamp_present: principal.lastSignInAt != null,
+        age_bucket: freshness,
+        timestamp: new Date(deps.nowMilliseconds()).toISOString(),
+      });
+    } catch {
+      // Diagnostics must never change deletion authorization or ordering.
+    }
+    if (freshness !== "fresh") {
+      return reply({ code: "recent_auth_required" }, 403);
+    }
     let body: unknown;
     try {
       body = await request.json();
@@ -237,6 +256,21 @@ export function createDeleteAccountHandler(deps: AccountDependencies) {
       );
     }
   };
+}
+
+export function recentAuthFreshness(
+  lastSignInAt: string | null,
+  nowMilliseconds: number,
+): "fresh" | "stale" | "invalid" {
+  if (lastSignInAt == null || !Number.isFinite(nowMilliseconds)) {
+    return "invalid";
+  }
+  if (!/(?:z|[+-]\d{2}:\d{2})$/i.test(lastSignInAt)) return "invalid";
+  const signedInAt = Date.parse(lastSignInAt);
+  if (!Number.isFinite(signedInAt)) return "invalid";
+  const age = nowMilliseconds - signedInAt;
+  if (age < -allowedFutureSkewMs) return "invalid";
+  return age <= recentAuthWindowMs ? "fresh" : "stale";
 }
 async function storageFailure(
   d: AccountDependencies,

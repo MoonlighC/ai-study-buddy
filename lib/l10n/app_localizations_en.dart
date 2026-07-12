@@ -2066,6 +2066,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Please sign in again before deleting your account.';
 
   @override
+  String get deletionErrorRecentAuthVerificationFailed =>
+      'Your recent login could not be verified. Please try again manually.';
+
+  @override
   String get deletionErrorUnauthorized => 'Your session is no longer valid.';
 
   @override

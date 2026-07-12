@@ -2105,6 +2105,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Melde dich erneut an, bevor du dein Konto löschst.';
 
   @override
+  String get deletionErrorRecentAuthVerificationFailed =>
+      'Deine erneute Anmeldung konnte nicht bestätigt werden. Versuche es bitte manuell erneut.';
+
+  @override
   String get deletionErrorUnauthorized =>
       'Deine Sitzung ist nicht mehr gültig.';
 

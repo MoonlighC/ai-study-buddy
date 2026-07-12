@@ -3466,6 +3466,12 @@ abstract class AppLocalizations {
   /// **'Please sign in again before deleting your account.'**
   String get deletionErrorRecentAuth;
 
+  /// No description provided for @deletionErrorRecentAuthVerificationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your recent login could not be verified. Please try again manually.'**
+  String get deletionErrorRecentAuthVerificationFailed;
+
   /// No description provided for @deletionErrorUnauthorized.
   ///
   /// In en, this message translates to:

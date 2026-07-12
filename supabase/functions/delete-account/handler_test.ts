@@ -13,13 +13,16 @@ function deps(
   overrides: Partial<AccountDependencies> = {},
 ): AccountDependencies {
   return {
-    verifyJwt: async () => ({ userId: "user", authTime: 950 }),
+    verifyJwt: async () => ({
+      userId: "user",
+      lastSignInAt: new Date(950_000).toISOString(),
+    }),
     begin: async () => ({ outcome: "pending", operation_id: "stable" }),
     list: async () => ({ names: [], error: false }),
     remove: async () => ({ error: false }),
     mark: async () => true,
     deleteAuthUser: async () => ({ error: false }),
-    nowSeconds: () => 1000,
+    nowMilliseconds: () => 1_000_000,
     operationId: () => "operation",
     log: () => {},
     ...overrides,
@@ -109,31 +112,98 @@ Deno.test("account: client user ID is rejected", async () => {
   equal(r.status, 400);
   assert(!begun);
 });
-Deno.test("account: missing auth_time requires recent auth", async () =>
+Deno.test("account: missing authoritative sign-in time requires recent auth", async () =>
   equal(
     await json(
       await createDeleteAccountHandler(
-        deps({ verifyJwt: async () => ({ userId: "user", authTime: null }) }),
+        deps({
+          verifyJwt: async () => ({ userId: "user", lastSignInAt: null }),
+        }),
       )(request()),
     ),
     { code: "recent_auth_required" },
   ));
-Deno.test("account: stale auth_time requires recent auth", async () =>
+Deno.test("account: stale authoritative sign-in time requires recent auth", async () =>
   equal(
     (await createDeleteAccountHandler(
-      deps({ verifyJwt: async () => ({ userId: "user", authTime: 399 }) }),
+      deps({
+        verifyJwt: async () => ({
+          userId: "user",
+          lastSignInAt: new Date(399_999).toISOString(),
+        }),
+      }),
     )(request())).status,
     403,
   ));
-Deno.test("account: exact ten-minute auth boundary is accepted", async () =>
+Deno.test("account: exact ten-minute authoritative boundary is accepted", async () =>
   equal(
     (await createDeleteAccountHandler(
-      deps({ verifyJwt: async () => ({ userId: "user", authTime: 400 }) }),
+      deps({
+        verifyJwt: async () => ({
+          userId: "user",
+          lastSignInAt: new Date(400_000).toISOString(),
+        }),
+      }),
     )(request())).status,
     200,
   ));
 Deno.test("account: recent authentication is accepted", async () =>
   equal((await createDeleteAccountHandler(deps())(request())).status, 200));
+
+Deno.test("account: fresh verified user works without auth_time for every provider", async () => {
+  for (const provider of ["email", "oauth", "magic_link"]) {
+    const r = await createDeleteAccountHandler(deps({
+      verifyJwt: async () => ({
+        userId: "user",
+        lastSignInAt: new Date(999_000).toISOString(),
+        // Provider is deliberately not part of the principal contract.
+        provider,
+      }),
+    }))(request());
+    equal(r.status, 200);
+  }
+});
+
+Deno.test("account: malformed, missing, and excessive future skew are rejected", async () => {
+  for (
+    const lastSignInAt of [
+      null,
+      "not-a-date",
+      new Date(1_061_000).toISOString(),
+    ]
+  ) {
+    let begun = false;
+    const r = await createDeleteAccountHandler(deps({
+      verifyJwt: async () => ({ userId: "user", lastSignInAt }),
+      begin: async () => {
+        begun = true;
+        return { outcome: "pending" };
+      },
+    }))(request());
+    equal(r.status, 403);
+    assert(!begun);
+  }
+});
+
+Deno.test("account: token iat and client timestamp cannot override stale authoritative time", async () => {
+  let begun = false;
+  const handler = createDeleteAccountHandler(deps({
+    verifyJwt: async () => ({
+      userId: "user",
+      lastSignInAt: new Date(399_999).toISOString(),
+    }),
+    begin: async () => {
+      begun = true;
+      return { outcome: "pending" };
+    },
+  }));
+  equal(
+    (await handler(request({ confirmation: "DELETE", auth_time: 1_000 })))
+      .status,
+    403,
+  );
+  assert(!begun);
+});
 Deno.test("account: first request starts stable operation", async () => {
   let count = 0;
   await createDeleteAccountHandler(deps({
@@ -440,7 +510,7 @@ Deno.test("account: Auth deletion failure maps safely", async () =>
     ),
     { code: "auth_cleanup_failed", status: "retryable" },
   ));
-Deno.test("account: interrupted response after Auth success remains safely retryable", async () => {
+Deno.test("account: diagnostic failure cannot interrupt Auth deletion", async () => {
   let auth = false, firstLog = true;
   const h = createDeleteAccountHandler(deps({
     deleteAuthUser: async () => {
@@ -456,10 +526,7 @@ Deno.test("account: interrupted response after Auth success remains safely retry
   }));
   const r = await h(request());
   assert(auth);
-  equal(await json(r), {
-    code: "database_cleanup_failed",
-    status: "retryable",
-  });
+  equal(await json(r), { ok: true, status: "completed" });
 });
 Deno.test("account: stable codes do not leak provider payloads", async () => {
   const r = await createDeleteAccountHandler(

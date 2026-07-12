@@ -94,6 +94,67 @@ void main() {
     expect(auth.signOutCount, 1);
   });
 
+  test(
+    'fresh-login continuation succeeds on the second confirmed request',
+    () async {
+      final auth = _AuthFake(initialUser: user);
+      final deletion = _SequencedAccountDeletionFake([
+        const DeletionException(DeletionSafeCode.recentAuthRequired),
+        const DeletionResult(status: DeletionOperationStatus.completed),
+      ]);
+      final controller = AuthController(
+        authRepository: auth,
+        profileRepository: NoopProfileRepository(),
+        accountDeletionRepository: deletion,
+      );
+      await controller.initialize();
+
+      expect(await controller.deleteAccount(), isFalse);
+      expect(controller.pendingAccountDeletionReauth, isTrue);
+      expect(auth.signOutCount, 1);
+      expect(
+        await controller.signInWithEmail(
+          email: user.email,
+          password: 'password',
+        ),
+        isTrue,
+      );
+      controller.consumeAccountDeletionReauthIntent();
+      expect(await controller.deleteAccount(), isTrue);
+      expect(deletion.calls, 2);
+    },
+  );
+
+  test(
+    'repeated recent-auth failure is loop-guarded without another sign-out',
+    () async {
+      final auth = _AuthFake(initialUser: user);
+      final deletion = _SequencedAccountDeletionFake([
+        const DeletionException(DeletionSafeCode.recentAuthRequired),
+        const DeletionException(DeletionSafeCode.recentAuthRequired),
+      ]);
+      final controller = AuthController(
+        authRepository: auth,
+        profileRepository: NoopProfileRepository(),
+        accountDeletionRepository: deletion,
+      );
+      await controller.initialize();
+      expect(await controller.deleteAccount(), isFalse);
+      expect(auth.signOutCount, 1);
+      await controller.signInWithEmail(email: user.email, password: 'password');
+      controller.consumeAccountDeletionReauthIntent();
+
+      expect(await controller.deleteAccount(), isFalse);
+      expect(auth.signOutCount, 1);
+      expect(controller.user, isNotNull);
+      expect(controller.pendingAccountDeletionReauth, isFalse);
+      expect(
+        controller.accountDeletionError,
+        DeletionSafeCode.recentAuthVerificationFailed,
+      );
+    },
+  );
+
   testWidgets('subject deletion confirms full scope and loaded count', (
     tester,
   ) async {
@@ -173,6 +234,9 @@ void main() {
     );
     await tester.pump();
     expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+    await tester.tap(confirm);
+    await tester.pump();
+    expect((auth.accountDeletionRepository as _AccountDeletionFake).calls, 1);
   });
 }
 
@@ -197,10 +261,24 @@ class _SubjectDeletionFake implements SubjectDeletionRepository {
 class _AccountDeletionFake implements AccountDeletionRepository {
   _AccountDeletionFake({this.error});
   final Object? error;
+  int calls = 0;
   @override
   Future<DeletionResult> deleteAccount({required AuthUser user}) async {
+    calls++;
     if (error != null) throw error!;
     return const DeletionResult(status: DeletionOperationStatus.completed);
+  }
+}
+
+class _SequencedAccountDeletionFake implements AccountDeletionRepository {
+  _SequencedAccountDeletionFake(this.outcomes);
+  final List<Object> outcomes;
+  int calls = 0;
+  @override
+  Future<DeletionResult> deleteAccount({required AuthUser user}) async {
+    final outcome = outcomes[calls++];
+    if (outcome is DeletionResult) return outcome;
+    throw outcome;
   }
 }
 

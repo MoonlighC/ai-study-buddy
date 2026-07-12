@@ -1,1 +1,1 @@
-{"tasks":{"test":"deno test --allow-env handler_test.ts"}}
+{ "tasks": { "test": "deno test --allow-env handler_test.ts" } }

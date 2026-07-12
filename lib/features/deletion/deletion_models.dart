@@ -4,6 +4,7 @@ enum DeletionSafeCode {
   databaseCleanupFailed,
   authCleanupFailed,
   recentAuthRequired,
+  recentAuthVerificationFailed,
   unauthorized,
   retryLater,
   unknown,
@@ -29,8 +30,9 @@ class DeletionResult {
 }
 
 class DeletionException implements Exception {
-  const DeletionException(this.code);
+  const DeletionException(this.code, {this.completedDeletion = false});
   final DeletionSafeCode code;
+  final bool completedDeletion;
 }
 
 DeletionSafeCode deletionSafeCodeFromWire(Object? value) => switch (value) {
