@@ -2279,4 +2279,95 @@ class AppLocalizationsRu extends AppLocalizations {
   String searchFlashcardSubtitle(Object subject, Object topic) {
     return '$subject · Карточка · $topic';
   }
+
+  @override
+  String get uploadSelectMultiple => 'Выбрать один или несколько файлов';
+
+  @override
+  String get uploadMaximumFiles => 'Можно выбрать до 20 файлов одновременно.';
+
+  @override
+  String get uploadQueued => 'В очереди';
+
+  @override
+  String get uploadUploading => 'Загрузка';
+
+  @override
+  String get uploadProcessing => 'Обработка';
+
+  @override
+  String get uploadReady => 'Готово';
+
+  @override
+  String get uploadFailed => 'Ошибка';
+
+  @override
+  String get materialRetry => 'Повторить';
+
+  @override
+  String get uploadPartialSuccess =>
+      'Некоторые файлы готовы, другие требуют внимания.';
+
+  @override
+  String get materialViewOriginal => 'Открыть оригинал';
+
+  @override
+  String get materialViewerTitle => 'Оригинальный файл';
+
+  @override
+  String get materialPreviewLoading => 'Загрузка предпросмотра';
+
+  @override
+  String get materialPreviewUnavailable => 'Предпросмотр недоступен.';
+
+  @override
+  String get materialPreviewSessionExpired => 'Сеанс истёк. Войдите снова.';
+
+  @override
+  String get materialPreviewNotAuthorized =>
+      'Этот файл недоступен для вашей учётной записи.';
+
+  @override
+  String get materialUnsupportedFile => 'Неподдерживаемый файл.';
+
+  @override
+  String get materialInvalidFile => 'Недопустимый файл.';
+
+  @override
+  String get materialPreviewTooLarge => 'Файл слишком велик для предпросмотра.';
+
+  @override
+  String materialPageOf(Object page, Object pageCount) {
+    return 'Страница $page из $pageCount';
+  }
+
+  @override
+  String materialSelectedFiles(Object count) {
+    return 'Выбрано файлов: $count';
+  }
+
+  @override
+  String materialBatchResult(Object failed, Object succeeded) {
+    return 'Успешно: $succeeded / ошибок: $failed';
+  }
+
+  @override
+  String get materialPdfPreviewSemantics => 'Предпросмотр оригинального PDF';
+
+  @override
+  String get materialImagePreviewSemantics =>
+      'Предпросмотр оригинального изображения. Масштабируйте щипком и перемещайте перетаскиванием.';
+
+  @override
+  String get materialPreviousPage => 'Предыдущая страница';
+
+  @override
+  String get materialNextPage => 'Следующая страница';
+
+  @override
+  String get materialProcessingConsentRequired =>
+      'Откройте материал, чтобы проверить параметры сканирования.';
+
+  @override
+  String get materialMaximumFilesError => 'Можно выбрать не более 20 файлов.';
 }

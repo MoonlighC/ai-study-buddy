@@ -3681,6 +3681,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{subject} · Flashcard · {topic}'**
   String searchFlashcardSubtitle(Object subject, Object topic);
+
+  /// No description provided for @uploadSelectMultiple.
+  ///
+  /// In en, this message translates to:
+  /// **'Select one or several files'**
+  String get uploadSelectMultiple;
+
+  /// No description provided for @uploadMaximumFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Select up to 20 files at once.'**
+  String get uploadMaximumFiles;
+
+  /// No description provided for @uploadQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get uploadQueued;
+
+  /// No description provided for @uploadUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading'**
+  String get uploadUploading;
+
+  /// No description provided for @uploadProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing'**
+  String get uploadProcessing;
+
+  /// No description provided for @uploadReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get uploadReady;
+
+  /// No description provided for @uploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get uploadFailed;
+
+  /// No description provided for @materialRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get materialRetry;
+
+  /// No description provided for @uploadPartialSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Some files succeeded while others need attention.'**
+  String get uploadPartialSuccess;
+
+  /// No description provided for @materialViewOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'View original'**
+  String get materialViewOriginal;
+
+  /// No description provided for @materialViewerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Original file'**
+  String get materialViewerTitle;
+
+  /// No description provided for @materialPreviewLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading preview'**
+  String get materialPreviewLoading;
+
+  /// No description provided for @materialPreviewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview unavailable.'**
+  String get materialPreviewUnavailable;
+
+  /// No description provided for @materialPreviewSessionExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Your session expired. Sign in again.'**
+  String get materialPreviewSessionExpired;
+
+  /// No description provided for @materialPreviewNotAuthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'This file is not available to your account.'**
+  String get materialPreviewNotAuthorized;
+
+  /// No description provided for @materialUnsupportedFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsupported file.'**
+  String get materialUnsupportedFile;
+
+  /// No description provided for @materialInvalidFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid file.'**
+  String get materialInvalidFile;
+
+  /// No description provided for @materialPreviewTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'This file is too large to preview.'**
+  String get materialPreviewTooLarge;
+
+  /// No description provided for @materialPageOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} of {pageCount}'**
+  String materialPageOf(Object page, Object pageCount);
+
+  /// No description provided for @materialSelectedFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected {count} files'**
+  String materialSelectedFiles(Object count);
+
+  /// No description provided for @materialBatchResult.
+  ///
+  /// In en, this message translates to:
+  /// **'{succeeded} succeeded / {failed} failed'**
+  String materialBatchResult(Object failed, Object succeeded);
+
+  /// No description provided for @materialPdfPreviewSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Original PDF preview'**
+  String get materialPdfPreviewSemantics;
+
+  /// No description provided for @materialImagePreviewSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Original image preview. Pinch to zoom and drag to pan.'**
+  String get materialImagePreviewSemantics;
+
+  /// No description provided for @materialPreviousPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous page'**
+  String get materialPreviousPage;
+
+  /// No description provided for @materialNextPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Next page'**
+  String get materialNextPage;
+
+  /// No description provided for @materialProcessingConsentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the material to review scanning options.'**
+  String get materialProcessingConsentRequired;
+
+  /// No description provided for @materialMaximumFilesError.
+  ///
+  /// In en, this message translates to:
+  /// **'You can select a maximum of 20 files.'**
+  String get materialMaximumFilesError;
 }
 
 class _AppLocalizationsDelegate

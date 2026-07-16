@@ -2239,4 +2239,98 @@ class AppLocalizationsDe extends AppLocalizations {
   String searchFlashcardSubtitle(Object subject, Object topic) {
     return '$subject · Lernkarte · $topic';
   }
+
+  @override
+  String get uploadSelectMultiple => 'Eine oder mehrere Dateien auswählen';
+
+  @override
+  String get uploadMaximumFiles => 'Wähle bis zu 20 Dateien gleichzeitig aus.';
+
+  @override
+  String get uploadQueued => 'In Warteschlange';
+
+  @override
+  String get uploadUploading => 'Wird hochgeladen';
+
+  @override
+  String get uploadProcessing => 'Wird verarbeitet';
+
+  @override
+  String get uploadReady => 'Bereit';
+
+  @override
+  String get uploadFailed => 'Fehlgeschlagen';
+
+  @override
+  String get materialRetry => 'Erneut versuchen';
+
+  @override
+  String get uploadPartialSuccess =>
+      'Einige Dateien waren erfolgreich, andere benötigen Aufmerksamkeit.';
+
+  @override
+  String get materialViewOriginal => 'Original anzeigen';
+
+  @override
+  String get materialViewerTitle => 'Originaldatei';
+
+  @override
+  String get materialPreviewLoading => 'Vorschau wird geladen';
+
+  @override
+  String get materialPreviewUnavailable => 'Vorschau nicht verfügbar.';
+
+  @override
+  String get materialPreviewSessionExpired =>
+      'Deine Sitzung ist abgelaufen. Melde dich erneut an.';
+
+  @override
+  String get materialPreviewNotAuthorized =>
+      'Diese Datei ist für dein Konto nicht verfügbar.';
+
+  @override
+  String get materialUnsupportedFile => 'Nicht unterstützte Datei.';
+
+  @override
+  String get materialInvalidFile => 'Ungültige Datei.';
+
+  @override
+  String get materialPreviewTooLarge =>
+      'Diese Datei ist zu groß für die Vorschau.';
+
+  @override
+  String materialPageOf(Object page, Object pageCount) {
+    return 'Seite $page von $pageCount';
+  }
+
+  @override
+  String materialSelectedFiles(Object count) {
+    return '$count Dateien ausgewählt';
+  }
+
+  @override
+  String materialBatchResult(Object failed, Object succeeded) {
+    return '$succeeded erfolgreich / $failed fehlgeschlagen';
+  }
+
+  @override
+  String get materialPdfPreviewSemantics => 'Vorschau des Original-PDFs';
+
+  @override
+  String get materialImagePreviewSemantics =>
+      'Vorschau des Originalbilds. Zum Zoomen aufziehen und zum Verschieben ziehen.';
+
+  @override
+  String get materialPreviousPage => 'Vorherige Seite';
+
+  @override
+  String get materialNextPage => 'Nächste Seite';
+
+  @override
+  String get materialProcessingConsentRequired =>
+      'Öffne das Material, um die Scanoptionen zu prüfen.';
+
+  @override
+  String get materialMaximumFilesError =>
+      'Du kannst höchstens 20 Dateien auswählen.';
 }

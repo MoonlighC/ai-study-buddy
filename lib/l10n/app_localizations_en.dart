@@ -2198,4 +2198,97 @@ class AppLocalizationsEn extends AppLocalizations {
   String searchFlashcardSubtitle(Object subject, Object topic) {
     return '$subject · Flashcard · $topic';
   }
+
+  @override
+  String get uploadSelectMultiple => 'Select one or several files';
+
+  @override
+  String get uploadMaximumFiles => 'Select up to 20 files at once.';
+
+  @override
+  String get uploadQueued => 'Queued';
+
+  @override
+  String get uploadUploading => 'Uploading';
+
+  @override
+  String get uploadProcessing => 'Processing';
+
+  @override
+  String get uploadReady => 'Ready';
+
+  @override
+  String get uploadFailed => 'Failed';
+
+  @override
+  String get materialRetry => 'Retry';
+
+  @override
+  String get uploadPartialSuccess =>
+      'Some files succeeded while others need attention.';
+
+  @override
+  String get materialViewOriginal => 'View original';
+
+  @override
+  String get materialViewerTitle => 'Original file';
+
+  @override
+  String get materialPreviewLoading => 'Loading preview';
+
+  @override
+  String get materialPreviewUnavailable => 'Preview unavailable.';
+
+  @override
+  String get materialPreviewSessionExpired =>
+      'Your session expired. Sign in again.';
+
+  @override
+  String get materialPreviewNotAuthorized =>
+      'This file is not available to your account.';
+
+  @override
+  String get materialUnsupportedFile => 'Unsupported file.';
+
+  @override
+  String get materialInvalidFile => 'Invalid file.';
+
+  @override
+  String get materialPreviewTooLarge => 'This file is too large to preview.';
+
+  @override
+  String materialPageOf(Object page, Object pageCount) {
+    return 'Page $page of $pageCount';
+  }
+
+  @override
+  String materialSelectedFiles(Object count) {
+    return 'Selected $count files';
+  }
+
+  @override
+  String materialBatchResult(Object failed, Object succeeded) {
+    return '$succeeded succeeded / $failed failed';
+  }
+
+  @override
+  String get materialPdfPreviewSemantics => 'Original PDF preview';
+
+  @override
+  String get materialImagePreviewSemantics =>
+      'Original image preview. Pinch to zoom and drag to pan.';
+
+  @override
+  String get materialPreviousPage => 'Previous page';
+
+  @override
+  String get materialNextPage => 'Next page';
+
+  @override
+  String get materialProcessingConsentRequired =>
+      'Open the material to review scanning options.';
+
+  @override
+  String get materialMaximumFilesError =>
+      'You can select a maximum of 20 files.';
 }

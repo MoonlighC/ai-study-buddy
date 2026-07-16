@@ -13,6 +13,7 @@ import '../features/generation/generated_outputs_screen.dart';
 import '../features/materials/add_material_screen.dart';
 import '../features/materials/material_detail_screen.dart';
 import '../features/materials/upload_material_screen.dart';
+import '../features/materials/material_viewer_screen.dart';
 import '../features/progress/progress_screen.dart';
 import '../features/quizzes/quiz_taking_screen.dart';
 import '../features/search/search_screen.dart';
@@ -36,6 +37,7 @@ class AppRoutes {
   static const addMaterial = '/materials/add';
   static const materialDetail = '/materials/detail';
   static const uploadMaterial = '/materials/upload';
+  static const materialViewer = '/materials/viewer';
   static const generatedOutputs = '/generation/outputs';
   static const flashcards = '/flashcards';
   static const flashcardTraining = '/flashcards/training';
@@ -85,6 +87,9 @@ class AppRoutes {
     final uploadMaterialArgs = routeSettings.arguments is UploadMaterialArgs
         ? routeSettings.arguments! as UploadMaterialArgs
         : UploadMaterialArgs(subject: subject, kind: MaterialKind.pdf);
+    final materialViewerArgs = routeSettings.arguments is MaterialViewerArgs
+        ? routeSettings.arguments! as MaterialViewerArgs
+        : null;
     final studySessionArgs = routeSettings.arguments is StudySessionResultArgs
         ? routeSettings.arguments! as StudySessionResultArgs
         : StudySessionResultArgs(
@@ -103,6 +108,7 @@ class AppRoutes {
       addMaterial => AddMaterialScreen(subject: subject),
       materialDetail => MaterialDetailScreen(material: material),
       uploadMaterial => UploadMaterialScreen(args: uploadMaterialArgs),
+      materialViewer => MaterialViewerScreen(args: materialViewerArgs),
       generatedOutputs => GeneratedOutputsScreen(subject: subject),
       flashcards => FlashcardsScreen(args: flashcardsArgs),
       flashcardTraining => FlashcardTrainingScreen(args: flashcardTrainingArgs),

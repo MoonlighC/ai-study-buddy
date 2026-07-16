@@ -40,3 +40,25 @@ Every real AI call should log:
 - 80 quiz questions per user
 - 3 uploads per user
 - $0.25 estimated OpenAI cost per user by default
+## Phase B upload queue and original previews
+
+Phase B keeps upload orchestration in a session-owned, in-memory queue. The
+queue is independently observable, preserves FIFO order, and runs no more than
+two upload/processing workers. Inactive items retain only picker metadata and a
+deferred read handle where the platform supports it; full file bytes are read
+when a worker starts and are released after authoritative material creation.
+The queue is cleared on authenticated-session changes and is not restored after
+application termination.
+
+Every item receives one planned material UUID. Retries reconcile that exact ID
+and the canonical owner/material Storage location before resuming upload,
+material creation, or extraction. A processing retry always uses the existing
+authoritative material and cannot create a second row. Existing scanned and
+mixed-PDF consent remains in material detail, including the 10-page limit.
+
+Original previews resolve an exact material ID through authenticated RLS,
+validate uploaded-source metadata internally, and download bytes directly from
+private Storage. PDF rendering uses only in-memory `PdfViewer.data`; image
+rendering uses only `Image.memory` inside `InteractiveViewer`. No Storage
+identifier, URL, token, or document byte buffer enters public route/queue
+models, persistence, logs, analytics, semantics, or user-facing errors.

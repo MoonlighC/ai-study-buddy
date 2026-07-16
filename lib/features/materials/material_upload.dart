@@ -4,6 +4,44 @@ import '../../core/models/material.dart';
 
 const int maxPdfUploadBytes = 10 * 1024 * 1024;
 const int maxImageUploadBytes = 8 * 1024 * 1024;
+const int maxMaterialFilesPerBatch = 20;
+
+enum MaterialFileValidationCode {
+  unsupportedFile,
+  invalidFile,
+  emptyFile,
+  fileTooLarge,
+}
+
+enum MaterialFileBatchErrorCode { tooManyFiles }
+
+class MaterialFileSelectionResult {
+  const MaterialFileSelectionResult.valid(this.file) : errorCode = null;
+
+  const MaterialFileSelectionResult.invalid(this.file, this.errorCode);
+
+  final SelectedMaterialFile file;
+  final MaterialFileValidationCode? errorCode;
+
+  bool get isValid => errorCode == null;
+}
+
+class MaterialFilePickerBatch {
+  const MaterialFilePickerBatch({
+    required this.batchToken,
+    required this.results,
+    this.errorCode,
+  });
+
+  final String batchToken;
+  final List<MaterialFileSelectionResult> results;
+  final MaterialFileBatchErrorCode? errorCode;
+
+  List<SelectedMaterialFile> get validFiles => [
+    for (final result in results)
+      if (result.isValid) result.file,
+  ];
+}
 
 class SelectedMaterialFile {
   const SelectedMaterialFile({
@@ -42,9 +80,46 @@ class MaterialUploadRequest {
 }
 
 class MaterialUploadValidationException implements Exception {
-  const MaterialUploadValidationException(this.message);
+  const MaterialUploadValidationException(
+    this.message, {
+    this.code = MaterialFileValidationCode.invalidFile,
+  });
 
   final String message;
+  final MaterialFileValidationCode code;
+}
+
+MaterialFilePickerBatch validateMaterialFileBatch({
+  required String batchToken,
+  required List<SelectedMaterialFile> files,
+  required MaterialKind expectedKind,
+}) {
+  if (files.length > maxMaterialFilesPerBatch) {
+    return MaterialFilePickerBatch(
+      batchToken: batchToken,
+      results: const [],
+      errorCode: MaterialFileBatchErrorCode.tooManyFiles,
+    );
+  }
+  return MaterialFilePickerBatch(
+    batchToken: batchToken,
+    results: [
+      for (final file in files)
+        tryValidateMaterialUploadSelection(file, expectedKind),
+    ],
+  );
+}
+
+MaterialFileSelectionResult tryValidateMaterialUploadSelection(
+  SelectedMaterialFile file,
+  MaterialKind expectedKind,
+) {
+  try {
+    validateMaterialUploadSelection(file, expectedKind);
+    return MaterialFileSelectionResult.valid(file);
+  } on MaterialUploadValidationException catch (error) {
+    return MaterialFileSelectionResult.invalid(file, error.code);
+  }
 }
 
 Future<MaterialUploadRequest> prepareMaterialUpload({
@@ -99,6 +174,84 @@ String sanitizeUploadFilename(
   return '$stem.${fallbackExtension.toLowerCase()}';
 }
 
+bool isCanonicalMaterialFilename({
+  required String filename,
+  required MaterialKind kind,
+  required String mimeType,
+}) {
+  if (_containsUnsafePathText(filename) || filename.trim() != filename) {
+    return false;
+  }
+  final match = RegExp(
+    r'^([A-Za-z0-9-][A-Za-z0-9_-]{0,99})\.(pdf|png|jpg|jpeg|webp)$',
+  ).firstMatch(filename);
+  if (match == null) return false;
+  final extension = match.group(2)!;
+  final normalizedMime = mimeType.trim().toLowerCase();
+  if (normalizedMime != mimeType || normalizedMime.isEmpty) return false;
+  return switch (kind) {
+    MaterialKind.pdf =>
+      extension == 'pdf' && normalizedMime == 'application/pdf',
+    MaterialKind.image => switch (extension) {
+      'png' => normalizedMime == 'image/png',
+      'jpg' || 'jpeg' => normalizedMime == 'image/jpeg',
+      'webp' => normalizedMime == 'image/webp',
+      _ => false,
+    },
+    MaterialKind.pastedText => false,
+  };
+}
+
+bool isCanonicalMaterialObjectPath({
+  required String path,
+  required String userId,
+  required String materialId,
+  required MaterialKind kind,
+  required String mimeType,
+  String? expectedFilename,
+}) {
+  if (path.trim() != path ||
+      path.contains('//') ||
+      _containsUnsafePathText(path)) {
+    return false;
+  }
+  final segments = path.split('/');
+  if (segments.length != 3 ||
+      segments[0] != userId ||
+      segments[1] != materialId) {
+    return false;
+  }
+  final filename = segments[2];
+  if (expectedFilename != null && filename != expectedFilename) return false;
+  return isCanonicalMaterialFilename(
+    filename: filename,
+    kind: kind,
+    mimeType: mimeType,
+  );
+}
+
+bool _containsUnsafePathText(String value) {
+  if (value.isEmpty ||
+      value.contains('..') ||
+      value.contains('\\') ||
+      RegExp(r'[\x00-\x1F\x7F]').hasMatch(value) ||
+      RegExp(r'[\u2044\u2215\u29F5\uFF0F\uFF3C\uFE68]').hasMatch(value)) {
+    return true;
+  }
+  if (!value.contains('%')) return false;
+  var decoded = value;
+  for (var pass = 0; pass < 2; pass += 1) {
+    try {
+      final next = Uri.decodeComponent(decoded);
+      if (next != decoded) return true;
+      decoded = next;
+    } on FormatException {
+      return true;
+    }
+  }
+  return true;
+}
+
 String _displayFilename(String value, String fallback) {
   final basename = value.replaceAll('\\', '/').split('/').last.trim();
   return basename.isEmpty ? fallback : basename;
@@ -125,6 +278,7 @@ void _validateExtension(String extension, MaterialKind kind) {
   if (!valid) {
     throw const MaterialUploadValidationException(
       'Choose a supported PDF, PNG, JPG, JPEG, or WEBP file.',
+      code: MaterialFileValidationCode.unsupportedFile,
     );
   }
 }
@@ -136,11 +290,13 @@ void _validateSize(int bytes, MaterialKind kind) {
   if (bytes < 1) {
     throw const MaterialUploadValidationException(
       'The selected file is empty.',
+      code: MaterialFileValidationCode.emptyFile,
     );
   }
   if (bytes > limit) {
     throw MaterialUploadValidationException(
       'The selected file exceeds $limit bytes.',
+      code: MaterialFileValidationCode.fileTooLarge,
     );
   }
 }

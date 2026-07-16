@@ -19,6 +19,8 @@ import '../quizzes/quiz_taking_screen.dart';
 import '../study_sessions/study_session_result_screen.dart';
 import 'material_presentation.dart';
 import 'summary_document_view.dart';
+import 'material_viewer_screen.dart';
+import 'original_material_repository.dart';
 
 class MaterialDetailScreen extends StatelessWidget {
   const MaterialDetailScreen({required this.material, super.key});
@@ -38,6 +40,11 @@ class MaterialDetailScreen extends StatelessWidget {
         freshMaterial.processingStatus == MaterialProcessingStatus.ready &&
         freshMaterial.hasContentText;
     final l10n = context.l10n;
+    final viewerUser = AuthScope.read(context).user;
+    final canViewOriginal =
+        viewerUser != null &&
+        hasValidOriginalMetadata(freshMaterial, viewerUser.id) &&
+        !deleting;
 
     return ResponsiveAppScaffold(
       title: l10n.materialDetailTitle,
@@ -62,6 +69,22 @@ class MaterialDetailScreen extends StatelessWidget {
                   ? null
                   : () => _confirmDelete(context, freshMaterial),
             ),
+            if (canViewOriginal) ...[
+              const SizedBox(height: 12),
+              GlassButton(
+                key: const ValueKey('view-original-material'),
+                label: l10n.materialViewOriginal,
+                icon: Icons.visibility_outlined,
+                onPressed: () => Navigator.pushNamed(
+                  context,
+                  AppRoutes.materialViewer,
+                  arguments: MaterialViewerArgs(
+                    materialId: freshMaterial.id,
+                    kind: freshMaterial.kind,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             if (deleting)
               MaterialStatusPanel(

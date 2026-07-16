@@ -24,10 +24,12 @@ import '../features/materials/material_repository.dart';
 import '../features/materials/material_file_picker.dart';
 import '../features/materials/material_upload.dart';
 import '../features/materials/material_upload_repository.dart';
+import '../features/materials/material_upload_queue.dart';
 import '../features/materials/pdf_text_extraction_repository.dart';
 import '../features/materials/image_text_extraction_repository.dart';
 import '../features/materials/scanned_pdf_ocr_repository.dart';
 import '../features/materials/material_lifecycle_repository.dart';
+import '../features/materials/original_material_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
@@ -44,6 +46,7 @@ class AppState extends ChangeNotifier {
     ImageTextExtractionRepository? imageTextExtractionRepository,
     ScannedPdfOcrRepository? scannedPdfOcrRepository,
     MaterialLifecycleRepository? materialLifecycleRepository,
+    OriginalMaterialRepository? originalMaterialRepository,
     MaterialFilePicker? materialFilePicker,
     String Function()? materialIdGenerator,
     FavoriteRepository? favoriteRepository,
@@ -100,6 +103,12 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyMaterialLifecycleRepository()
                : const MockMaterialLifecycleRepository()),
+       originalMaterialRepository =
+           originalMaterialRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyOriginalMaterialRepository()
+               : MockOriginalMaterialRepository()),
        materialIdGenerator = materialIdGenerator ?? newUuidV4,
        favoriteRepository =
            favoriteRepository ??
@@ -173,8 +182,17 @@ class AppState extends ChangeNotifier {
   final ImageTextExtractionRepository imageTextExtractionRepository;
   final ScannedPdfOcrRepository scannedPdfOcrRepository;
   final MaterialLifecycleRepository materialLifecycleRepository;
+  final OriginalMaterialRepository originalMaterialRepository;
   final MaterialFilePicker materialFilePicker;
   final String Function() materialIdGenerator;
+  late final MaterialUploadQueueController materialUploadQueue =
+      MaterialUploadQueueController(
+        repository: materialUploadRepository,
+        queueIdGenerator: newUuidV4,
+        materialIdGenerator: materialIdGenerator,
+        processMaterial: _processQueuedMaterial,
+        onMaterialChanged: _upsertQueuedMaterial,
+      );
   final FavoriteRepository favoriteRepository;
   final FlashcardRepository flashcardRepository;
   final SummaryRepository summaryRepository;
@@ -220,6 +238,7 @@ class AppState extends ChangeNotifier {
   final Map<String, String> _scannedPdfOcrErrors = {};
   final Set<String> _extractingImageIds = {};
   final Map<String, String> _imageExtractionErrors = {};
+  String? _materialWorkSessionUserId;
   bool _isLoadingMaterialFavorites = false;
   bool _isUpdatingMaterialFavorite = false;
   String? _favoriteSyncErrorMessage;
@@ -417,6 +436,11 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> loadSyncedWorkspaceFor(AuthUser? user) async {
+    if (_materialWorkSessionUserId != user?.id) {
+      _materialWorkSessionUserId = user?.id;
+      _clearMaterialWorkState();
+    }
+    materialUploadQueue.bindSession(user?.id);
     await loadSubjectsFor(user);
     await loadMaterialsFor(user);
     await loadMaterialFavoritesFor(user);
@@ -567,6 +591,45 @@ class AppState extends ChangeNotifier {
     return materialFilePicker.pick(kind);
   }
 
+  Future<MaterialFilePickerBatch?> pickMaterialFiles(MaterialKind kind) {
+    final picker = materialFilePicker;
+    if (picker is MultiMaterialFilePicker) return picker.pickMultiple(kind);
+    return picker.pick(kind).then((file) {
+      if (file == null) return null;
+      return validateMaterialFileBatch(
+        batchToken: newUuidV4(),
+        files: [file],
+        expectedKind: kind,
+      );
+    });
+  }
+
+  bool enqueueMaterialBatch(
+    AuthUser? user, {
+    required String subjectId,
+    required MaterialKind kind,
+    required MaterialFilePickerBatch batch,
+  }) {
+    if (kind == MaterialKind.pastedText) return false;
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        user == null) {
+      return false;
+    }
+    final effectiveUser =
+        user ??
+        const AuthUser(
+          id: 'mock-user',
+          email: 'alex.student@example.test',
+          displayName: 'Alex Student',
+        );
+    return materialUploadQueue.enqueueBatch(
+      user: effectiveUser,
+      subjectId: subjectId,
+      kind: kind,
+      batch: batch,
+    );
+  }
+
   Future<bool> uploadMaterialFor(
     AuthUser? user, {
     required String subjectId,
@@ -633,7 +696,12 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<bool> extractPdfTextFor(AuthUser? user, String materialId) async {
+  Future<bool> extractPdfTextFor(
+    AuthUser? user,
+    String materialId, {
+    MaterialQueueWorkGuard? queueGuard,
+  }) async {
+    if (!_isCurrentQueueWork(queueGuard)) return false;
     if (_extractingPdfIds.contains(materialId)) return false;
     final material = materialById(materialId);
     if (material == null ||
@@ -642,8 +710,10 @@ class AppState extends ChangeNotifier {
         material.processingStatus == MaterialProcessingStatus.processing ||
         (material.processingStatus == MaterialProcessingStatus.ready &&
             material.hasContentText)) {
-      _pdfExtractionErrors[materialId] = 'This PDF cannot be extracted.';
-      notifyListeners();
+      if (_isCurrentQueueWork(queueGuard)) {
+        _pdfExtractionErrors[materialId] = 'This PDF cannot be extracted.';
+        notifyListeners();
+      }
       return false;
     }
     final effectiveUser =
@@ -655,11 +725,14 @@ class AppState extends ChangeNotifier {
         );
     if (config.effectiveBackendMode == AppBackendMode.supabase &&
         user == null) {
-      _pdfExtractionErrors[materialId] = 'Log in to extract PDF text.';
-      notifyListeners();
+      if (_isCurrentQueueWork(queueGuard)) {
+        _pdfExtractionErrors[materialId] = 'Log in to extract PDF text.';
+        notifyListeners();
+      }
       return false;
     }
 
+    if (!_isCurrentQueueWork(queueGuard)) return false;
     _extractingPdfIds.add(materialId);
     _pdfExtractionErrors.remove(materialId);
     notifyListeners();
@@ -668,6 +741,7 @@ class AppState extends ChangeNotifier {
         user: effectiveUser,
         materialId: materialId,
       );
+      if (!_isCurrentQueueWork(queueGuard)) return false;
       final returnedMaterial =
           config.effectiveBackendMode == AppBackendMode.supabase
           ? result.material
@@ -686,13 +760,16 @@ class AppState extends ChangeNotifier {
       }
       return result.succeeded;
     } catch (error) {
+      if (!_isCurrentQueueWork(queueGuard)) return false;
       _pdfExtractionErrors[materialId] = error is PdfTextExtractionException
           ? error.message
           : 'Could not extract text. Try again.';
       return false;
     } finally {
-      _extractingPdfIds.remove(materialId);
-      notifyListeners();
+      if (_isCurrentQueueSession(queueGuard)) {
+        _extractingPdfIds.remove(materialId);
+        notifyListeners();
+      }
     }
   }
 
@@ -754,7 +831,12 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<bool> extractImageTextFor(AuthUser? user, String materialId) async {
+  Future<bool> extractImageTextFor(
+    AuthUser? user,
+    String materialId, {
+    MaterialQueueWorkGuard? queueGuard,
+  }) async {
+    if (!_isCurrentQueueWork(queueGuard)) return false;
     if (_extractingImageIds.contains(materialId)) return false;
     final material = materialById(materialId);
     if (material == null ||
@@ -763,8 +845,10 @@ class AppState extends ChangeNotifier {
         material.processingStatus == MaterialProcessingStatus.processing ||
         (material.processingStatus == MaterialProcessingStatus.ready &&
             material.hasContentText)) {
-      _imageExtractionErrors[materialId] = 'This image cannot be processed.';
-      notifyListeners();
+      if (_isCurrentQueueWork(queueGuard)) {
+        _imageExtractionErrors[materialId] = 'This image cannot be processed.';
+        notifyListeners();
+      }
       return false;
     }
     final effectiveUser =
@@ -776,10 +860,13 @@ class AppState extends ChangeNotifier {
         );
     if (config.effectiveBackendMode == AppBackendMode.supabase &&
         user == null) {
-      _imageExtractionErrors[materialId] = 'Log in to extract image text.';
-      notifyListeners();
+      if (_isCurrentQueueWork(queueGuard)) {
+        _imageExtractionErrors[materialId] = 'Log in to extract image text.';
+        notifyListeners();
+      }
       return false;
     }
+    if (!_isCurrentQueueWork(queueGuard)) return false;
     _extractingImageIds.add(materialId);
     _imageExtractionErrors.remove(materialId);
     notifyListeners();
@@ -788,6 +875,7 @@ class AppState extends ChangeNotifier {
         user: effectiveUser,
         materialId: materialId,
       );
+      if (!_isCurrentQueueWork(queueGuard)) return false;
       final returned = config.effectiveBackendMode == AppBackendMode.supabase
           ? result.material
           : result.material.copyWith(
@@ -805,13 +893,16 @@ class AppState extends ChangeNotifier {
       }
       return result.succeeded;
     } catch (error) {
+      if (!_isCurrentQueueWork(queueGuard)) return false;
       _imageExtractionErrors[materialId] = error is ImageTextExtractionException
           ? error.message
           : 'Could not extract image text. Try again.';
       return false;
     } finally {
-      _extractingImageIds.remove(materialId);
-      notifyListeners();
+      if (_isCurrentQueueSession(queueGuard)) {
+        _extractingImageIds.remove(materialId);
+        notifyListeners();
+      }
     }
   }
 
@@ -824,6 +915,55 @@ class AppState extends ChangeNotifier {
       for (final existing in _materials)
         if (existing.id == material.id) material else existing,
     ];
+    materialUploadQueue.acceptAuthoritativeMaterial(material);
+  }
+
+  void _upsertQueuedMaterial(StudyMaterial material) {
+    if (_deletingMaterialIds.contains(material.id)) return;
+    _materials = [
+      material,
+      for (final existing in _materials)
+        if (existing.id != material.id) existing,
+    ];
+    materialUploadQueue.acceptAuthoritativeMaterial(material);
+    notifyListeners();
+  }
+
+  Future<MaterialQueueProcessingResult> _processQueuedMaterial(
+    AuthUser user,
+    StudyMaterial material,
+    MaterialQueueWorkGuard guard,
+  ) async {
+    if (!guard.isCurrent) {
+      return MaterialQueueProcessingResult(
+        material: material,
+        succeeded: false,
+      );
+    }
+    final succeeded = material.kind == MaterialKind.pdf
+        ? await extractPdfTextFor(user, material.id, queueGuard: guard)
+        : await extractImageTextFor(user, material.id, queueGuard: guard);
+    if (!guard.isCurrent) {
+      return MaterialQueueProcessingResult(
+        material: material,
+        succeeded: false,
+      );
+    }
+    final authoritative = materialById(material.id) ?? material;
+    final consentRequired =
+        authoritative.kind == MaterialKind.pdf &&
+        const {
+          'ocr_available',
+          'mixed_ocr_available',
+        }.contains(authoritative.pdfExtraction?.classification);
+    return MaterialQueueProcessingResult(
+      material: authoritative,
+      succeeded:
+          succeeded &&
+          authoritative.processingStatus == MaterialProcessingStatus.ready &&
+          authoritative.hasContentText,
+      consentRequired: consentRequired,
+    );
   }
 
   Future<bool> deleteSubjectFor(AuthUser? user, String subjectId) async {
@@ -1201,7 +1341,11 @@ class AppState extends ChangeNotifier {
   }
 
   void clearSyncedSubjectsForSignOut() {
+    _materialWorkSessionUserId = null;
+    materialUploadQueue.clearForSessionChange();
+    _clearMaterialWorkState();
     if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      notifyListeners();
       return;
     }
     _subjects = [];
@@ -1250,6 +1394,20 @@ class AppState extends ChangeNotifier {
     _cumulativeWeakTopics = [];
     _latestQuizCompletion = null;
     notifyListeners();
+  }
+
+  bool _isCurrentQueueWork(MaterialQueueWorkGuard? guard) =>
+      guard == null || guard.isCurrent;
+
+  bool _isCurrentQueueSession(MaterialQueueWorkGuard? guard) =>
+      guard == null || guard.isSessionCurrent;
+
+  void _clearMaterialWorkState() {
+    _extractingPdfIds.clear();
+    _pdfExtractionErrors.clear();
+    _extractingImageIds.clear();
+    _imageExtractionErrors.clear();
+    _staleMaterialProcessors.clear();
   }
 
   void clearSyncedWorkspaceForSignOut() {

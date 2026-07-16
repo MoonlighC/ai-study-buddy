@@ -10,10 +10,30 @@ abstract class MaterialUploadRepository {
   });
 }
 
+enum MaterialUploadFailureStage { upload, materialCreation }
+
+enum MaterialUploadErrorCode {
+  sessionExpired,
+  sessionChanged,
+  uploadFailed,
+  materialCreationFailed,
+  invalidReconciliation,
+  storageNotFound,
+  authorizationDenied,
+  networkFailure,
+  invalidMetadata,
+}
+
 class MaterialUploadException implements Exception {
-  const MaterialUploadException(this.message);
+  const MaterialUploadException(
+    this.message, {
+    this.stage = MaterialUploadFailureStage.upload,
+    this.code = MaterialUploadErrorCode.uploadFailed,
+  });
 
   final String message;
+  final MaterialUploadFailureStage stage;
+  final MaterialUploadErrorCode code;
 }
 
 class MockMaterialUploadRepository implements MaterialUploadRepository {

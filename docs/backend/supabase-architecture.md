@@ -198,3 +198,18 @@ Current model mapping:
 - Add server-side usage limit checks.
 - Store generated output.
 - Add quiz generation and upload processing later.
+## Phase B private original-file access
+
+Phase B requires no schema migration, Storage-policy change, or Edge Function.
+The Flutter repository resolves the exact owned, non-deleted `materials` row
+under existing RLS and validates its source kind and canonical private Storage
+metadata. It then performs an authenticated direct byte download from the
+existing private bucket. It never creates a public URL or persists a signed URL,
+object location, access token, or original byte buffer.
+
+PDF previews are capped at 10 MiB and image previews at 8 MiB. The repository
+checks authoritative row/object metadata before download where available and
+always rechecks actual downloaded byte length and signature. Successful empty
+queries, explicit authorization failures, expired sessions, missing objects,
+and transport failures remain distinct typed outcomes with non-technical UI
+messages.

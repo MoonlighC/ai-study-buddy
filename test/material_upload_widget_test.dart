@@ -92,7 +92,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text(scenario.filename), findsOneWidget);
-      expect(find.textContaining('Waiting for processing'), findsOneWidget);
+      expect(find.text('Ready'), findsOneWidget);
+      expect(find.byIcon(Icons.open_in_new), findsOneWidget);
     });
   }
 

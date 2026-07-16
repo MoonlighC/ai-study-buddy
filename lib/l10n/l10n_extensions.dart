@@ -1,10 +1,42 @@
 import 'package:flutter/widgets.dart';
 
+import '../features/materials/material_upload_queue.dart';
+import '../features/materials/original_material_repository.dart';
 import 'app_localizations.dart';
 import 'localized_formatters.dart';
 
 extension AppLocalizationsX on BuildContext {
   AppLocalizations get l10n => AppLocalizations.of(this)!;
+
+  String originalMaterialFailureMessage(OriginalMaterialFailureCode code) =>
+      switch (code) {
+        OriginalMaterialFailureCode.sessionExpired =>
+          l10n.materialPreviewSessionExpired,
+        OriginalMaterialFailureCode.previewTooLarge =>
+          l10n.materialPreviewTooLarge,
+        OriginalMaterialFailureCode.authorizationDenied =>
+          l10n.materialPreviewNotAuthorized,
+        _ => l10n.materialPreviewUnavailable,
+      };
+
+  String materialUploadQueueErrorMessage(MaterialUploadQueueErrorCode? code) =>
+      switch (code) {
+        MaterialUploadQueueErrorCode.unsupportedFile =>
+          l10n.materialUnsupportedFile,
+        MaterialUploadQueueErrorCode.invalidFile => l10n.materialInvalidFile,
+        MaterialUploadQueueErrorCode.emptyFile => localizedSafeMessage(
+          'The selected file is empty.',
+        ),
+        MaterialUploadQueueErrorCode.fileTooLarge => localizedSafeMessage(
+          'The selected file is too large.',
+        ),
+        MaterialUploadQueueErrorCode.sessionExpired ||
+        MaterialUploadQueueErrorCode.sessionChanged =>
+          l10n.materialPreviewSessionExpired,
+        MaterialUploadQueueErrorCode.processingConsentRequired =>
+          l10n.materialProcessingConsentRequired,
+        _ => l10n.uploadFailed,
+      };
 
   String localizedSafeMessage(String message) {
     final l = l10n;

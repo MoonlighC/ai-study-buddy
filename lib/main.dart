@@ -15,6 +15,7 @@ import 'features/materials/pdf_text_extraction_repository.dart';
 import 'features/materials/image_text_extraction_repository.dart';
 import 'features/materials/scanned_pdf_ocr_repository.dart';
 import 'features/materials/material_lifecycle_repository.dart';
+import 'features/materials/supabase_original_material_repository.dart';
 import 'features/quizzes/quiz_repository.dart';
 import 'features/progress/weak_topic_repository.dart';
 import 'features/subjects/supabase_subject_repository.dart';
@@ -67,6 +68,11 @@ Future<void> main() async {
       materialLifecycleRepository: supabaseClient == null
           ? null
           : SupabaseMaterialLifecycleRepository(supabaseClient),
+      originalMaterialRepository: supabaseClient == null
+          ? null
+          : SupabaseOriginalMaterialRepository(
+              SupabaseOriginalMaterialDataSource(supabaseClient),
+            ),
       favoriteRepository: supabaseClient == null
           ? null
           : SupabaseFavoriteRepository(supabaseClient),
