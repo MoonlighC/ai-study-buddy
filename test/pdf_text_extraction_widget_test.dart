@@ -197,16 +197,19 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
 
-    final collapsed = tester.widget<Text>(find.text(summary));
-    expect(collapsed.maxLines, 14);
-    expect(collapsed.overflow, TextOverflow.ellipsis);
+    expect(
+      find.byKey(const ValueKey('collapsed-summary-markdown')),
+      findsOneWidget,
+    );
     final showMore = find.widgetWithText(TextButton, 'Show more');
     await tester.ensureVisible(showMore);
     await tester.pumpAndSettle();
     await tester.tap(showMore);
     await tester.pumpAndSettle();
-    final expanded = tester.widget<Text>(find.text(summary));
-    expect(expanded.maxLines, isNull);
+    expect(
+      find.byKey(const ValueKey('collapsed-summary-markdown')),
+      findsNothing,
+    );
     expect(find.text('Show less'), findsOneWidget);
   });
 }

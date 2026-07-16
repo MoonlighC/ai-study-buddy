@@ -35,11 +35,9 @@ class SupabaseAuthRepository implements AuthRepository {
     } on AuthRepositoryException {
       rethrow;
     } on supabase.AuthException catch (error) {
-      throw AuthRepositoryException(error.message);
-    } catch (_) {
-      throw const AuthRepositoryException(
-        'Could not log in. Please try again.',
-      );
+      throw _mappedAuthException(error);
+    } catch (error) {
+      throw _unexpectedAuthException(error);
     }
   }
 
@@ -64,11 +62,9 @@ class SupabaseAuthRepository implements AuthRepository {
       }
       return AuthResult.signedIn(_mapUser(user));
     } on supabase.AuthException catch (error) {
-      throw AuthRepositoryException(error.message);
-    } catch (_) {
-      throw const AuthRepositoryException(
-        'Could not create the account. Please try again.',
-      );
+      throw _mappedAuthException(error);
+    } catch (error) {
+      throw _unexpectedAuthException(error);
     }
   }
 
@@ -77,11 +73,9 @@ class SupabaseAuthRepository implements AuthRepository {
     try {
       await _client.auth.resetPasswordForEmail(email.trim());
     } on supabase.AuthException catch (error) {
-      throw AuthRepositoryException(error.message);
-    } catch (_) {
-      throw const AuthRepositoryException(
-        'Could not send the password reset email. Please try again.',
-      );
+      throw _mappedAuthException(error);
+    } catch (error) {
+      throw _unexpectedAuthException(error);
     }
   }
 
@@ -90,11 +84,9 @@ class SupabaseAuthRepository implements AuthRepository {
     try {
       await _client.auth.signOut();
     } on supabase.AuthException catch (error) {
-      throw AuthRepositoryException(error.message);
-    } catch (_) {
-      throw const AuthRepositoryException(
-        'Could not log out. Please try again.',
-      );
+      throw _mappedAuthException(error);
+    } catch (error) {
+      throw _unexpectedAuthException(error);
     }
   }
 
@@ -113,6 +105,64 @@ class SupabaseAuthRepository implements AuthRepository {
     }
     final trimmedValue = value.trim();
     return trimmedValue.isEmpty ? null : trimmedValue;
+  }
+
+  AuthRepositoryException _mappedAuthException(supabase.AuthException error) {
+    final message = error.message.toLowerCase();
+    if (message.contains('email not confirmed')) {
+      return AuthRepositoryException(
+        error.message,
+        code: AuthFailureCode.emailNotConfirmed,
+      );
+    }
+    if (message.contains('invalid login credentials') ||
+        message.contains('invalid credentials') ||
+        message.contains('email or password')) {
+      return AuthRepositoryException(
+        error.message,
+        code: AuthFailureCode.invalidCredentials,
+      );
+    }
+    if (message.contains('invalid email')) {
+      return AuthRepositoryException(
+        error.message,
+        code: AuthFailureCode.invalidEmail,
+      );
+    }
+    if (message.contains('rate limit') ||
+        message.contains('too many request') ||
+        message.contains('over_email_send_rate_limit')) {
+      return AuthRepositoryException(
+        error.message,
+        code: AuthFailureCode.rateLimited,
+      );
+    }
+    if (message.contains('already registered')) {
+      return AuthRepositoryException(
+        error.message,
+        code: AuthFailureCode.alreadyRegistered,
+      );
+    }
+    return AuthRepositoryException(
+      error.message,
+      code: AuthFailureCode.serviceUnavailable,
+    );
+  }
+
+  AuthRepositoryException _unexpectedAuthException(Object error) {
+    final diagnostic = '${error.runtimeType} $error'.toLowerCase();
+    final networkFailure =
+        diagnostic.contains('socket') ||
+        diagnostic.contains('timeout') ||
+        diagnostic.contains('connection') ||
+        diagnostic.contains('failed host') ||
+        diagnostic.contains('clientexception');
+    return AuthRepositoryException(
+      networkFailure ? 'Network failure.' : 'Authentication service failure.',
+      code: networkFailure
+          ? AuthFailureCode.network
+          : AuthFailureCode.serviceUnavailable,
+    );
   }
 }
 

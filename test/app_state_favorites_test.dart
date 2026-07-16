@@ -159,6 +159,67 @@ void main() {
       expect(state.favoriteSyncErrorMessage, 'Could not update favorite.');
     });
 
+    test(
+      'subject materials pin favorites with stable date and id order',
+      () async {
+        final state = AppState(
+          config: _supabaseConfig(),
+          materialRepository: _FakeMaterialRepository(
+            loadedMaterials: [
+              StudyMaterial(
+                id: 'material-b',
+                subjectId: 'subject-1',
+                title: 'Older favorite',
+                kind: MaterialKind.pastedText,
+                content: 'Useful material content for sorting.',
+                createdLabel: 'Synced',
+                createdAt: DateTime.utc(2026, 1, 1),
+              ),
+              StudyMaterial(
+                id: 'material-c',
+                subjectId: 'subject-1',
+                title: 'Newest',
+                kind: MaterialKind.pastedText,
+                content: 'Useful material content for sorting.',
+                createdLabel: 'Synced',
+                createdAt: DateTime.utc(2026, 3, 1),
+              ),
+              StudyMaterial(
+                id: 'material-a',
+                subjectId: 'subject-1',
+                title: 'Middle',
+                kind: MaterialKind.pastedText,
+                content: 'Useful material content for sorting.',
+                createdLabel: 'Synced',
+                createdAt: DateTime.utc(2026, 2, 1),
+              ),
+            ],
+          ),
+          favoriteRepository: _FakeFavoriteRepository(
+            loadedMaterialFavoriteIds: const {'material-b'},
+          ),
+        );
+        await state.loadMaterialsFor(user);
+        await state.loadMaterialFavoritesFor(user);
+
+        expect(state.materialsFor('subject-1').map((item) => item.id), [
+          'material-b',
+          'material-c',
+          'material-a',
+        ]);
+
+        expect(
+          await state.toggleMaterialFavoriteFor(user, 'material-c'),
+          isTrue,
+        );
+        expect(state.materialsFor('subject-1').map((item) => item.id), [
+          'material-c',
+          'material-b',
+          'material-a',
+        ]);
+      },
+    );
+
     test('workspace sync keeps subject and material sync working', () async {
       final subjectRepository = _FakeSubjectRepository(
         loadedSubjects: const [_subject],

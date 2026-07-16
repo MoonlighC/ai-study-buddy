@@ -13,6 +13,7 @@ import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../../shared/widgets/study_components.dart';
+import '../study_sessions/study_session_result_screen.dart';
 
 class AfterLectureScreen extends StatefulWidget {
   const AfterLectureScreen({super.key});
@@ -117,7 +118,10 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
                           ),
                           title: Text(item.title),
                           subtitle: Text(
-                            LocalizedFormatters.materialDate(context.l10n, item),
+                            LocalizedFormatters.materialDate(
+                              context.l10n,
+                              item,
+                            ),
                           ),
                           selected: material?.id == item.id,
                           onTap: () => setState(() => selectedMaterial = item),
@@ -162,7 +166,9 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
                               block.label,
                             ),
                           ),
-                          trailing: Text(context.l10n.studyMinutes(block.minutes)),
+                          trailing: Text(
+                            context.l10n.studyMinutes(block.minutes),
+                          ),
                         ),
                     ],
                   ),
@@ -170,15 +176,20 @@ class _AfterLectureScreenState extends State<AfterLectureScreen> {
                 const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: () {
-                    state.createStudySession(
+                    final session = state.createStudySession(
                       subject: subject!,
                       confidence: confidence,
                       materialId: material.id,
                     );
+                    if (session == null) return;
                     Navigator.pushNamed(
                       context,
                       AppRoutes.studySessionResult,
-                      arguments: subject,
+                      arguments: StudySessionResultArgs(
+                        subject: subject,
+                        sessionId: session.id,
+                        materialId: material.id,
+                      ),
                     );
                   },
                   icon: const Icon(Icons.auto_awesome_outlined),

@@ -631,11 +631,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get uploadImageTitle => 'Загрузить изображение';
 
   @override
-  String get uploadPdfGuidance => 'PDF-файлы до 10 МиБ.';
+  String get uploadPdfGuidance => 'PDF-файлы до 10,49 MB.';
 
   @override
   String get uploadImageGuidance =>
-      'Изображения PNG, JPG, JPEG или WEBP до 8 МиБ.';
+      'Изображения PNG, JPG, JPEG или WEBP до 8,39 MB.';
 
   @override
   String get uploadChoosePdf => 'Выбрать PDF';
@@ -1053,6 +1053,32 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get errorEnterValidEmail => 'Введите действительный адрес эл. почты.';
+
+  @override
+  String get errorEmailRequired => 'Введите адрес эл. почты.';
+
+  @override
+  String get errorPasswordRequired => 'Введите пароль.';
+
+  @override
+  String get authInvalidCredentials =>
+      'Не удалось войти. Проверьте адрес эл. почты и пароль.';
+
+  @override
+  String get authEmailNotConfirmed =>
+      'Подтвердите адрес эл. почты перед входом.';
+
+  @override
+  String get authRateLimited =>
+      'Слишком много попыток входа. Повторите попытку позже.';
+
+  @override
+  String get authNetworkFailure =>
+      'Проверьте подключение к интернету и повторите попытку.';
+
+  @override
+  String get authServiceUnavailable =>
+      'Служба входа временно недоступна. Повторите попытку позже.';
 
   @override
   String get errorPasswordTooShort =>
@@ -1996,6 +2022,11 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String fileSizeMebibytes(Object value) {
     return '$value МиБ';
+  }
+
+  @override
+  String fileSizeMegabytes(Object value) {
+    return '$value MB';
   }
 
   @override

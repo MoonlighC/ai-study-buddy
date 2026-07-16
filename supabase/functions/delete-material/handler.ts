@@ -1,7 +1,7 @@
 export interface DeleteDependencies {
   verifyJwt(jwt: string): Promise<string | null>;
   begin(userId: string, id: string): Promise<Record<string, unknown> | null>;
-  remove(bucket: string, path: string): Promise<{ error: boolean }>;
+  remove(bucket: string, path: string): Promise<{ error: boolean; notFound?: boolean }>;
   mark(userId: string, id: string, outcome: "removed" | "failed", code?: string): Promise<boolean>;
   finalize(userId: string, id: string): Promise<boolean>;
   operationId(): string;
@@ -38,7 +38,7 @@ export function createDeleteMaterialHandler(deps: DeleteDependencies) {
       let cleanup = begun.cleanup_status as string;
       if (source === "upload" && (cleanup === "pending_storage" || cleanup === "storage_failed")) {
         const result = await deps.remove(begun.storage_bucket as string, begun.storage_path as string);
-        if (result.error) {
+        if (result.error && !result.notFound) {
           await deps.mark(userId, id, "failed", "storage_delete_failed");
           deps.log("storage", operationId, 503, "storage_delete_failed");
           return reply({ error: "Could not remove the uploaded file. Try again." }, 503);

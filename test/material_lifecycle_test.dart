@@ -69,12 +69,30 @@ void main() {
       'Could not delete the material. Try again.',
     );
   });
+
+  test('lost response reconciles absent material as success', () async {
+    final state = AppState(
+      materialRepository: MockMaterialRepository(
+        initialMaterials: const [material],
+      ),
+      materialLifecycleRepository: _Lifecycle(
+        fail: true,
+        existsAfterFailure: false,
+      ),
+    );
+    await state.loadMaterialsFor(user);
+
+    expect(await state.deleteMaterialFor(user, material.id), isTrue);
+    expect(state.materialById(material.id), isNull);
+    expect(state.materialLifecycleErrorFor(material.id), isNull);
+  });
 }
 
 class _Lifecycle implements MaterialLifecycleRepository {
-  _Lifecycle({this.gate, this.fail = false});
+  _Lifecycle({this.gate, this.fail = false, this.existsAfterFailure});
   final Completer<void>? gate;
   final bool fail;
+  final bool? existsAfterFailure;
   int deleteCalls = 0;
   @override
   Future<void> deleteMaterial({
@@ -103,4 +121,10 @@ class _Lifecycle implements MaterialLifecycleRepository {
     required String materialId,
     required String processor,
   }) async {}
+
+  @override
+  Future<bool?> materialExists({
+    required AuthUser user,
+    required String materialId,
+  }) async => existsAfterFailure ?? (fail ? true : null);
 }

@@ -66,17 +66,21 @@ void main() {
     }
   });
 
-  test('numbers, percentages, and IEC sizes honor locale punctuation', () {
+  test('numbers, percentages, and decimal MB honor locale punctuation', () {
     final en = lookupAppLocalizations(const Locale('en'));
     final de = lookupAppLocalizations(const Locale('de'));
     final ru = lookupAppLocalizations(const Locale('ru'));
     expect(LocalizedFormatters.percentage(en, 33.33), contains('33.33'));
     expect(LocalizedFormatters.percentage(de, 33.33), contains('33,33'));
     expect(LocalizedFormatters.percentage(ru, 33.33), contains('33,33'));
-    expect(LocalizedFormatters.fileSize(en, 1024), '1 KiB');
-    expect(LocalizedFormatters.fileSize(de, 1536), '1,5 KiB');
-    expect(LocalizedFormatters.fileSize(ru, 1536), '1,5 КиБ');
-    expect(LocalizedFormatters.fileSize(en, 1024 * 1024), '1 MiB');
+    expect(LocalizedFormatters.fileSize(en, 0), '0.00 MB');
+    expect(LocalizedFormatters.fileSize(en, 190000), '0.19 MB');
+    expect(LocalizedFormatters.fileSize(de, 190000), '0,19 MB');
+    expect(LocalizedFormatters.fileSize(ru, 190000), '0,19 MB');
+    expect(LocalizedFormatters.fileSize(en, 12400000), '12.40 MB');
+    expect(LocalizedFormatters.fileSize(de, 12400000), '12,40 MB');
+    expect(LocalizedFormatters.fileSize(en, 999999), '1.00 MB');
+    expect(LocalizedFormatters.fileSize(en, 1000000), '1.00 MB');
   });
 
   test('count messages cover 0, 1, 2, 5, and 21 in every locale', () {

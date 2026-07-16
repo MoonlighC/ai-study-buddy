@@ -922,21 +922,17 @@ class AppState extends ChangeNotifier {
         user: effectiveUser,
         materialId: materialId,
       );
-      _materials.removeWhere((item) => item.id == materialId);
-      _favoriteMaterialIds.remove(materialId);
-      _flashcards.removeWhere((item) => item.materialId == materialId);
-      _quizzes.removeWhere((item) => item.materialId == materialId);
-      for (var index = 0; index < _studySessions.length; index++) {
-        if (_studySessions[index].materialId == materialId) {
-          _studySessions[index] = _studySessions[index].detachMaterial();
-        }
-      }
-      _pdfExtractionErrors.remove(materialId);
-      _scannedPdfOcrErrors.remove(materialId);
-      _imageExtractionErrors.remove(materialId);
-      _staleMaterialProcessors.remove(materialId);
+      _removeMaterialLocally(materialId);
       return true;
     } catch (error) {
+      final exists = await materialLifecycleRepository.materialExists(
+        user: effectiveUser,
+        materialId: materialId,
+      );
+      if (exists == false) {
+        _removeMaterialLocally(materialId);
+        return true;
+      }
       _materialLifecycleErrors[materialId] = error is MaterialLifecycleException
           ? error.message
           : 'Could not delete the material. Try again.';
@@ -945,6 +941,23 @@ class AppState extends ChangeNotifier {
       _deletingMaterialIds.remove(materialId);
       notifyListeners();
     }
+  }
+
+  void _removeMaterialLocally(String materialId) {
+    _materials.removeWhere((item) => item.id == materialId);
+    _favoriteMaterialIds.remove(materialId);
+    _flashcards.removeWhere((item) => item.materialId == materialId);
+    _quizzes.removeWhere((item) => item.materialId == materialId);
+    for (var index = 0; index < _studySessions.length; index++) {
+      if (_studySessions[index].materialId == materialId) {
+        _studySessions[index] = _studySessions[index].detachMaterial();
+      }
+    }
+    _pdfExtractionErrors.remove(materialId);
+    _scannedPdfOcrErrors.remove(materialId);
+    _imageExtractionErrors.remove(materialId);
+    _staleMaterialProcessors.remove(materialId);
+    _materialLifecycleErrors.remove(materialId);
   }
 
   Future<void> inspectMaterialRecoveryFor(
@@ -1310,9 +1323,29 @@ class AppState extends ChangeNotifier {
   }
 
   List<StudyMaterial> materialsFor(String subjectId) {
-    return _materials
+    final result = _materials
         .where((material) => material.subjectId == subjectId)
         .toList();
+    result.sort(_compareSubjectMaterials);
+    return result;
+  }
+
+  int _compareSubjectMaterials(StudyMaterial left, StudyMaterial right) {
+    final favoriteOrder =
+        (_favoriteMaterialIds.contains(right.id) ? 1 : 0) -
+        (_favoriteMaterialIds.contains(left.id) ? 1 : 0);
+    if (favoriteOrder != 0) return favoriteOrder;
+    final leftCreated = left.createdAt;
+    final rightCreated = right.createdAt;
+    if (leftCreated != null && rightCreated != null) {
+      final dateOrder = rightCreated.compareTo(leftCreated);
+      if (dateOrder != 0) return dateOrder;
+    } else if (leftCreated != null) {
+      return -1;
+    } else if (rightCreated != null) {
+      return 1;
+    }
+    return left.id.compareTo(right.id);
   }
 
   StudyMaterial? materialById(String materialId) {
@@ -1968,20 +2001,23 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  StudySession createStudySession({
+  StudySession? createStudySession({
     required Subject subject,
     required LectureConfidence confidence,
-    String? materialId,
+    required String materialId,
   }) {
-    final materials = materialsFor(subject.id);
-    final selectedMaterialId = materialId ?? materials.firstOrNull?.id ?? '';
-    final selectedMaterial = materialById(selectedMaterialId);
+    final selectedMaterial = materialById(materialId);
+    if (selectedMaterial == null ||
+        selectedMaterial.subjectId != subject.id ||
+        !canGenerateSummaryForMaterial(selectedMaterial)) {
+      return null;
+    }
     final sessionNumber = ++_sessionCounter;
     final question = _quizFor(subject, selectedMaterial, sessionNumber);
     final session = StudySession(
       id: 'local-session-$sessionNumber',
       subjectId: subject.id,
-      materialId: selectedMaterialId,
+      materialId: selectedMaterial.id,
       confidence: confidence,
       summary: _summaryFor(subject, confidence, selectedMaterial),
       studyTimeBlocks: _timeBlocksFor(confidence),

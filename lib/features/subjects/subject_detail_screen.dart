@@ -17,6 +17,7 @@ import '../../shared/widgets/state_views.dart';
 import '../auth/auth_controller.dart';
 import '../deletion/deletion_models.dart';
 import '../materials/upload_material_screen.dart';
+import '../study_sessions/study_session_result_screen.dart';
 
 class SubjectDetailScreen extends StatelessWidget {
   const SubjectDetailScreen({required this.subject, super.key});
@@ -342,15 +343,22 @@ class _StudyActions extends StatelessWidget {
           onPressed: eligibleMaterial == null
               ? null
               : () {
-                  AppStateScope.read(context).createStudySession(
-                    subject: subject,
-                    confidence: LectureConfidence.mostly,
-                    materialId: eligibleMaterial!.id,
-                  );
+                  final material = eligibleMaterial!;
+                  final session = AppStateScope.read(context)
+                      .createStudySession(
+                        subject: subject,
+                        confidence: LectureConfidence.mostly,
+                        materialId: material.id,
+                      );
+                  if (session == null) return;
                   Navigator.pushNamed(
                     context,
                     AppRoutes.studySessionResult,
-                    arguments: subject,
+                    arguments: StudySessionResultArgs(
+                      subject: subject,
+                      sessionId: session.id,
+                      materialId: material.id,
+                    ),
                   );
                 },
         ),

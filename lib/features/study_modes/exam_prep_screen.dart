@@ -11,6 +11,7 @@ import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../../shared/widgets/study_components.dart';
+import '../study_sessions/study_session_result_screen.dart';
 
 class ExamPrepScreen extends StatefulWidget {
   const ExamPrepScreen({super.key});
@@ -22,6 +23,7 @@ class ExamPrepScreen extends StatefulWidget {
 class _ExamPrepScreenState extends State<ExamPrepScreen> {
   static const ai = MockAiService();
   Subject? selectedSubject;
+  String? selectedMaterialId;
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +33,13 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
     final materials = effectiveSubject == null
         ? []
         : state.materialsFor(effectiveSubject.id);
+    final selectedMaterial = materials
+        .where(
+          (material) =>
+              material.id == selectedMaterialId &&
+              state.canGenerateSummaryForMaterial(material),
+        )
+        .firstOrNull;
     final weakTopics = effectiveSubject == null
         ? []
         : ai.weakTopicsFor(effectiveSubject);
@@ -84,8 +93,10 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                       ChoiceChip(
                         label: Text(subject.name),
                         selected: effectiveSubject.id == subject.id,
-                        onSelected: (_) =>
-                            setState(() => selectedSubject = subject),
+                        onSelected: (_) => setState(() {
+                          selectedSubject = subject;
+                          selectedMaterialId = null;
+                        }),
                       ),
                   ],
                 ),
@@ -124,10 +135,22 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                       for (final material in materials)
                         ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.article_outlined),
+                          selected: selectedMaterialId == material.id,
+                          leading: Icon(
+                            selectedMaterialId == material.id
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                          ),
+                          onTap: state.canGenerateSummaryForMaterial(material)
+                              ? () => setState(
+                                  () => selectedMaterialId = material.id,
+                                )
+                              : null,
                           title: Text(material.title),
                           subtitle: Text(
-                            '${LocalizedFormatters.materialDate(context.l10n, material)} · ${context.l10n.examPrepIncluded}',
+                            state.canGenerateSummaryForMaterial(material)
+                                ? '${LocalizedFormatters.materialDate(context.l10n, material)} · ${context.l10n.examPrepIncluded}'
+                                : context.l10n.studyUnavailableTitle,
                           ),
                         ),
                   ],
@@ -167,18 +190,26 @@ class _ExamPrepScreenState extends State<ExamPrepScreen> {
                 ),
               ),
               FilledButton.icon(
-                onPressed: () {
-                  AppStateScope.read(context).createStudySession(
-                    subject: effectiveSubject,
-                    confidence: LectureConfidence.mostly,
-                    materialId: materials.firstOrNull?.id,
-                  );
-                  Navigator.pushNamed(
-                    context,
-                    AppRoutes.studySessionResult,
-                    arguments: effectiveSubject,
-                  );
-                },
+                onPressed: selectedMaterial == null
+                    ? null
+                    : () {
+                        final session = AppStateScope.read(context)
+                            .createStudySession(
+                              subject: effectiveSubject,
+                              confidence: LectureConfidence.mostly,
+                              materialId: selectedMaterial.id,
+                            );
+                        if (session == null) return;
+                        Navigator.pushNamed(
+                          context,
+                          AppRoutes.studySessionResult,
+                          arguments: StudySessionResultArgs(
+                            subject: effectiveSubject,
+                            sessionId: session.id,
+                            materialId: selectedMaterial.id,
+                          ),
+                        );
+                      },
                 icon: const Icon(Icons.auto_awesome_outlined),
                 label: Text(context.l10n.studyCreateSession),
               ),

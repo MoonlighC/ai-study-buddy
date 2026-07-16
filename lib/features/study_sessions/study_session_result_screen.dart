@@ -12,21 +12,35 @@ import '../../shared/widgets/state_views.dart';
 import '../../shared/widgets/study_components.dart';
 import '../flashcards/flashcards_screen.dart';
 
-class StudySessionResultScreen extends StatelessWidget {
-  const StudySessionResultScreen({required this.subject, super.key});
+class StudySessionResultArgs {
+  const StudySessionResultArgs({
+    required this.subject,
+    required this.sessionId,
+    required this.materialId,
+  });
+
   final Subject subject;
+  final String sessionId;
+  final String materialId;
+}
+
+class StudySessionResultScreen extends StatelessWidget {
+  const StudySessionResultScreen({required this.args, super.key});
+  final StudySessionResultArgs args;
   static const ai = MockAiService();
 
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
-    final latest = state.latestStudySession;
-    final session = latest != null && latest.subjectId == subject.id
-        ? latest
+    final subject = args.subject;
+    final candidate = state.sessionFor(args.sessionId);
+    final session =
+        candidate != null &&
+            candidate.subjectId == subject.id &&
+            candidate.materialId == args.materialId
+        ? candidate
         : null;
-    final material = session == null
-        ? null
-        : state.materialById(session.materialId);
+    final material = state.materialById(args.materialId);
     final usable =
         session != null &&
         material != null &&
@@ -45,7 +59,9 @@ class StudySessionResultScreen extends StatelessWidget {
               EmptyState(
                 key: const ValueKey('study-session-unavailable'),
                 title: context.l10n.studyUnavailableTitle,
-                message: context.l10n.sessionUnavailableForSubject(subject.name),
+                message: context.l10n.sessionUnavailableForSubject(
+                  subject.name,
+                ),
                 icon: Icons.article_outlined,
                 action: OutlinedButton.icon(
                   onPressed: () => Navigator.maybePop(context),
@@ -81,7 +97,12 @@ class StudySessionResultScreen extends StatelessWidget {
                     leading: const Icon(Icons.schedule_outlined),
                     title: Text(context.l10n.studyEstimatedTime),
                     trailing: Text(
-                      context.l10n.studyMinutes(session.studyTimeBlocks.fold<int>(0, (sum, block) => sum + block.minutes)),
+                      context.l10n.studyMinutes(
+                        session.studyTimeBlocks.fold<int>(
+                          0,
+                          (sum, block) => sum + block.minutes,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -103,7 +124,9 @@ class StudySessionResultScreen extends StatelessWidget {
                           for (final card in session.flashcards)
                             ListTile(
                               title: Text(card.front),
-                              subtitle: Text(context.l10n.sessionTopic(card.topic)),
+                              subtitle: Text(
+                                context.l10n.sessionTopic(card.topic),
+                              ),
                             ),
                         ],
                       ),

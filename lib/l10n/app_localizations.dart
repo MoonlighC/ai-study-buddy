@@ -1165,13 +1165,13 @@ abstract class AppLocalizations {
   /// PDF upload guidance.
   ///
   /// In en, this message translates to:
-  /// **'PDF files up to 10 MiB.'**
+  /// **'PDF files up to 10.49 MB.'**
   String get uploadPdfGuidance;
 
   /// Image upload guidance.
   ///
   /// In en, this message translates to:
-  /// **'PNG, JPG, JPEG, or WEBP images up to 8 MiB.'**
+  /// **'PNG, JPG, JPEG, or WEBP images up to 8.39 MB.'**
   String get uploadImageGuidance;
 
   /// Choose PDF file action.
@@ -1869,6 +1869,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter a valid email address.'**
   String get errorEnterValidEmail;
+
+  /// Validation error for an empty email field.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email address.'**
+  String get errorEmailRequired;
+
+  /// Validation error for an empty password field.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your password.'**
+  String get errorPasswordRequired;
+
+  /// Safe combined sign-in failure that does not reveal account existence.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to sign in. Check your email address and password.'**
+  String get authInvalidCredentials;
+
+  /// Authoritative email-not-confirmed sign-in error.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your email address before signing in.'**
+  String get authEmailNotConfirmed;
+
+  /// Authentication rate-limit error.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many sign-in attempts. Try again later.'**
+  String get authRateLimited;
+
+  /// Authentication network error.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your internet connection and try again.'**
+  String get authNetworkFailure;
+
+  /// Temporary authentication service error.
+  ///
+  /// In en, this message translates to:
+  /// **'The authentication service is temporarily unavailable. Try again later.'**
+  String get authServiceUnavailable;
 
   /// Validation error for a short password.
   ///
@@ -3255,6 +3297,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{value} MiB'**
   String fileSizeMebibytes(Object value);
+
+  /// No description provided for @fileSizeMegabytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} MB'**
+  String fileSizeMegabytes(Object value);
 
   /// No description provided for @favoriteAction.
   ///

@@ -17,7 +17,7 @@ serve(async (request) => {
       return userId;
     },
     async begin(userId, id) { const { data, error } = await trustedClient!.rpc("begin_material_deletion_internal", { p_user_id: userId, p_material_id: id }).maybeSingle(); return error ? null : data; },
-    async remove(bucket, path) { const { error } = await trustedClient!.storage.from(bucket).remove([path]); return { error: error !== null }; },
+    async remove(bucket, path) { const { error } = await trustedClient!.storage.from(bucket).remove([path]); const status = String(error?.statusCode ?? ""); return { error: error !== null, notFound: status === "404" }; },
     async mark(userId, id, outcome, code) { const { error } = await trustedClient!.rpc("mark_material_storage_cleanup_internal", { p_user_id: userId, p_material_id: id, p_outcome: outcome, p_safe_error_code: code ?? null }); return !error; },
     async finalize(userId, id) { const { error } = await trustedClient!.rpc("finalize_material_deletion_internal", { p_user_id: userId, p_material_id: id }); return !error; },
     operationId: () => crypto.randomUUID(),

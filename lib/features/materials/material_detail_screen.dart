@@ -16,7 +16,9 @@ import '../flashcards/flashcard_generation_dialog.dart';
 import '../flashcards/flashcards_screen.dart';
 import '../quizzes/quiz_repository.dart';
 import '../quizzes/quiz_taking_screen.dart';
+import '../study_sessions/study_session_result_screen.dart';
 import 'material_presentation.dart';
+import 'summary_document_view.dart';
 
 class MaterialDetailScreen extends StatelessWidget {
   const MaterialDetailScreen({required this.material, super.key});
@@ -168,15 +170,21 @@ class MaterialDetailScreen extends StatelessWidget {
                   onPressed: deleting
                       ? null
                       : () {
-                          AppStateScope.read(context).createStudySession(
-                            subject: subject,
-                            confidence: LectureConfidence.mostly,
-                            materialId: freshMaterial.id,
-                          );
+                          final session = AppStateScope.read(context)
+                              .createStudySession(
+                                subject: subject,
+                                confidence: LectureConfidence.mostly,
+                                materialId: freshMaterial.id,
+                              );
+                          if (session == null) return;
                           Navigator.pushNamed(
                             context,
                             AppRoutes.studySessionResult,
-                            arguments: subject,
+                            arguments: StudySessionResultArgs(
+                              subject: subject,
+                              sessionId: session.id,
+                              materialId: freshMaterial.id,
+                            ),
                           );
                         },
                 ),
@@ -271,7 +279,14 @@ class MaterialDetailScreen extends StatelessWidget {
                       'Type: ${freshMaterial.kind == MaterialKind.pdf ? 'PDF' : 'Image'}',
                     ),
                     Text(
-                      'Size: ${freshMaterial.fileSizeBytes == null ? 'Unknown' : formatFileSize(freshMaterial.fileSizeBytes!)}',
+                      context.l10n.formattedMaterialSize(
+                        freshMaterial.fileSizeBytes == null
+                            ? context.l10n.materialUnknownSize
+                            : LocalizedFormatters.fileSize(
+                                context.l10n,
+                                freshMaterial.fileSizeBytes!,
+                              ),
+                      ),
                     ),
                     Text('MIME: ${freshMaterial.mimeType ?? 'Unknown'}'),
                     Text('Status: ${_materialStatus(freshMaterial)}'),
@@ -323,15 +338,20 @@ class MaterialDetailScreen extends StatelessWidget {
               ),
               FilledButton.icon(
                 onPressed: () {
-                  AppStateScope.read(context).createStudySession(
+                  final session = AppStateScope.read(context).createStudySession(
                     subject: subject,
                     confidence: LectureConfidence.mostly,
                     materialId: freshMaterial.id,
                   );
+                  if (session == null) return;
                   Navigator.pushNamed(
                     context,
                     AppRoutes.studySessionResult,
-                    arguments: subject,
+                    arguments: StudySessionResultArgs(
+                      subject: subject,
+                      sessionId: session.id,
+                      materialId: freshMaterial.id,
+                    ),
                   );
                 },
                 icon: const Icon(Icons.auto_awesome_outlined),
@@ -1057,15 +1077,9 @@ class _SummarySectionState extends State<_SummarySection> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (hasSummary) ...[
-          Text(
-            summary,
-            maxLines: _shouldCollapse(summary) && !_isExpanded ? 14 : null,
-            overflow: _shouldCollapse(summary) && !_isExpanded
-                ? TextOverflow.ellipsis
-                : null,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(height: 1.45),
+          SummaryDocumentView(
+            markdown: summary,
+            collapsed: _shouldCollapse(summary) && !_isExpanded,
           ),
           if (_shouldCollapse(summary))
             Align(

@@ -21,6 +21,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isSubmitting = false;
+  String? _emailError;
+  String? _passwordError;
 
   @override
   void dispose() {
@@ -55,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
           if (isSupabaseMode) ...[
             TextField(
+              key: const ValueKey('login-email-field'),
               controller: _emailController,
               enabled: !disabled,
               keyboardType: TextInputType.emailAddress,
@@ -63,10 +66,15 @@ class _LoginScreenState extends State<LoginScreen> {
               decoration: InputDecoration(
                 labelText: l10n.commonEmail,
                 prefixIcon: const Icon(Icons.mail_outline),
+                errorText: _emailError,
               ),
+              onChanged: (_) {
+                if (_emailError != null) setState(() => _emailError = null);
+              },
             ),
             const SizedBox(height: AppSpacing.sm),
             TextField(
+              key: const ValueKey('login-password-field'),
               controller: _passwordController,
               enabled: !disabled,
               obscureText: !_isPasswordVisible,
@@ -75,6 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
               decoration: InputDecoration(
                 labelText: l10n.commonPassword,
                 prefixIcon: const Icon(Icons.lock_outline),
+                errorText: _passwordError,
                 suffixIcon: IconButton(
                   constraints: const BoxConstraints(
                     minWidth: 48,
@@ -95,6 +104,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
+              onChanged: (_) {
+                if (_passwordError != null) {
+                  setState(() => _passwordError = null);
+                }
+              },
               onSubmitted: (_) => _logIn(),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -118,8 +132,17 @@ class _LoginScreenState extends State<LoginScreen> {
               label: Text(l10n.authCreateAccountTitle),
             ),
             TextButton(
+              key: const ValueKey('forgot-password-action'),
               onPressed: disabled ? null : _resetPassword,
-              child: Text(l10n.authForgotPassword),
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.xs,
+                children: [
+                  const Icon(Icons.lock_reset_outlined),
+                  Text(l10n.authForgotPassword),
+                ],
+              ),
             ),
           ] else ...[
             SizedBox(
@@ -151,6 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _logIn() async {
     if (_isSubmitting) return;
+    if (!_validateLoginFields()) return;
     FocusScope.of(context).unfocus();
     setState(() => _isSubmitting = true);
     final signedIn = await AuthScope.read(context).signInWithEmail(
@@ -185,10 +209,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _resetPassword() async {
     if (_isSubmitting) return;
+    final emailError = _validateEmail(_emailController.text);
+    if (emailError != null) {
+      setState(() => _emailError = emailError);
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() => _isSubmitting = true);
     await AuthScope.read(context).sendPasswordResetEmail(_emailController.text);
     if (mounted) setState(() => _isSubmitting = false);
+  }
+
+  bool _validateLoginFields() {
+    final emailError = _validateEmail(_emailController.text);
+    final passwordError = _passwordController.text.isEmpty
+        ? context.l10n.errorPasswordRequired
+        : null;
+    setState(() {
+      _emailError = emailError;
+      _passwordError = passwordError;
+    });
+    return emailError == null && passwordError == null;
+  }
+
+  String? _validateEmail(String value) {
+    final email = value.trim();
+    if (email.isEmpty) return context.l10n.errorEmailRequired;
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      return context.l10n.errorEnterValidEmail;
+    }
+    return null;
   }
 
   Future<void> _continueWithEmail() async {

@@ -99,13 +99,6 @@ String sanitizeUploadFilename(
   return '$stem.${fallbackExtension.toLowerCase()}';
 }
 
-String formatFileSize(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  final kib = bytes / 1024;
-  if (kib < 1024) return '${kib.toStringAsFixed(1)} KiB';
-  return '${(kib / 1024).toStringAsFixed(1)} MiB';
-}
-
 String _displayFilename(String value, String fallback) {
   final basename = value.replaceAll('\\', '/').split('/').last.trim();
   return basename.isEmpty ? fallback : basename;
@@ -146,9 +139,8 @@ void _validateSize(int bytes, MaterialKind kind) {
     );
   }
   if (bytes > limit) {
-    final label = kind == MaterialKind.pdf ? '10 MiB' : '8 MiB';
     throw MaterialUploadValidationException(
-      'The selected file exceeds $label.',
+      'The selected file exceeds $limit bytes.',
     );
   }
 }

@@ -85,6 +85,13 @@ class AppRoutes {
     final uploadMaterialArgs = routeSettings.arguments is UploadMaterialArgs
         ? routeSettings.arguments! as UploadMaterialArgs
         : UploadMaterialArgs(subject: subject, kind: MaterialKind.pdf);
+    final studySessionArgs = routeSettings.arguments is StudySessionResultArgs
+        ? routeSettings.arguments! as StudySessionResultArgs
+        : StudySessionResultArgs(
+            subject: subject,
+            sessionId: '',
+            materialId: '',
+          );
 
     final widget = switch (routeSettings.name) {
       authGate => const AuthGateScreen(),
@@ -107,7 +114,7 @@ class AppRoutes {
       afterLecture => const AfterLectureScreen(),
       examPrep => const ExamPrepScreen(),
       continueStudying => const ContinueStudyingScreen(),
-      studySessionResult => StudySessionResultScreen(subject: subject),
+      studySessionResult => StudySessionResultScreen(args: studySessionArgs),
       aiTeacher => AiTeacherScreen(subject: subject),
       progress => const ProgressScreen(),
       usage => const UsageLimitsScreen(),

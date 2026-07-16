@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:ai_study_buddy/app/app.dart';
 import 'package:ai_study_buddy/app/app_config.dart';
+import 'package:ai_study_buddy/app/app_state.dart';
 import 'package:ai_study_buddy/app/routes.dart';
 import 'package:ai_study_buddy/core/models/flashcard.dart';
 import 'package:ai_study_buddy/core/models/material.dart';
@@ -9,6 +10,7 @@ import 'package:ai_study_buddy/core/models/quiz.dart';
 import 'package:ai_study_buddy/core/models/quiz_attempt.dart';
 import 'package:ai_study_buddy/core/models/quiz_question.dart';
 import 'package:ai_study_buddy/core/models/subject.dart';
+import 'package:ai_study_buddy/core/models/study_session.dart';
 import 'package:ai_study_buddy/core/models/weak_topic.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
@@ -18,10 +20,12 @@ import 'package:ai_study_buddy/features/flashcards/flashcard_training_screen.dar
 import 'package:ai_study_buddy/shared/widgets/study_components.dart';
 import 'package:ai_study_buddy/features/generation/summary_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
+import 'package:ai_study_buddy/features/materials/material_lifecycle_repository.dart';
 import 'package:ai_study_buddy/features/progress/weak_topic_repository.dart';
 import 'package:ai_study_buddy/features/quizzes/quiz_repository.dart';
 import 'package:ai_study_buddy/features/quizzes/quiz_taking_screen.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
+import 'package:ai_study_buddy/features/study_sessions/study_session_result_screen.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
 import 'package:ai_study_buddy/shared/widgets/glass_components.dart';
 import 'package:flutter/material.dart';
@@ -1723,6 +1727,39 @@ void main() {
     expect(find.text('Ready for your next study step?'), findsOneWidget);
   });
 
+  testWidgets('login shows field errors and a prominent recovery action', (
+    tester,
+  ) async {
+    final authRepository = _RecordingAuthRepository();
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        config: _supabaseConfig(),
+        authRepository: authRepository,
+        profileRepository: _RecordingProfileRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('forgot-password-action')),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Log in'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Enter your email address.'), findsOneWidget);
+    expect(find.text('Enter your password.'), findsOneWidget);
+    expect(authRepository.signInCount, 0);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('login-email-field')),
+      'not-an-email',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Log in'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter a valid email address.'), findsOneWidget);
+  });
+
   testWidgets('signup password visibility toggle works', (tester) async {
     await tester.pumpWidget(
       StudyBuddyApp(
@@ -2192,6 +2229,123 @@ void main() {
     );
     expect(find.text('No study material available'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('study-session route accepts an exact valid triple', (
+    tester,
+  ) async {
+    final harness = await _createStudySessionRouteHarness(tester);
+
+    await _pushRoute(
+      tester,
+      AppRoutes.studySessionResult,
+      arguments: StudySessionResultArgs(
+        subject: _studySessionSubject,
+        sessionId: harness.sessionId,
+        materialId: harness.material.id,
+      ),
+    );
+
+    expect(find.text('Generated from: Session material'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('study-session-unavailable')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('study-session route rejects a wrong material ID', (
+    tester,
+  ) async {
+    final harness = await _createStudySessionRouteHarness(tester);
+
+    await _pushRoute(
+      tester,
+      AppRoutes.studySessionResult,
+      arguments: StudySessionResultArgs(
+        subject: _studySessionSubject,
+        sessionId: harness.sessionId,
+        materialId: 'different-material',
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('study-session-unavailable')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('study-session route rejects a wrong subject', (tester) async {
+    final harness = await _createStudySessionRouteHarness(tester);
+    const wrongSubject = Subject(
+      id: 'different-subject',
+      name: 'Different subject',
+      description: 'Does not own the session',
+      colorValue: 0xFFDC2626,
+    );
+
+    await _pushRoute(
+      tester,
+      AppRoutes.studySessionResult,
+      arguments: StudySessionResultArgs(
+        subject: wrongSubject,
+        sessionId: harness.sessionId,
+        materialId: harness.material.id,
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('study-session-unavailable')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('study-session route rejects a missing session', (tester) async {
+    final harness = await _createStudySessionRouteHarness(tester);
+
+    await _pushRoute(
+      tester,
+      AppRoutes.studySessionResult,
+      arguments: StudySessionResultArgs(
+        subject: _studySessionSubject,
+        sessionId: 'missing-session',
+        materialId: harness.material.id,
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('study-session-unavailable')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('study-session route rejects a detached deleted material', (
+    tester,
+  ) async {
+    final harness = await _createStudySessionRouteHarness(
+      tester,
+      lifecycleRepository: MockMaterialLifecycleRepository(),
+    );
+    harness.repository.loadedMaterials.clear();
+    await harness.state.loadMaterialsFor(_supabaseUser);
+    expect(
+      await harness.state.deleteMaterialFor(_supabaseUser, harness.material.id),
+      isTrue,
+    );
+
+    await _pushRoute(
+      tester,
+      AppRoutes.studySessionResult,
+      arguments: StudySessionResultArgs(
+        subject: _studySessionSubject,
+        sessionId: harness.sessionId,
+        materialId: harness.material.id,
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('study-session-unavailable')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('eligible subject action creates and opens study session', (
@@ -2692,6 +2846,10 @@ void main() {
     await _tapVisible(tester, find.text('Create study session'));
     await tester.pumpAndSettle();
 
+    expect(
+      find.text('Generated from: Photosynthesis lecture notes'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Simple explanation'), findsWidgets);
     expect(find.text('45 min'), findsOneWidget);
 
@@ -2712,7 +2870,41 @@ void main() {
     );
   });
 
-  testWidgets('continue studying reads latest local session', (tester) async {
+  testWidgets(
+    'exam preparation opens the explicitly selected material session',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 2400);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      await _enterDashboard(tester);
+      await _pushRoute(tester, AppRoutes.examPrep);
+
+      final createButton = find.widgetWithText(
+        FilledButton,
+        'Create study session',
+      );
+      expect(tester.widget<FilledButton>(createButton).onPressed, isNull);
+
+      await _tapVisible(tester, find.text('Photosynthesis lecture notes'));
+      await tester.pumpAndSettle();
+      await _tapVisible(tester, createButton);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Generated from: Photosynthesis lecture notes'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('study-session-unavailable')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('continue studying propagates the exact local session', (
+    tester,
+  ) async {
     await _enterDashboard(tester);
 
     await _pushRoute(tester, AppRoutes.afterLecture);
@@ -2733,6 +2925,14 @@ void main() {
     expect(find.text('Biology'), findsOneWidget);
     expect(find.textContaining('Simple explanation'), findsOneWidget);
     expect(find.text('Last score: 0%'), findsOneWidget);
+
+    await _scrollTo(tester, find.text('Continue session'));
+    await tester.tap(find.text('Continue session'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Generated from: Photosynthesis lecture notes'),
+      findsOneWidget,
+    );
   });
 }
 
@@ -2995,8 +3195,10 @@ StudyMaterial _studyMaterial({
 
 Future<void> _pumpSubjectDetailWithMaterials(
   WidgetTester tester,
-  List<StudyMaterial> materials,
-) async {
+  List<StudyMaterial> materials, {
+  MaterialLifecycleRepository? lifecycleRepository,
+  MaterialRepository? materialRepository,
+}) async {
   await tester.pumpWidget(
     StudyBuddyApp(
       key: UniqueKey(),
@@ -3006,9 +3208,10 @@ Future<void> _pumpSubjectDetailWithMaterials(
       subjectRepository: _RecordingSubjectRepository(
         loadedSubjects: const [_studySessionSubject],
       ),
-      materialRepository: _RecordingMaterialRepository(
-        loadedMaterials: materials,
-      ),
+      materialRepository:
+          materialRepository ??
+          _RecordingMaterialRepository(loadedMaterials: materials),
+      materialLifecycleRepository: lifecycleRepository,
     ),
   );
   await tester.pumpAndSettle();
@@ -3016,6 +3219,46 @@ Future<void> _pumpSubjectDetailWithMaterials(
     tester,
     AppRoutes.subjectDetail,
     arguments: _studySessionSubject,
+  );
+}
+
+Future<
+  ({
+    AppState state,
+    String sessionId,
+    StudyMaterial material,
+    _RecordingMaterialRepository repository,
+  })
+>
+_createStudySessionRouteHarness(
+  WidgetTester tester, {
+  MaterialLifecycleRepository? lifecycleRepository,
+}) async {
+  final material = _studyMaterial(
+    id: 'route-session-source',
+    kind: MaterialKind.pastedText,
+  );
+  final repository = _RecordingMaterialRepository(loadedMaterials: [material]);
+  await _pumpSubjectDetailWithMaterials(
+    tester,
+    [material],
+    lifecycleRepository: lifecycleRepository,
+    materialRepository: repository,
+  );
+  final state = AppStateScope.read(
+    tester.element(find.text('Create study session').first),
+  );
+  final session = state.createStudySession(
+    subject: _studySessionSubject,
+    confidence: LectureConfidence.mostly,
+    materialId: material.id,
+  );
+  expect(session, isNotNull);
+  return (
+    state: state,
+    sessionId: session!.id,
+    material: material,
+    repository: repository,
   );
 }
 
@@ -3083,6 +3326,7 @@ class _RecordingAuthRepository implements AuthRepository {
 
   AuthUser? _user;
   final Object? signUpError;
+  int signInCount = 0;
   int signUpCount = 0;
   int signOutCount = 0;
   final List<String> signUpDisplayNames = [];
@@ -3097,6 +3341,7 @@ class _RecordingAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
+    signInCount++;
     _user = AuthUser(
       id: 'signed-in-user',
       email: email.trim(),

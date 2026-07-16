@@ -14,7 +14,8 @@ class LocalizedFormatters {
     StudyMaterial material, {
     DateTime? now,
   }) {
-    final instant = material.createdAt ?? DateTime.tryParse(material.createdLabel);
+    final instant =
+        material.createdAt ?? DateTime.tryParse(material.createdLabel);
     if (instant != null) {
       return dateOrRelative(l10n, instant, now: now);
     }
@@ -34,7 +35,11 @@ class LocalizedFormatters {
   }) {
     final localValue = value.toLocal();
     final localNow = (now ?? DateTime.now()).toLocal();
-    final valueDay = DateTime(localValue.year, localValue.month, localValue.day);
+    final valueDay = DateTime(
+      localValue.year,
+      localValue.month,
+      localValue.day,
+    );
     final today = DateTime(localNow.year, localNow.month, localNow.day);
     final days = today.difference(valueDay).inDays;
     if (days == 0) {
@@ -50,9 +55,7 @@ class LocalizedFormatters {
 
   static String dateTime(AppLocalizations l10n, DateTime value) {
     initializeDateFormatting(l10n.localeName);
-    return DateFormat.yMMMd(
-      l10n.localeName,
-    ).add_jm().format(value.toLocal());
+    return DateFormat.yMMMd(l10n.localeName).add_jm().format(value.toLocal());
   }
 
   static String percentage(AppLocalizations l10n, num percent) {
@@ -69,37 +72,28 @@ class LocalizedFormatters {
       ).format(value);
 
   static String fileSize(AppLocalizations l10n, int bytes) {
-    if (bytes < 1024) return l10n.fileSizeBytes(bytes);
-    final kib = bytes / 1024;
-    if (kib < 1024) return l10n.fileSizeKibibytes(_compact(l10n, kib));
-    return l10n.fileSizeMebibytes(_compact(l10n, kib / 1024));
-  }
-
-  static String _compact(AppLocalizations l10n, double value) {
-    return NumberFormat.decimalPatternDigits(
+    final value = NumberFormat.decimalPatternDigits(
       locale: l10n.localeName,
-      decimalDigits: value == value.roundToDouble() ? 0 : 1,
-    ).format(value);
+      decimalDigits: 2,
+    ).format(bytes / 1000000);
+    return l10n.fileSizeMegabytes(value);
   }
 
-  static String difficulty(
-    AppLocalizations l10n,
-    FlashcardDifficulty value,
-  ) => switch (value) {
-    FlashcardDifficulty.easy => l10n.settingsDifficultyEasy,
-    FlashcardDifficulty.medium => l10n.settingsDifficultyMedium,
-    FlashcardDifficulty.exam => l10n.settingsDifficultyExam,
-  };
+  static String difficulty(AppLocalizations l10n, FlashcardDifficulty value) =>
+      switch (value) {
+        FlashcardDifficulty.easy => l10n.settingsDifficultyEasy,
+        FlashcardDifficulty.medium => l10n.settingsDifficultyMedium,
+        FlashcardDifficulty.exam => l10n.settingsDifficultyExam,
+      };
 
-  static String confidence(
-    AppLocalizations l10n,
-    LectureConfidence value,
-  ) => switch (value) {
-    LectureConfidence.understoodEverything => l10n.confidenceUnderstoodEverything,
-    LectureConfidence.mostly => l10n.confidenceMostly,
-    LectureConfidence.aboutHalf => l10n.confidenceAboutHalf,
-    LectureConfidence.completelyLost => l10n.confidenceCompletelyLost,
-  };
+  static String confidence(AppLocalizations l10n, LectureConfidence value) =>
+      switch (value) {
+        LectureConfidence.understoodEverything =>
+          l10n.confidenceUnderstoodEverything,
+        LectureConfidence.mostly => l10n.confidenceMostly,
+        LectureConfidence.aboutHalf => l10n.confidenceAboutHalf,
+        LectureConfidence.completelyLost => l10n.confidenceCompletelyLost,
+      };
 
   static String studyBlock(AppLocalizations l10n, String legacyLabel) =>
       switch (legacyLabel) {

@@ -615,11 +615,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadImageTitle => 'Upload image';
 
   @override
-  String get uploadPdfGuidance => 'PDF files up to 10 MiB.';
+  String get uploadPdfGuidance => 'PDF files up to 10.49 MB.';
 
   @override
   String get uploadImageGuidance =>
-      'PNG, JPG, JPEG, or WEBP images up to 8 MiB.';
+      'PNG, JPG, JPEG, or WEBP images up to 8.39 MB.';
 
   @override
   String get uploadChoosePdf => 'Choose PDF';
@@ -1024,6 +1024,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorEnterValidEmail => 'Enter a valid email address.';
+
+  @override
+  String get errorEmailRequired => 'Enter your email address.';
+
+  @override
+  String get errorPasswordRequired => 'Enter your password.';
+
+  @override
+  String get authInvalidCredentials =>
+      'Unable to sign in. Check your email address and password.';
+
+  @override
+  String get authEmailNotConfirmed =>
+      'Confirm your email address before signing in.';
+
+  @override
+  String get authRateLimited => 'Too many sign-in attempts. Try again later.';
+
+  @override
+  String get authNetworkFailure =>
+      'Check your internet connection and try again.';
+
+  @override
+  String get authServiceUnavailable =>
+      'The authentication service is temporarily unavailable. Try again later.';
 
   @override
   String get errorPasswordTooShort => 'Password must be at least 6 characters.';
@@ -1920,6 +1945,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String fileSizeMebibytes(Object value) {
     return '$value MiB';
+  }
+
+  @override
+  String fileSizeMegabytes(Object value) {
+    return '$value MB';
   }
 
   @override

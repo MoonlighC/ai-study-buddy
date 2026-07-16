@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'app_localizations.dart';
+import 'localized_formatters.dart';
 
 extension AppLocalizationsX on BuildContext {
   AppLocalizations get l10n => AppLocalizations.of(this)!;
@@ -22,9 +23,18 @@ extension AppLocalizationsX on BuildContext {
     if (uploadLimit != null) {
       return l.errorUploadTooLarge(uploadLimit.group(1)!);
     }
+    final uploadByteLimit = RegExp(
+      r'^The selected file exceeds ([0-9]+) bytes\.$',
+    ).firstMatch(message);
+    if (uploadByteLimit != null) {
+      final bytes = int.parse(uploadByteLimit.group(1)!);
+      return l.errorUploadTooLarge(LocalizedFormatters.fileSize(l, bytes));
+    }
     return switch (message) {
       'Enter your name.' => l.errorEnterName,
       'Enter a valid email address.' => l.errorEnterValidEmail,
+      'Enter your email address.' => l.errorEmailRequired,
+      'Password is required.' => l.errorPasswordRequired,
       'Password must be at least 6 characters.' => l.errorPasswordTooShort,
       'Confirm your password.' => l.errorConfirmPassword,
       'Passwords do not match.' => l.errorPasswordsDoNotMatch,
@@ -32,6 +42,14 @@ extension AppLocalizationsX on BuildContext {
       'An account already exists for this email. Try logging in instead.' =>
         l.errorAccountAlreadyExists,
       'Something went wrong. Please try again.' => l.genericLocalizedError,
+      'Unable to sign in. Check your email address and password.' =>
+        l.authInvalidCredentials,
+      'Confirm your email address before signing in.' =>
+        l.authEmailNotConfirmed,
+      'Too many sign-in attempts. Try again later.' => l.authRateLimited,
+      'Check your internet connection and try again.' => l.authNetworkFailure,
+      'The authentication service is temporarily unavailable. Try again later.' =>
+        l.authServiceUnavailable,
       'Could not update the account profile.' => l.errorCouldNotUpdateProfile,
       'Could not log out.' => l.errorCouldNotLogOut,
       'Could not sync subjects. Try again.' => l.errorCouldNotSyncSubjects,

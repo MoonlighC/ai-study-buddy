@@ -30,10 +30,25 @@ abstract class ProfileRepository {
   });
 }
 
+enum AuthFailureCode {
+  invalidEmail,
+  invalidCredentials,
+  emailNotConfirmed,
+  rateLimited,
+  network,
+  serviceUnavailable,
+  alreadyRegistered,
+  unknown,
+}
+
 class AuthRepositoryException implements Exception {
-  const AuthRepositoryException(this.message);
+  const AuthRepositoryException(
+    this.message, {
+    this.code = AuthFailureCode.unknown,
+  });
 
   final String message;
+  final AuthFailureCode code;
 }
 
 class ProfileRepositoryException implements Exception {

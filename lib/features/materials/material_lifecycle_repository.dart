@@ -27,6 +27,12 @@ abstract class MaterialLifecycleRepository {
     required String materialId,
     required String processor,
   });
+
+  /// Returns null when existence could not be reconciled safely.
+  Future<bool?> materialExists({
+    required AuthUser user,
+    required String materialId,
+  }) async => null;
 }
 
 class MockMaterialLifecycleRepository implements MaterialLifecycleRepository {
@@ -47,6 +53,11 @@ class MockMaterialLifecycleRepository implements MaterialLifecycleRepository {
     required String materialId,
     required String processor,
   }) async {}
+  @override
+  Future<bool?> materialExists({
+    required AuthUser user,
+    required String materialId,
+  }) async => false;
 }
 
 class EmptyMaterialLifecycleRepository implements MaterialLifecycleRepository {
@@ -70,6 +81,11 @@ class EmptyMaterialLifecycleRepository implements MaterialLifecycleRepository {
     required String materialId,
     required String processor,
   }) async => _unavailable();
+  @override
+  Future<bool?> materialExists({
+    required AuthUser user,
+    required String materialId,
+  }) async => null;
 }
 
 class SupabaseMaterialLifecycleRepository
@@ -102,6 +118,23 @@ class SupabaseMaterialLifecycleRepository
       throw const MaterialLifecycleException(
         'Could not delete the material. Try again.',
       );
+    }
+  }
+
+  @override
+  Future<bool?> materialExists({
+    required AuthUser user,
+    required String materialId,
+  }) async {
+    try {
+      final row = await _client
+          .from('materials')
+          .select('id')
+          .eq('id', materialId)
+          .maybeSingle();
+      return row != null;
+    } catch (_) {
+      return null;
     }
   }
 

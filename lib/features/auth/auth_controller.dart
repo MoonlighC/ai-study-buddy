@@ -184,6 +184,7 @@ class AuthController extends ChangeNotifier {
     final validationMessage = _validateCredentials(
       email: email,
       password: password,
+      requireMinimumPasswordLength: false,
     );
     if (validationMessage != null) {
       _setError(validationMessage);
@@ -222,6 +223,7 @@ class AuthController extends ChangeNotifier {
     final validationMessage = _validateCredentials(
       email: email,
       password: password,
+      requireMinimumPasswordLength: true,
     );
     if (validationMessage != null) {
       _setError(validationMessage);
@@ -338,18 +340,26 @@ class AuthController extends ChangeNotifier {
   String? _validateCredentials({
     required String email,
     required String password,
+    required bool requireMinimumPasswordLength,
   }) {
-    if (!_looksLikeEmail(email.trim())) {
+    final trimmedEmail = email.trim();
+    if (trimmedEmail.isEmpty) {
+      return 'Enter your email address.';
+    }
+    if (!_looksLikeEmail(trimmedEmail)) {
       return 'Enter a valid email address.';
     }
-    if (password.length < 6) {
+    if (password.isEmpty) {
+      return 'Password is required.';
+    }
+    if (requireMinimumPasswordLength && password.length < 6) {
       return 'Password must be at least 6 characters.';
     }
     return null;
   }
 
   bool _looksLikeEmail(String email) {
-    return email.contains('@') && email.contains('.');
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
   }
 
   String? _cleanName(String? name) {
@@ -378,11 +388,25 @@ class AuthController extends ChangeNotifier {
 
   String _messageFor(Object error) {
     if (error is AuthRepositoryException) {
-      final normalizedMessage = error.message.toLowerCase();
-      if (normalizedMessage.contains('user already registered')) {
-        return 'An account already exists for this email. Try logging in instead.';
-      }
-      return error.message;
+      return switch (error.code) {
+        AuthFailureCode.invalidEmail => 'Enter a valid email address.',
+        AuthFailureCode.invalidCredentials =>
+          'Unable to sign in. Check your email address and password.',
+        AuthFailureCode.emailNotConfirmed =>
+          'Confirm your email address before signing in.',
+        AuthFailureCode.rateLimited =>
+          'Too many sign-in attempts. Try again later.',
+        AuthFailureCode.network =>
+          'Check your internet connection and try again.',
+        AuthFailureCode.serviceUnavailable =>
+          'The authentication service is temporarily unavailable. Try again later.',
+        AuthFailureCode.alreadyRegistered =>
+          'An account already exists for this email. Try logging in instead.',
+        AuthFailureCode.unknown =>
+          error.message.toLowerCase().contains('user already registered')
+              ? 'An account already exists for this email. Try logging in instead.'
+              : 'Something went wrong. Please try again.',
+      };
     }
     if (error is ProfileRepositoryException) {
       return error.message;

@@ -118,6 +118,95 @@ void main() {
       expect(profileRepository.ensuredUsers, [user]);
     });
 
+    test('login requires email and password before repository call', () async {
+      final authRepository = _FakeAuthRepository();
+      final controller = AuthController(
+        authRepository: authRepository,
+        profileRepository: _FakeProfileRepository(),
+      );
+
+      expect(
+        await controller.signInWithEmail(email: ' ', password: 'secret'),
+        isFalse,
+      );
+      expect(controller.errorMessage, 'Enter your email address.');
+      expect(
+        await controller.signInWithEmail(
+          email: 'learner@example.test',
+          password: '',
+        ),
+        isFalse,
+      );
+      expect(controller.errorMessage, 'Password is required.');
+      expect(authRepository.signInCount, 0);
+    });
+
+    test(
+      'login accepts a short non-empty password for authentication',
+      () async {
+        final authRepository = _FakeAuthRepository(
+          signInResult: AuthResult.signedIn(user),
+        );
+        final controller = AuthController(
+          authRepository: authRepository,
+          profileRepository: _FakeProfileRepository(),
+        );
+
+        expect(
+          await controller.signInWithEmail(
+            email: 'learner@example.test',
+            password: 'x',
+          ),
+          isTrue,
+        );
+        expect(authRepository.signInCount, 1);
+      },
+    );
+
+    for (final entry in const <(AuthFailureCode, String)>[
+      (
+        AuthFailureCode.invalidCredentials,
+        'Unable to sign in. Check your email address and password.',
+      ),
+      (
+        AuthFailureCode.emailNotConfirmed,
+        'Confirm your email address before signing in.',
+      ),
+      (
+        AuthFailureCode.rateLimited,
+        'Too many sign-in attempts. Try again later.',
+      ),
+      (
+        AuthFailureCode.network,
+        'Check your internet connection and try again.',
+      ),
+      (
+        AuthFailureCode.serviceUnavailable,
+        'The authentication service is temporarily unavailable. Try again later.',
+      ),
+    ]) {
+      test('login maps ${entry.$1} to a safe message', () async {
+        final controller = AuthController(
+          authRepository: _FakeAuthRepository(
+            signInError: AuthRepositoryException(
+              'Provider detail',
+              code: entry.$1,
+            ),
+          ),
+          profileRepository: _FakeProfileRepository(),
+        );
+
+        expect(
+          await controller.signInWithEmail(
+            email: 'learner@example.test',
+            password: 'secret',
+          ),
+          isFalse,
+        );
+        expect(controller.errorMessage, entry.$2);
+      });
+    }
+
     test('signup with a session signs in and ensures profile', () async {
       final authRepository = _FakeAuthRepository(
         signUpResult: AuthResult.signedIn(user),
@@ -347,6 +436,7 @@ class _FakeAuthRepository implements AuthRepository {
     AuthResult? signInResult,
     AuthResult? signUpResult,
     this.signUpError,
+    this.signInError,
   }) : signInResult = signInResult ?? AuthResult.signedIn(initialUser ?? _user),
        signUpResult = signUpResult ?? AuthResult.signedIn(initialUser ?? _user);
 
@@ -360,6 +450,7 @@ class _FakeAuthRepository implements AuthRepository {
   final AuthResult signInResult;
   final AuthResult signUpResult;
   final Object? signUpError;
+  final Object? signInError;
 
   int signInCount = 0;
   int signUpCount = 0;
@@ -378,6 +469,8 @@ class _FakeAuthRepository implements AuthRepository {
     required String password,
   }) async {
     signInCount += 1;
+    final error = signInError;
+    if (error != null) throw error;
     return signInResult;
   }
 

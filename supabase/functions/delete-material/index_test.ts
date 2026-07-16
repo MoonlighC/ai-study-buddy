@@ -35,6 +35,15 @@ Deno.test("storage failure is recorded and not finalized", async () => {
   const response = await createDeleteMaterialHandler(deps({ remove: async () => ({ error: true }), mark: async (_, __, outcome) => { marked = outcome; return true; }, finalize: async () => { finalized = true; return true; } }))(request({ material_id: id }));
   assertEquals(response.status, 503); assertEquals(marked, "failed"); assertEquals(finalized, false);
 });
+Deno.test("storage object already missing is treated as cleaned", async () => {
+  let marked = ""; let finalized = false;
+  const response = await createDeleteMaterialHandler(deps({
+    remove: async () => ({ error: true, notFound: true }),
+    mark: async (_, __, outcome) => { marked = outcome; return true; },
+    finalize: async () => { finalized = true; return true; },
+  }))(request({ material_id: id }));
+  assertEquals(response.status, 200); assertEquals(marked, "removed"); assertEquals(finalized, true);
+});
 Deno.test("rejects malformed and extra input", async () => {
   assertEquals((await createDeleteMaterialHandler(deps())(request({ material_id: id, user_id: "x" }))).status, 400);
   assertEquals((await createDeleteMaterialHandler(deps())(request({ material_id: "bad" }))).status, 400);
