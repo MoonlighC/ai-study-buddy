@@ -8,8 +8,16 @@ import {
 import { TrustedOpenAiAdapter } from "./openai_adapter.ts";
 import { buildSyntheticPdf } from "./synthetic_pdf_fixtures.ts";
 
-const owner = "11111111-1111-4111-8111-111111111111";
-const materialId = "22222222-2222-4222-8222-222222222222";
+const owner = crypto.randomUUID();
+const materialId = crypto.randomUUID();
+const otherOwner = crypto.randomUUID();
+const jobId = crypto.randomUUID();
+const batchId = crypto.randomUUID();
+const leaseId = crypto.randomUUID();
+const artifactId = crypto.randomUUID();
+const retryAuthorizationId = crypto.randomUUID();
+const runtimeAuthFixture = ["fixture", crypto.randomUUID()].join("_");
+const runtimeApiFixture = ["safe", "mock", crypto.randomUUID()].join("_");
 
 Deno.test("C2 prepare owner succeeds with exact 1..P manifest", async () => {
   const pdf = await buildSyntheticPdf(["text", "text"]);
@@ -36,7 +44,7 @@ Deno.test("C2 prepare owner succeeds with exact 1..P manifest", async () => {
 Deno.test("C2 prepare denies cross-user and malformed requests", async () => {
   const pdf = await buildSyntheticPdf(["text"]);
   const fake = fakeDependencies(pdf);
-  fake.source.user_id = "33333333-3333-4333-8333-333333333333";
+  fake.source.user_id = otherOwner;
   const denied = await createPrepareMaterialAnalysisHandler(fake.deps)(request({
     material_id: materialId,
     processing_mode: "recommended",
@@ -128,9 +136,9 @@ Deno.test("C2 advance performs one bounded operation with exact original image b
   fake.work = {
     kind: "page_visual",
     material_id: materialId,
-    job_id: "33333333-3333-4333-8333-333333333333",
-    batch_id: "44444444-4444-4444-8444-444444444444",
-    lease_token: "55555555-5555-4555-8555-555555555555",
+    job_id: jobId,
+    batch_id: batchId,
+    lease_token: leaseId,
     page_count: 1,
     page_numbers: [1],
   };
@@ -298,7 +306,7 @@ function fakeDependencies(
     observedImageBytes: new Uint8Array(),
   };
   const provider = new TrustedOpenAiAdapter({
-    apiKey: "not-real",
+    apiKey: runtimeApiFixture,
     model: "server-model",
     fetcher: async (input, init) => {
       await Promise.resolve();
@@ -339,7 +347,8 @@ function fakeDependencies(
     },
   });
   const deps: AnalysisDependencies = {
-    verifyJwt: (jwt) => Promise.resolve(jwt === "valid-jwt" ? owner : null),
+    verifyJwt: (jwt) =>
+      Promise.resolve(jwt === runtimeAuthFixture ? owner : null),
     loadSource: () => Promise.resolve(state.source),
     downloadPrivate: () => Promise.resolve(Uint8Array.from(bytes)),
     prepareInternal: (input) => {
@@ -357,7 +366,7 @@ function fakeDependencies(
     createFileIntent: () => {
       state.fileIntents++;
       return Promise.resolve({
-        artifact_id: "77777777-7777-4777-8777-777777777777",
+        artifact_id: artifactId,
       });
     },
     recordFileUploaded: () =>
@@ -391,7 +400,7 @@ function fakeDependencies(
     persistCleanup: () => Promise.resolve(),
     authorizeRetry: () => {
       state.retryAuthorizations++;
-      return Promise.resolve("66666666-6666-4666-8666-666666666666");
+      return Promise.resolve(retryAuthorizationId);
     },
     consumeRetry: () => {
       state.retryConsumptions++;
@@ -426,9 +435,9 @@ function workUnit(): InternalWorkUnit {
   return {
     kind: "page_visual",
     material_id: materialId,
-    job_id: "33333333-3333-4333-8333-333333333333",
-    batch_id: "44444444-4444-4444-8444-444444444444",
-    lease_token: "55555555-5555-4555-8555-555555555555",
+    job_id: jobId,
+    batch_id: batchId,
+    lease_token: leaseId,
     page_count: 1,
     page_numbers: [1],
   };
@@ -483,7 +492,7 @@ function request(body: Record<string, unknown>) {
   return new Request("https://example.test", {
     method: "POST",
     headers: {
-      Authorization: "Bearer valid-jwt",
+      Authorization: ["Bearer", runtimeAuthFixture].join(" "),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
