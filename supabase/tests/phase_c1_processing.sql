@@ -160,11 +160,12 @@ select pg_temp.assert_true(
 );
 
 delete from public.material_processing_pages where job_id=:'job_g1' and page_number=1;
+select gen_random_uuid() as incomplete_lease_token \gset
 update public.material_processing_jobs set status='processing',budget_state='reserved',
-  active_lease_token='99999999-9999-9999-9999-999999999999',
+  active_lease_token=:'incomplete_lease_token',
   active_lease_expires_at=now()+interval '2 minutes' where id=:'job_g1';
 select pg_temp.expect_incomplete_manifest(
-  :'job_g1','99999999-9999-9999-9999-999999999999');
+  :'job_g1',:'incomplete_lease_token');
 update public.material_processing_jobs set status='prepared',active_lease_token=null,
   active_lease_expires_at=null where id=:'job_g1';
 
