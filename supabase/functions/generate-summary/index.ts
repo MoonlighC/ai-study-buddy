@@ -1,7 +1,11 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-import { buildSummaryRequestBody } from "./summary_prompt.ts";
+import {
+  buildSummaryRequestBody,
+  isPastedSummaryMaterial,
+  isPhaseCUpload,
+} from "./summary_prompt.ts";
 import {
   generationLog,
   providerSafeCode,
@@ -23,156 +27,217 @@ const minSummaryInputChars = 80;
 const shortInputMessage = "Add more lecture text before generating a summary.";
 const defaultModel = "gpt-4.1-mini";
 
-serve(async (request) => {
-  logStage("request_received", { method: request.method });
-  if (request.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-  if (request.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed." }, 405);
-  }
+export type SummaryHandlerDependencies = {
+  env(name: string): string;
+  verifyUser(input: {
+    jwt: string;
+    supabaseUrl: string;
+    publicKey: string;
+  }): Promise<string | null>;
+  loadMaterial(input: {
+    jwt: string;
+    supabaseUrl: string;
+    publicKey: string;
+    userId: string;
+    materialId: string;
+  }): Promise<Record<string, unknown> | null>;
+  saveSummary(input: {
+    supabaseUrl: string;
+    trustedKey: string;
+    userId: string;
+    materialId: string;
+    summary: string;
+  }): Promise<boolean>;
+  generate(apiKey: string, model: string, text: string): Promise<string>;
+};
 
-  const authorization = request.headers.get("Authorization") ?? "";
-  const jwt = authorization.startsWith("Bearer ")
-    ? authorization.substring("Bearer ".length).trim()
-    : "";
-  if (jwt.length === 0) {
-    logKnownFailure("auth_missing");
-    return jsonResponse({ error: "Authentication required." }, 401);
-  }
+export function createGenerateSummaryHandler(deps: SummaryHandlerDependencies) {
+  return async (request: Request) => {
+    logStage("request_received", { method: request.method });
+    if (request.method === "OPTIONS") {
+      return new Response("ok", { headers: corsHeaders });
+    }
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "Method not allowed." }, 405);
+    }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  let supabaseAnonKey = "";
-  let serviceRoleKey = "";
-  let trustedSource = "";
-  try {
-    ({ publicKey: supabaseAnonKey, trustedKey: serviceRoleKey, trustedSource } =
-      resolveProjectKeys(Deno.env.get));
-  } catch (error) {
-    if (!(error instanceof SafeConfigurationError)) throw error;
-  }
-  const openAiApiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
-  const model = Deno.env.get("OPENAI_MODEL") ?? defaultModel;
-  if (
-    supabaseUrl.length === 0 || supabaseAnonKey.length === 0 ||
-    serviceRoleKey.length === 0
-  ) {
-    logKnownFailure("supabase_env_missing");
-    return jsonResponse({ error: "Summary generation is unavailable." }, 500);
-  }
-
-  let materialId = "";
-  try {
-    const body = await request.json();
-    materialId = typeof body.material_id === "string"
-      ? body.material_id.trim()
+    const authorization = request.headers.get("Authorization") ?? "";
+    const jwt = authorization.startsWith("Bearer ")
+      ? authorization.substring("Bearer ".length).trim()
       : "";
-  } catch (_) {
-    logKnownFailure("invalid_json");
-    return jsonResponse({ error: "Invalid request." }, 400);
-  }
-  if (materialId.length === 0) {
-    logKnownFailure("material_id_missing");
-    return jsonResponse({ error: "Invalid request." }, 400);
-  }
+    if (jwt.length === 0) {
+      logKnownFailure("auth_missing");
+      return jsonResponse({ error: "Authentication required." }, 401);
+    }
 
-  const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${jwt}` } },
-  });
-  const trustedClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: userData, error: userError } = await supabaseClient.auth
-    .getUser(
+    const supabaseUrl = deps.env("SUPABASE_URL");
+    let supabaseAnonKey = "";
+    let serviceRoleKey = "";
+    let trustedSource = "";
+    try {
+      ({
+        publicKey: supabaseAnonKey,
+        trustedKey: serviceRoleKey,
+        trustedSource,
+      } = resolveProjectKeys((name) => deps.env(name)));
+    } catch (error) {
+      if (!(error instanceof SafeConfigurationError)) throw error;
+    }
+    const openAiApiKey = deps.env("OPENAI_API_KEY");
+    const model = deps.env("OPENAI_MODEL") || defaultModel;
+    if (
+      supabaseUrl.length === 0 || supabaseAnonKey.length === 0 ||
+      serviceRoleKey.length === 0
+    ) {
+      logKnownFailure("supabase_env_missing");
+      return jsonResponse({ error: "Summary generation is unavailable." }, 500);
+    }
+
+    let materialId = "";
+    try {
+      const body = await request.json();
+      materialId = typeof body.material_id === "string"
+        ? body.material_id.trim()
+        : "";
+    } catch (_) {
+      logKnownFailure("invalid_json");
+      return jsonResponse({ error: "Invalid request." }, 400);
+    }
+    if (materialId.length === 0) {
+      logKnownFailure("material_id_missing");
+      return jsonResponse({ error: "Invalid request." }, 400);
+    }
+
+    const userId = await deps.verifyUser({
       jwt,
-    );
-  const user = userData.user;
-  if (userError || user === null) {
-    logKnownFailure("auth_invalid");
-    return jsonResponse({ error: "Authentication required." }, 401);
-  }
-  logStage("auth_verified", { reason: trustedSource });
-
-  const { data: material, error: materialError } = await supabaseClient
-    .from("materials")
-    .select("id,user_id,kind,source_kind,content_text,processing_status")
-    .eq("id", materialId)
-    .eq("user_id", user.id)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  const contentText = typeof material?.content_text === "string"
-    ? material.content_text.trim()
-    : "";
-  if (
-    materialError || material === null ||
-    !isEligibleAiMaterial(material, contentText)
-  ) {
-    logKnownFailure("material_unavailable");
-    return jsonResponse({ error: "Material unavailable." }, 404);
-  }
-  logStage("material_loaded", { content_length: contentText.length });
-  if (contentText.length < minSummaryInputChars) {
-    logKnownFailure("material_content_too_short", {
-      content_length: contentText.length,
+      supabaseUrl,
+      publicKey: supabaseAnonKey,
     });
-    return jsonResponse({ error: shortInputMessage }, 400);
-  }
-  if (openAiApiKey.length === 0) {
-    logKnownFailure("openai_key_missing");
-    return jsonResponse({ error: "Summary generation is unavailable." }, 500);
-  }
+    if (!userId) {
+      logKnownFailure("auth_invalid");
+      return jsonResponse({ error: "Authentication required." }, 401);
+    }
+    logStage("auth_verified", { reason: trustedSource });
 
-  try {
-    // TODO: Enforce daily_usage_limits server-side before making this request.
-    const isReadyUpload =
-      (material.kind === "pdf" || material.kind === "image") &&
-      material.source_kind === "upload" &&
-      material.processing_status === "ready";
-    // Phase 9B.1 intentionally summarizes only the current capped input.
-    const summary = await generateSummary(
-      openAiApiKey,
-      model,
-      contentText.slice(0, maxInputChars),
-      isReadyUpload,
-    );
-    logStage("parsed");
-    logStage("database_write_started");
-    const { data: updatedMaterials, error: updateError } = await trustedClient
-      .from("materials")
-      .update({ summary })
-      .eq("id", materialId)
-      .eq("user_id", user.id)
+    const material = await deps.loadMaterial({
+      jwt,
+      supabaseUrl,
+      publicKey: supabaseAnonKey,
+      userId,
+      materialId,
+    });
+
+    const contentText = typeof material?.content_text === "string"
+      ? material.content_text.trim()
+      : "";
+    if (material === null) {
+      logKnownFailure("material_unavailable");
+      return jsonResponse({ error: "Material unavailable." }, 404);
+    }
+    if (isPhaseCUpload(material)) {
+      logKnownFailure("phase_c_processing_required");
+      return jsonResponse(
+        { error: "Use material analysis for uploaded files." },
+        409,
+      );
+    }
+    if (!isPastedSummaryMaterial(material, contentText)) {
+      logKnownFailure("material_unavailable");
+      return jsonResponse({ error: "Material unavailable." }, 404);
+    }
+    logStage("material_loaded", { content_length: contentText.length });
+    if (contentText.length < minSummaryInputChars) {
+      logKnownFailure("material_content_too_short", {
+        content_length: contentText.length,
+      });
+      return jsonResponse({ error: shortInputMessage }, 400);
+    }
+    if (openAiApiKey.length === 0) {
+      logKnownFailure("openai_key_missing");
+      return jsonResponse({ error: "Summary generation is unavailable." }, 500);
+    }
+
+    try {
+      // TODO: Enforce daily_usage_limits server-side before making this request.
+      // Phase 9B.1 intentionally summarizes only the current capped input.
+      const summary = await deps.generate(
+        openAiApiKey,
+        model,
+        contentText.slice(0, maxInputChars),
+      );
+      logStage("parsed");
+      logStage("database_write_started");
+      const saved = await deps.saveSummary({
+        supabaseUrl,
+        trustedKey: serviceRoleKey,
+        userId,
+        materialId,
+        summary,
+      });
+      if (!saved) {
+        logKnownFailure(
+          "database_write_failed",
+          safeDatabaseFailure(null),
+        );
+        return jsonResponse({
+          error: "Could not save summary.",
+          code: "database_write_failed",
+        }, 500);
+      }
+      logStage("completed");
+
+      return jsonResponse({ material_id: materialId, summary });
+    } catch (error) {
+      const reason = error instanceof SafeFunctionError
+        ? error.reason
+        : "unexpected_generation_failure";
+      logKnownFailure(reason);
+      return jsonResponse(
+        { error: "Could not generate summary.", code: reason },
+        500,
+      );
+    }
+  };
+}
+
+const runtimeDependencies: SummaryHandlerDependencies = {
+  env: (name) => Deno.env.get(name) ?? "",
+  async verifyUser(input) {
+    const client = createClient(input.supabaseUrl, input.publicKey, {
+      global: { headers: { Authorization: `Bearer ${input.jwt}` } },
+    });
+    const { data, error } = await client.auth.getUser(input.jwt);
+    return error || !data.user ? null : data.user.id;
+  },
+  async loadMaterial(input) {
+    const client = createClient(input.supabaseUrl, input.publicKey, {
+      global: { headers: { Authorization: `Bearer ${input.jwt}` } },
+    });
+    const { data, error } = await client.from("materials")
+      .select("id,user_id,kind,source_kind,content_text,processing_status")
+      .eq("id", input.materialId)
+      .eq("user_id", input.userId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    return error || !data ? null : data as Record<string, unknown>;
+  },
+  async saveSummary(input) {
+    const client = createClient(input.supabaseUrl, input.trustedKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await client.from("materials")
+      .update({ summary: input.summary })
+      .eq("id", input.materialId)
+      .eq("user_id", input.userId)
       .is("deleted_at", null)
       .select("id");
-    if (
-      updateError ||
-      !Array.isArray(updatedMaterials) ||
-      updatedMaterials.length !== 1
-    ) {
-      logKnownFailure(
-        "database_write_failed",
-        safeDatabaseFailure(updateError),
-      );
-      return jsonResponse({
-        error: "Could not save summary.",
-        code: "database_write_failed",
-      }, 500);
-    }
-    logStage("completed");
+    return !error && Array.isArray(data) && data.length === 1;
+  },
+  generate: (apiKey, model, text) =>
+    generateSummary(apiKey, model, text, false),
+};
 
-    return jsonResponse({ material_id: materialId, summary });
-  } catch (error) {
-    const reason = error instanceof SafeFunctionError
-      ? error.reason
-      : "unexpected_generation_failure";
-    logKnownFailure(reason);
-    return jsonResponse(
-      { error: "Could not generate summary.", code: reason },
-      500,
-    );
-  }
-});
+if (import.meta.main) serve(createGenerateSummaryHandler(runtimeDependencies));
 
 async function generateSummary(
   apiKey: string,
@@ -250,19 +315,6 @@ function collectResponseText(value: unknown, textParts: string[]) {
       collectResponseText(contentItem, textParts);
     }
   }
-}
-
-function isEligibleAiMaterial(
-  material: Record<string, unknown>,
-  content: string,
-) {
-  if (content.length === 0) return false;
-  return (material.kind === "pasted_text" &&
-    material.source_kind === "manual") ||
-    (material.kind === "pdf" && material.source_kind === "upload" &&
-      material.processing_status === "ready") ||
-    (material.kind === "image" && material.source_kind === "upload" &&
-      material.processing_status === "ready");
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {

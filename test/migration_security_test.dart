@@ -350,40 +350,51 @@ void main() {
     }
   });
 
-  test('AI functions accept only manual text or ready uploaded PDF', () async {
-    for (final paths in [
-      ['supabase/functions/generate-summary/index.ts'],
-      [
-        'supabase/functions/generate-flashcards/index.ts',
-        'supabase/functions/generate-flashcards/handler.ts',
-      ],
-      ['supabase/functions/generate-quiz/index.ts'],
-    ]) {
-      final source = (await Future.wait(
-        paths.map((path) => File(path).readAsString()),
-      )).join('\n');
-      expect(source, contains('material.kind === "pasted_text"'));
-      expect(source, contains('material.source_kind === "manual"'));
-      expect(source, contains('material.kind === "pdf"'));
-      expect(source, contains('material.source_kind === "upload"'));
-      expect(source, contains('material.processing_status === "ready"'));
-    }
-    final summary = await File(
-      'supabase/functions/generate-summary/index.ts',
-    ).readAsString();
-    final runtime = await File(
-      'supabase/functions/_shared/generation_runtime.ts',
-    ).readAsString();
-    expect(summary, contains('resolveProjectKeys(Deno.env.get)'));
-    expect(runtime, contains('SUPABASE_SECRET_KEYS'));
-    expect(runtime, contains('SUPABASE_SERVICE_ROLE_KEY'));
-    expect(summary, contains('.update({ summary })'));
-    expect(summary, contains('.select("id")'));
-    expect(summary, contains('updatedMaterials.length !== 1'));
-    expect(summary, isNot(contains('processing_status: "processing"')));
-    expect(summary, isNot(contains('processing_status: "failed"')));
-    expect(summary, isNot(contains('.update({ content_text')));
-  });
+  test(
+    'AI functions preserve pasted text and route uploads through Phase C',
+    () async {
+      for (final paths in [
+        [
+          'supabase/functions/generate-flashcards/index.ts',
+          'supabase/functions/generate-flashcards/handler.ts',
+        ],
+        ['supabase/functions/generate-quiz/index.ts'],
+      ]) {
+        final source = (await Future.wait(
+          paths.map((path) => File(path).readAsString()),
+        )).join('\n');
+        expect(source, contains('material.kind === "pasted_text"'));
+        expect(source, contains('material.source_kind === "manual"'));
+        expect(source, contains('material.kind === "pdf"'));
+        expect(source, contains('material.source_kind === "upload"'));
+        expect(source, contains('material.processing_status === "ready"'));
+      }
+      final summary = (await Future.wait([
+        File('supabase/functions/generate-summary/index.ts').readAsString(),
+        File(
+          'supabase/functions/generate-summary/summary_prompt.ts',
+        ).readAsString(),
+      ])).join('\n');
+      expect(summary, contains('isPhaseCUpload(material)'));
+      expect(summary, contains('material.kind === "pasted_text"'));
+      expect(summary, contains('material.source_kind === "manual"'));
+      expect(summary, contains('Use material analysis for uploaded files.'));
+      expect(summary, isNot(contains('isReadyUpload =')));
+      final runtime = await File(
+        'supabase/functions/_shared/generation_runtime.ts',
+      ).readAsString();
+      expect(summary, contains('resolveProjectKeys((name) => deps.env(name))'));
+      expect(runtime, contains('SUPABASE_SECRET_KEYS'));
+      expect(runtime, contains('SUPABASE_SERVICE_ROLE_KEY'));
+      expect(summary, contains('.update({ summary: input.summary })'));
+      expect(summary, contains('.select("id")'));
+      expect(summary, contains('Array.isArray(data) && data.length === 1'));
+      expect(summary, contains('createGenerateSummaryHandler'));
+      expect(summary, isNot(contains('processing_status: "processing"')));
+      expect(summary, isNot(contains('processing_status: "failed"')));
+      expect(summary, isNot(contains('.update({ content_text')));
+    },
+  );
 
   test('PDF summaries use expanded source-aware instructions', () async {
     final source = await File(

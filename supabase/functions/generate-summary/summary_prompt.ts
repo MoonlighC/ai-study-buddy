@@ -1,6 +1,19 @@
 export const conciseSummaryOutputTokens = 220;
 export const pdfStudySummaryOutputTokens = 1_400;
 
+export function isPhaseCUpload(material: Record<string, unknown>) {
+  return (material.kind === "pdf" || material.kind === "image") &&
+    material.source_kind === "upload";
+}
+
+export function isPastedSummaryMaterial(
+  material: Record<string, unknown>,
+  content: string,
+) {
+  return content.length > 0 && material.kind === "pasted_text" &&
+    material.source_kind === "manual";
+}
+
 export function buildSummaryRequestBody(
   model: string,
   inputText: string,

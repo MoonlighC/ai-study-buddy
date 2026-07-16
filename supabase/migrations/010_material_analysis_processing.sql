@@ -129,15 +129,27 @@ returns boolean language sql immutable
 set search_path = pg_catalog, public
 as $$
   select p_pages is not null
-    and pg_catalog.cardinality(p_pages) between 1 and 10
+    and pg_catalog.cardinality(p_pages) between 1 and 100
     and not exists (select 1 from pg_catalog.unnest(p_pages) p where p not between 1 and 100)
     and (select pg_catalog.count(distinct p) from pg_catalog.unnest(p_pages) p) = pg_catalog.cardinality(p_pages)
+$$;
+
+create or replace function public.material_analysis_version_fingerprint(p_contract jsonb)
+returns text language sql immutable
+set search_path = pg_catalog, public, extensions
+as $$
+  select encode(extensions.digest(
+    '{' || string_agg(to_json(key)::text || ':' || value::text, ',' order by key) || '}',
+    'sha256'
+  ), 'hex')
+  from jsonb_each(p_contract)
 $$;
 
 create table public.material_processing_jobs (
   id uuid primary key default gen_random_uuid(),
   material_id uuid not null,
   user_id uuid not null,
+  generation integer not null default 1 check (generation between 1 and 2147483647),
   page_count integer not null check (page_count between 1 and 100),
   completed_page_count integer not null default 0 check (completed_page_count between 0 and page_count),
   status text not null check (status in (
@@ -154,6 +166,9 @@ create table public.material_processing_jobs (
   domain_profile text not null check (domain_profile in ('general','stem')),
   router_version text not null,
   schema_version integer not null check (schema_version = 1),
+  source_hash text not null default repeat('0',64) check (source_hash ~ '^[0-9a-f]{64}$'),
+  version_contract jsonb not null,
+  version_fingerprint text not null check (version_fingerprint ~ '^[0-9a-f]{64}$'),
   warning_payload jsonb not null default '[]'::jsonb,
   safe_error_code text check (safe_error_code is null or length(safe_error_code) between 1 and 64),
   next_retry_at timestamptz,
@@ -166,7 +181,7 @@ create table public.material_processing_jobs (
   completed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (material_id),
+  unique (material_id, generation),
   unique (id, material_id, user_id),
   foreign key (material_id, user_id) references public.materials(id, user_id) on delete cascade,
   check (public.material_analysis_safe_warnings(warning_payload)),
@@ -184,6 +199,8 @@ create table public.material_processing_batches (
     'page_text','page_visual','page_recovery','reduction','final_summary'
   )),
   page_numbers integer[] not null,
+  reduction_level integer not null default 0 check (reduction_level between 0 and 10),
+  input_batch_ids uuid[] not null default '{}'::uuid[] check (cardinality(input_batch_ids) <= 10),
   status text not null default 'prepared' check (status in (
     'prepared','submitted','response_known','dispatch_unknown',
     'reconciliation_required','user_retry_required','completed','failed'
@@ -204,6 +221,14 @@ create table public.material_processing_batches (
   retry_after timestamptz,
   ambiguous_since timestamptz,
   failure_code text check (failure_code is null or length(failure_code) between 1 and 64),
+  temporary_file_id text check (
+    temporary_file_id is null or length(btrim(temporary_file_id)) between 8 and 200
+  ),
+  cleanup_state text not null default 'not_required' check (
+    cleanup_state in ('not_required','pending','completed')
+  ),
+  cleanup_attempt_count integer not null default 0 check (cleanup_attempt_count between 0 and 10),
+  cleanup_retry_after timestamptz,
   result_payload jsonb,
   result_schema_version integer,
   validation_version text,
@@ -218,7 +243,8 @@ create table public.material_processing_batches (
   check (public.material_analysis_valid_page_numbers(page_numbers)),
   check ((lease_token is null) = (lease_expires_at is null)),
   check ((operation = 'page_visual' and cardinality(page_numbers) <= 5)
-    or (operation <> 'page_visual' and cardinality(page_numbers) <= 10)),
+    or (operation in ('page_text','page_recovery') and cardinality(page_numbers) <= 10)
+    or (operation in ('reduction','final_summary') and cardinality(page_numbers) <= 100)),
   check ((operation = 'page_recovery' and max_attempts = 1)
     or (operation <> 'page_recovery' and max_attempts <= 2)),
   check ((status in ('response_known','reconciliation_required','completed') and upstream_response_id is not null)
@@ -230,6 +256,38 @@ create table public.material_processing_batches (
       and validation_hash ~ '^[0-9a-f]{64}$' and completed_at is not null)
     or status <> 'completed'),
   check ((status = 'failed' and completed_at is not null) or status <> 'failed')
+);
+
+create table public.material_processing_artifacts (
+  id uuid primary key default gen_random_uuid(),
+  batch_id uuid not null,
+  job_id uuid not null,
+  material_id uuid not null,
+  user_id uuid not null,
+  provider_filename text not null unique check (
+    provider_filename = 'analysis-' || id::text || '.pdf'
+  ),
+  provider_file_id text unique check (
+    provider_file_id is null or length(btrim(provider_file_id)) between 8 and 200
+  ),
+  state text not null check (state in (
+    'upload_intent','uploaded','cleanup_pending','cleaned','manual_cleanup_required'
+  )),
+  cleanup_attempt_count integer not null default 0 check (cleanup_attempt_count between 0 and 10),
+  cleanup_retry_after timestamptz,
+  lease_token uuid,
+  lease_expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  uploaded_at timestamptz,
+  cleaned_at timestamptz,
+  updated_at timestamptz not null default now(),
+  unique (id, batch_id, job_id, material_id, user_id),
+  foreign key (batch_id, job_id, material_id, user_id)
+    references public.material_processing_batches(id, job_id, material_id, user_id) on delete cascade,
+  check ((lease_token is null) = (lease_expires_at is null)),
+  check ((state in ('uploaded','cleanup_pending','cleaned') and provider_file_id is not null)
+    or state not in ('uploaded','cleanup_pending','cleaned')),
+  check ((state = 'cleaned') = (cleaned_at is not null))
 );
 
 create table public.material_processing_attempts (
@@ -278,6 +336,8 @@ create table public.material_processing_pages (
   user_id uuid not null,
   page_number integer not null check (page_number between 1 and 100),
   route text check (route in ('text','visual')),
+  normalized_text text not null default '' check (length(normalized_text) <= 40000),
+  input_hash text not null default repeat('0',64) check (input_hash ~ '^[0-9a-f]{64}$'),
   status text not null default 'pending' check (status in (
     'pending','batched','processing','completed','partial','missing','failed'
   )),
@@ -354,6 +414,8 @@ create index material_processing_pages_job_status_idx
   on public.material_processing_pages(job_id, status, page_number);
 create index material_processing_batches_claim_idx
   on public.material_processing_batches(job_id, operation, status, retry_after, created_at);
+create index material_processing_artifacts_cleanup_idx
+  on public.material_processing_artifacts(job_id, state, cleanup_retry_after, updated_at);
 create index material_processing_batches_expired_lease_idx
   on public.material_processing_batches(lease_expires_at)
   where lease_token is not null;
@@ -364,6 +426,8 @@ create index material_processing_retry_authorizations_owner_idx
 
 alter table public.material_processing_jobs enable row level security;
 alter table public.material_processing_jobs force row level security;
+alter table public.material_processing_artifacts enable row level security;
+alter table public.material_processing_artifacts force row level security;
 alter table public.material_processing_pages enable row level security;
 alter table public.material_processing_pages force row level security;
 alter table public.material_processing_batches enable row level security;
@@ -374,6 +438,8 @@ alter table public.material_processing_retry_authorizations enable row level sec
 alter table public.material_processing_retry_authorizations force row level security;
 
 create policy material_analysis_executor_jobs on public.material_processing_jobs
+  for all to material_analysis_executor using (true) with check (true);
+create policy material_analysis_executor_artifacts on public.material_processing_artifacts
   for all to material_analysis_executor using (true) with check (true);
 create policy material_analysis_executor_pages on public.material_processing_pages
   for all to material_analysis_executor using (true) with check (true);
@@ -387,18 +453,21 @@ create policy material_analysis_executor_materials on public.materials
   for all to material_analysis_executor using (true) with check (true);
 
 alter table public.material_processing_jobs owner to postgres;
+alter table public.material_processing_artifacts owner to postgres;
 alter table public.material_processing_pages owner to postgres;
 alter table public.material_processing_batches owner to postgres;
 alter table public.material_processing_attempts owner to postgres;
 alter table public.material_processing_retry_authorizations owner to postgres;
 
 revoke all on table public.material_processing_jobs from public, anon, authenticated, service_role;
+revoke all on table public.material_processing_artifacts from public, anon, authenticated, service_role;
 revoke all on table public.material_processing_pages from public, anon, authenticated, service_role;
 revoke all on table public.material_processing_batches from public, anon, authenticated, service_role;
 revoke all on table public.material_processing_attempts from public, anon, authenticated, service_role;
 revoke all on table public.material_processing_retry_authorizations from public, anon, authenticated, service_role;
 
 grant select, insert, update, delete on public.material_processing_jobs to material_analysis_executor;
+grant select, insert, update, delete on public.material_processing_artifacts to material_analysis_executor;
 grant select, insert, update, delete on public.material_processing_pages to material_analysis_executor;
 grant select, insert, update, delete on public.material_processing_batches to material_analysis_executor;
 grant select, insert, update, delete on public.material_processing_attempts to material_analysis_executor;
@@ -589,14 +658,17 @@ execute function public.refresh_material_processing_progress();
 
 create or replace function public.create_material_processing_job_internal(
   p_material_id uuid, p_processing_mode text, p_confirmation boolean,
-  p_page_count integer, p_domain_profile text
+  p_page_count integer, p_domain_profile text,p_generation integer,
+  p_version_contract jsonb,p_version_fingerprint text
 ) returns uuid language plpgsql security definer
 set search_path = pg_catalog, public
 as $$
 declare v_material public.materials%rowtype; v_job_id uuid; v_requires boolean;
 begin
   if p_processing_mode not in ('recommended','economy') or p_page_count not between 1 and 100
-    or p_domain_profile not in ('general','stem') then raise exception 'invalid_job_contract'; end if;
+    or p_domain_profile not in ('general','stem') or p_generation not between 1 and 2147483647
+    or jsonb_typeof(p_version_contract)<>'object'
+    or p_version_fingerprint !~ '^[0-9a-f]{64}$' then raise exception 'invalid_job_contract'; end if;
   select * into v_material from public.materials
   where id = p_material_id and deleted_at is null for update;
   if not found then raise exception 'material_unavailable'; end if;
@@ -604,19 +676,22 @@ begin
   if v_requires and not p_confirmation then
     insert into public.material_processing_jobs(
       material_id,user_id,page_count,status,public_stage,processing_mode,
-      confirmation_required,domain_profile,router_version,schema_version
+      confirmation_required,domain_profile,router_version,schema_version,generation,
+      version_contract,version_fingerprint
     ) values (
       v_material.id,v_material.user_id,p_page_count,'awaiting_confirmation','preparing_document',
-      p_processing_mode,true,p_domain_profile,'phase-c-router-v1',1
+      p_processing_mode,true,p_domain_profile,'phase-c-router-v1',1,p_generation,
+      p_version_contract,p_version_fingerprint
     ) returning id into v_job_id;
   else
     insert into public.material_processing_jobs(
       material_id,user_id,page_count,status,public_stage,processing_mode,
-      confirmation_required,confirmation_authorized_at,domain_profile,router_version,schema_version
+      confirmation_required,confirmation_authorized_at,domain_profile,router_version,schema_version,
+      generation,version_contract,version_fingerprint
     ) values (
       v_material.id,v_material.user_id,p_page_count,'prepared','preparing_document',
       p_processing_mode,v_requires,case when v_requires then now() end,
-      p_domain_profile,'phase-c-router-v1',1
+      p_domain_profile,'phase-c-router-v1',1,p_generation,p_version_contract,p_version_fingerprint
     ) returning id into v_job_id;
   end if;
   insert into public.material_processing_pages(job_id,material_id,user_id,page_number)
@@ -633,8 +708,34 @@ as $$
 begin
   update public.material_processing_jobs j set status='prepared', confirmation_authorized_at=now(), updated_at=now()
   from public.materials m where j.material_id=p_material_id and m.id=j.material_id
-    and m.user_id=auth.uid() and j.user_id=m.user_id and j.status='awaiting_confirmation';
+    and m.user_id=auth.uid() and j.user_id=m.user_id and j.status='awaiting_confirmation'
+    and j.generation=(select max(latest.generation) from public.material_processing_jobs latest
+      where latest.material_id=p_material_id);
   if not found then raise exception 'confirmation_not_allowed'; end if;
+end
+$$;
+
+-- Compatibility for the C1 transition harness. It still persists the full contract.
+create or replace function public.create_material_processing_job_internal(
+  p_material_id uuid,p_processing_mode text,p_confirmation boolean,
+  p_page_count integer,p_domain_profile text
+) returns uuid language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_contract jsonb;
+begin
+  v_contract:=jsonb_build_object(
+    'fingerprint_version','phase-c-fingerprint-v2','source_content_hash',repeat('0',64),
+    'source_metadata_hash',repeat('0',64),'processing_mode',p_processing_mode,
+    'page_count',p_page_count,'router_version','phase-c-router-v1',
+    'prompt_version','phase-c-prompts-v1','page_schema_version','phase-c-page-schema-v1',
+    'reduction_schema_version','phase-c-reduction-schema-v1',
+    'final_summary_schema_version','phase-c-final-schema-v1',
+    'validator_version','phase-c-validator-v2','openai_configuration_version','phase-c-server-v1',
+    'mini_pdf_version','phase-c-mini-pdf-v1');
+  return public.create_material_processing_job_internal(
+    p_material_id,p_processing_mode,p_confirmation,p_page_count,p_domain_profile,1,
+    v_contract,public.material_analysis_version_fingerprint(v_contract));
 end
 $$;
 
@@ -651,6 +752,9 @@ begin
   ) or p_fingerprint !~ '^[0-9a-f]{64}$' or not public.material_analysis_valid_page_numbers(p_page_numbers)
   then raise exception 'invalid_batch_contract'; end if;
   if p_operation='page_visual' and cardinality(p_page_numbers)>5 then raise exception 'visual_batch_limit'; end if;
+  if p_operation in ('page_text','page_recovery') and cardinality(p_page_numbers)>10 then
+    raise exception 'text_batch_limit';
+  end if;
   if exists (
     select 1 from unnest(p_page_numbers) p
     left join public.material_processing_pages page on page.job_id=v_job.id and page.page_number=p
@@ -942,7 +1046,8 @@ begin
   if not found then raise exception 'retry_not_allowed'; end if;
   select * into v_batch from public.material_processing_batches
   where job_id=v_job.id and status='user_retry_required' order by updated_at desc limit 1 for update;
-  if not found or v_batch.current_attempt_id is null then raise exception 'retry_attempt_unavailable'; end if;
+  if not found or v_batch.current_attempt_id is null or v_batch.attempt_count>=v_batch.max_attempts
+    then raise exception 'retry_attempt_unavailable'; end if;
   insert into public.material_processing_retry_authorizations(
     job_id,batch_id,material_id,user_id,predecessor_attempt_id
   ) values (v_job.id,v_batch.id,v_job.material_id,v_job.user_id,v_batch.current_attempt_id)
@@ -961,6 +1066,8 @@ begin
   select * into v_auth from public.material_processing_retry_authorizations
   where id=p_authorization_id and material_id=p_material_id and consumed_at is null and expires_at>now() for update;
   if not found then raise exception 'retry_authorization_invalid'; end if;
+  if exists(select 1 from public.material_processing_batches where id=v_auth.batch_id
+    and attempt_count>=max_attempts) then raise exception 'retry_attempt_limit'; end if;
   update public.material_processing_retry_authorizations set consumed_at=now() where id=v_auth.id;
   update public.material_processing_batches set status='prepared',pending_predecessor_attempt_id=v_auth.predecessor_attempt_id,
     current_attempt_id=null,upstream_response_id=null,lease_token=null,lease_expires_at=null,updated_at=now()
@@ -1034,24 +1141,557 @@ returns table(
 set search_path = pg_catalog, public
 as $$
   select m.id,j.processing_mode,case when j.status='prepared' then 'processing' else j.status end,
-    j.public_stage,j.page_count,j.completed_page_count,j.confirmation_required,
-    j.status='user_retry_required',
+    j.public_stage,j.page_count,j.completed_page_count,
+    (j.status='awaiting_confirmation' and j.confirmation_required),
+    (j.status='user_retry_required' and exists(
+      select 1 from public.material_processing_batches retry_batch
+      where retry_batch.job_id=j.id and retry_batch.status='user_retry_required'
+        and retry_batch.attempt_count<retry_batch.max_attempts
+    )),
     case when j.next_retry_at is null then null
       else greatest(0,least(900,extract(epoch from (j.next_retry_at-now()))::integer)) end,
-    j.warning_payload,m.summary_schema_version,
+    case when m.summary_payload is not null and public.material_analysis_valid_summary_payload(m.summary_payload)
+      then m.summary_payload->'warnings' else j.warning_payload end,m.summary_schema_version,
     case when m.summary_validation_version='phase-c-validator-v2'
       and m.summary_validation_hash ~ '^[0-9a-f]{64}$'
       and public.material_analysis_valid_summary_payload(m.summary_payload)
       then m.summary_payload else null end
-  from public.materials m join public.material_processing_jobs j
-    on j.material_id=m.id and j.user_id=m.user_id
+  from public.materials m join lateral (
+    select latest.* from public.material_processing_jobs latest
+    where latest.material_id=m.id and latest.user_id=m.user_id
+    order by latest.generation desc limit 1
+  ) j on true
   where m.id=p_material_id and m.user_id=auth.uid() and m.deleted_at is null;
+$$;
+
+-- C2 trusted orchestration boundary. Public requests never supply any value
+-- accepted by these service-only functions except the authenticated material.
+create or replace function public.load_material_analysis_source_internal(
+  p_material_id uuid,p_user_id uuid
+) returns table(
+  id uuid,user_id uuid,kind text,source_kind text,storage_bucket text,
+  storage_path text,mime_type text,file_size_bytes bigint,
+  processing_status text,deleted_at timestamptz,metadata jsonb
+) language sql stable security definer
+set search_path = pg_catalog, public
+as $$
+  select m.id,m.user_id,m.kind,m.source_kind,m.storage_bucket,m.storage_path,
+    m.mime_type,m.file_size_bytes,m.processing_status,m.deleted_at,m.metadata
+  from public.materials m
+  where m.id=p_material_id and m.user_id=p_user_id and m.deleted_at is null
+    and m.source_kind='upload' and m.kind in ('pdf','image')
+$$;
+
+create or replace function public.prepare_material_analysis_internal(
+  p_material_id uuid,p_user_id uuid,p_processing_mode text,p_confirmation boolean,
+  p_page_count integer,p_source_hash text,p_version_contract jsonb,
+  p_version_fingerprint text,p_page_plans jsonb
+) returns uuid language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_material public.materials%rowtype; v_job public.material_processing_jobs%rowtype;
+  v_job_id uuid; v_manifest integer[]; v_plan jsonb; v_generation integer:=1;
+begin
+  if p_processing_mode not in ('recommended','economy') or p_page_count not between 1 and 100
+    or p_source_hash !~ '^[0-9a-f]{64}$' or jsonb_typeof(p_page_plans)<>'array'
+    or jsonb_array_length(p_page_plans)<>p_page_count
+    or jsonb_typeof(p_version_contract)<>'object'
+    or (p_version_contract - array['fingerprint_version','source_content_hash','source_metadata_hash',
+      'processing_mode','page_count','router_version','prompt_version','page_schema_version',
+      'reduction_schema_version','final_summary_schema_version','validator_version',
+      'openai_configuration_version','mini_pdf_version']) <> '{}'::jsonb
+    or (select count(*) from jsonb_object_keys(p_version_contract))<>13
+    or p_version_contract->>'source_content_hash'<>p_source_hash
+    or p_version_contract->>'processing_mode'<>p_processing_mode
+    or (p_version_contract->>'page_count')::integer<>p_page_count
+    or p_version_fingerprint<>public.material_analysis_version_fingerprint(p_version_contract)
+    then raise exception 'invalid_preparation'; end if;
+  select * into v_material from public.materials where id=p_material_id and user_id=p_user_id
+    and deleted_at is null and source_kind='upload' and kind in ('pdf','image') for update;
+  if not found then raise exception 'material_unavailable'; end if;
+  select array_agg((value->>'page_number')::integer order by (value->>'page_number')::integer)
+  into v_manifest from jsonb_array_elements(p_page_plans);
+  if v_manifest <> array(select generate_series(1,p_page_count)) or exists (
+    select 1 from jsonb_array_elements(p_page_plans) p(value)
+    where jsonb_typeof(value)<>'object' or value->>'route' not in ('text','visual')
+      or value->>'input_hash' !~ '^[0-9a-f]{64}$'
+      or jsonb_typeof(value->'routing_signals')<>'object'
+      or length(coalesce(value->>'normalized_text',''))>40000
+      or (value->>'routing_confidence')::numeric not between 0 and 1
+  ) then raise exception 'invalid_page_plan'; end if;
+  select * into v_job from public.material_processing_jobs where material_id=p_material_id
+    order by generation desc limit 1 for update;
+  if found then
+    if v_job.user_id<>p_user_id then raise exception 'incompatible_existing_analysis'; end if;
+    if v_job.version_fingerprint=p_version_fingerprint then
+      if v_job.status='awaiting_confirmation' and p_confirmation then
+        update public.material_processing_jobs set status='prepared',confirmation_authorized_at=now(),updated_at=now()
+        where id=v_job.id;
+      end if;
+      return v_job.id;
+    elsif v_job.status not in ('completed','completed_with_warnings') then
+      raise exception 'incompatible_existing_analysis';
+    end if;
+    v_generation:=v_job.generation+1;
+  end if;
+  v_job_id := public.create_material_processing_job_internal(
+    p_material_id,p_processing_mode,p_confirmation,p_page_count,
+    case when exists(select 1 from jsonb_array_elements(p_page_plans) p(value)
+      where coalesce(value->>'normalized_text','') ~* '\m(theorem|equation|algorithm|matrix|physics|calculus)\M')
+      then 'stem' else 'general' end,v_generation,p_version_contract,p_version_fingerprint
+  );
+  update public.material_processing_jobs set source_hash=p_source_hash where id=v_job_id;
+  for v_plan in select value from jsonb_array_elements(p_page_plans) loop
+    update public.material_processing_pages set route=v_plan->>'route',
+      normalized_text=coalesce(v_plan->>'normalized_text',''),input_hash=v_plan->>'input_hash',
+      routing_signals=v_plan->'routing_signals',
+      routing_confidence=(v_plan->>'routing_confidence')::numeric
+    where job_id=v_job_id and page_number=(v_plan->>'page_number')::integer;
+  end loop;
+  return v_job_id;
+end
+$$;
+
+create or replace function public.prepare_material_analysis_internal(
+  p_material_id uuid,p_user_id uuid,p_processing_mode text,p_confirmation boolean,
+  p_page_count integer,p_source_hash text,p_page_plans jsonb
+) returns uuid language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_contract jsonb;
+begin
+  v_contract:=jsonb_build_object(
+    'fingerprint_version','phase-c-fingerprint-v2','source_content_hash',p_source_hash,
+    'source_metadata_hash',repeat('0',64),'processing_mode',p_processing_mode,
+    'page_count',p_page_count,'router_version','phase-c-router-v1',
+    'prompt_version','phase-c-prompts-v1','page_schema_version','phase-c-page-schema-v1',
+    'reduction_schema_version','phase-c-reduction-schema-v1',
+    'final_summary_schema_version','phase-c-final-schema-v1',
+    'validator_version','phase-c-validator-v2','openai_configuration_version','phase-c-server-v1',
+    'mini_pdf_version','phase-c-mini-pdf-v1');
+  return public.prepare_material_analysis_internal(
+    p_material_id,p_user_id,p_processing_mode,p_confirmation,p_page_count,p_source_hash,
+    v_contract,public.material_analysis_version_fingerprint(v_contract),p_page_plans);
+end
+$$;
+
+create or replace function public.material_analysis_work_payload(
+  p_batch_id uuid,p_lease_token uuid
+) returns jsonb language plpgsql stable security definer
+set search_path = pg_catalog, public
+as $$
+declare v_batch public.material_processing_batches%rowtype; v_job public.material_processing_jobs%rowtype;
+  v_payload jsonb; v_key text;
+begin
+  select * into v_batch from public.material_processing_batches
+  where id=p_batch_id and lease_token=p_lease_token;
+  if not found then raise exception 'work_lease_invalid'; end if;
+  select * into v_job from public.material_processing_jobs where id=v_batch.job_id;
+  select a.idempotency_key into v_key from public.material_processing_attempts a
+    where a.id=v_batch.current_attempt_id;
+  if v_batch.operation='page_text' then
+    select jsonb_build_object('pages',jsonb_agg(jsonb_build_object(
+      'page_number',p.page_number,'normalized_text',p.normalized_text) order by p.page_number))
+    into v_payload from public.material_processing_pages p
+    where p.job_id=v_batch.job_id and p.page_number=any(v_batch.page_numbers);
+  elsif v_batch.operation in ('page_visual','page_recovery') then
+    v_payload := jsonb_build_object('operation',v_batch.operation,'page_numbers',to_jsonb(v_batch.page_numbers));
+  elsif v_batch.operation='reduction' then
+    if cardinality(v_batch.input_batch_ids)>0 then
+      select jsonb_build_object('inputs',jsonb_agg(b.result_payload->'content' order by b.created_at),
+        'equation_ids',coalesce(jsonb_agg(b.result_payload->'content'->'equation_ids'),'[]'::jsonb))
+      into v_payload from public.material_processing_batches b where b.id=any(v_batch.input_batch_ids);
+    else
+      select jsonb_build_object('inputs',jsonb_agg(p.result_payload order by p.page_number),
+        'equation_ids',coalesce(jsonb_agg(p.result_payload->'equations'),'[]'::jsonb))
+      into v_payload from public.material_processing_pages p where p.job_id=v_batch.job_id
+        and p.page_number=any(v_batch.page_numbers) and p.status in ('completed','partial');
+    end if;
+  else
+    select jsonb_build_object(
+      'operation','final_summary','validated_reduction',top.result_payload->'content',
+      'manifest',jsonb_agg(jsonb_build_object('page_number',p.page_number,'status',p.status,
+        'route',p.route,'warnings',p.warning_payload) order by p.page_number))
+    into v_payload from public.material_processing_batches top
+    join public.material_processing_pages p on p.job_id=top.job_id
+    where top.id=v_batch.input_batch_ids[1] group by top.result_payload;
+  end if;
+  return jsonb_build_object('kind',v_batch.operation,'material_id',v_batch.material_id,
+    'job_id',v_batch.job_id,'batch_id',v_batch.id,'lease_token',p_lease_token,
+    'idempotency_key',v_key,'page_count',v_job.page_count,
+    'page_numbers',to_jsonb(v_batch.page_numbers),'input_payload',coalesce(v_payload,'{}'::jsonb),
+    'response_id',v_batch.upstream_response_id,'temporary_file_id',v_batch.temporary_file_id);
+end
+$$;
+
+create or replace function public.claim_next_material_analysis_operation_internal(
+  p_material_id uuid,p_user_id uuid
+) returns jsonb language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_job public.material_processing_jobs%rowtype; v_batch public.material_processing_batches%rowtype;
+  v_artifact public.material_processing_artifacts%rowtype;
+  v_claim record; v_pages integer[]; v_operation text; v_fingerprint text; v_batch_id uuid;
+  v_route text; v_chars integer:=0; v_page record; v_level integer; v_inputs uuid[];
+  v_token uuid:=gen_random_uuid();
+begin
+  select j.* into v_job from public.material_processing_jobs j join public.materials m
+    on m.id=j.material_id and m.user_id=j.user_id
+    where j.material_id=p_material_id and j.user_id=p_user_id and m.deleted_at is null
+    order by j.generation desc limit 1 for update of j;
+  if not found then raise exception 'analysis_unavailable'; end if;
+  if v_job.active_lease_token is not null and v_job.active_lease_expires_at<=now() then
+    select * into v_batch from public.material_processing_batches
+      where job_id=v_job.id and lease_token=v_job.active_lease_token limit 1;
+    if found then perform public.recover_expired_material_processing_batch_internal(v_batch.id); end if;
+    select * into v_job from public.material_processing_jobs where id=v_job.id for update;
+  end if;
+  if v_job.active_lease_token is not null and v_job.active_lease_expires_at>now() then
+    return jsonb_build_object('kind','none','material_id',p_material_id);
+  end if;
+  update public.material_processing_artifacts a set state='cleanup_pending',lease_token=null,
+    lease_expires_at=null,cleanup_retry_after=null,updated_at=now()
+  from public.material_processing_batches b where a.job_id=v_job.id and a.batch_id=b.id
+    and a.state='uploaded' and a.lease_expires_at<=now() and b.status='prepared';
+  update public.material_processing_artifacts set state='manual_cleanup_required',lease_token=null,
+    lease_expires_at=null,updated_at=now() where job_id=v_job.id and state='upload_intent'
+    and lease_expires_at<=now();
+  update public.material_processing_artifacts set state='manual_cleanup_required',lease_token=null,
+    lease_expires_at=null,updated_at=now() where job_id=v_job.id and state='cleanup_pending'
+    and cleanup_attempt_count>=10;
+  select * into v_artifact from public.material_processing_artifacts where job_id=v_job.id
+    and state='cleanup_pending' and cleanup_attempt_count<10
+    and (cleanup_retry_after is null or cleanup_retry_after<=now())
+    order by updated_at limit 1 for update skip locked;
+  if found then
+    update public.material_processing_jobs set active_lease_token=v_token,
+      active_lease_expires_at=now()+interval '120 seconds',updated_at=now() where id=v_job.id;
+    update public.material_processing_artifacts set lease_token=v_token,
+      lease_expires_at=now()+interval '120 seconds',cleanup_attempt_count=least(10,cleanup_attempt_count+1),
+      updated_at=now() where id=v_artifact.id;
+    return jsonb_build_object('kind','cleanup','material_id',p_material_id,
+      'batch_id',v_artifact.batch_id,'artifact_id',v_artifact.id,
+      'lease_token',v_token,'temporary_file_id',v_artifact.provider_file_id);
+  end if;
+  if v_job.status in ('awaiting_confirmation','user_retry_required','completed','completed_with_warnings','failed') then
+    return jsonb_build_object('kind','none','material_id',p_material_id);
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_job.user_id::text,0));
+  if (select count(*) from public.material_processing_jobs
+      where user_id=v_job.user_id and active_lease_expires_at>now())>=2 then
+    return jsonb_build_object('kind','none','material_id',p_material_id);
+  end if;
+  if v_job.status='reconciliation_required' then
+    select operation into v_operation from public.material_processing_batches
+      where job_id=v_job.id and status='reconciliation_required' order by created_at limit 1;
+    select * into v_claim from public.claim_material_processing_batch_internal(v_job.id,v_operation);
+    return jsonb_set(public.material_analysis_work_payload(v_claim.batch_id,v_claim.lease_token),'{kind}','"reconciliation"');
+  end if;
+  select * into v_batch from public.material_processing_batches where job_id=v_job.id
+    and status='prepared' and (retry_after is null or retry_after<=now()) order by created_at limit 1;
+  if not found then
+    select route into v_route from public.material_processing_pages where job_id=v_job.id and status='pending'
+      order by page_number limit 1;
+    if found then
+      v_pages:='{}';
+      for v_page in select * from public.material_processing_pages where job_id=v_job.id
+        and status='pending' and route=v_route order by page_number loop
+        v_operation := case when v_page.grouped_attempts>=2 then 'page_recovery'
+          when v_route='visual' then 'page_visual' else 'page_text' end;
+        if cardinality(v_pages)>=(case when v_operation in ('page_visual','page_recovery') then 5 else 10 end) then
+          exit;
+        end if;
+        if v_operation='page_text' and v_chars+length(v_page.normalized_text)+64>40000 then exit; end if;
+        v_pages:=array_append(v_pages,v_page.page_number);v_chars:=v_chars+length(v_page.normalized_text)+64;
+      end loop;
+      select encode(extensions.digest(v_job.version_fingerprint||':'||v_operation||':'||v_job.id::text||':'||array_to_string(v_pages,',')||':'||
+        string_agg(input_hash,':' order by page_number),'sha256'),'hex') into v_fingerprint
+      from public.material_processing_pages where job_id=v_job.id and page_number=any(v_pages);
+      v_batch_id:=public.create_material_processing_batch_internal(v_job.id,v_operation,v_pages,v_fingerprint);
+    elsif not exists(select 1 from public.material_processing_pages where job_id=v_job.id
+      and status not in ('completed','partial','missing')) then
+      -- Persist leaf reductions in deterministic groups of at most ten authoritative pages.
+      select array_agg(page_number order by page_number) into v_pages from (
+        select p.page_number from public.material_processing_pages p where p.job_id=v_job.id
+          and p.status in ('completed','partial') and not exists(
+            select 1 from public.material_processing_batches b where b.job_id=v_job.id
+              and b.operation='reduction' and b.reduction_level=1 and p.page_number=any(b.page_numbers))
+        order by p.page_number limit 10) s;
+      if cardinality(v_pages)>0 then
+        select encode(extensions.digest(v_job.version_fingerprint||':reduction:1:'||v_job.id::text||':'||array_to_string(v_pages,',')||':'||
+          string_agg(validation_hash,':' order by page_number),'sha256'),'hex') into v_fingerprint
+        from public.material_processing_pages where job_id=v_job.id and page_number=any(v_pages);
+        v_batch_id:=public.create_material_processing_batch_internal(v_job.id,'reduction',v_pages,v_fingerprint);
+        update public.material_processing_batches set reduction_level=1 where id=v_batch_id;
+      elsif exists(select 1 from public.material_processing_pages where job_id=v_job.id and status in ('completed','partial'))
+        and not exists(select 1 from public.material_processing_batches where job_id=v_job.id
+          and operation='reduction' and status<>'completed') then
+        select max(reduction_level) into v_level from public.material_processing_batches
+          where job_id=v_job.id and operation='reduction' and status='completed';
+        select array_agg(id order by created_at) into v_inputs from (
+          select id,created_at from public.material_processing_batches b where b.job_id=v_job.id
+            and b.operation='reduction' and b.status='completed' and b.reduction_level=v_level
+            and not exists(select 1 from public.material_processing_batches parent
+              where parent.job_id=v_job.id and parent.reduction_level=v_level+1 and b.id=any(parent.input_batch_ids))
+          order by created_at limit 10) s;
+        if cardinality(v_inputs)>1 then
+          select array_agg(distinct p order by p) into v_pages from public.material_processing_batches b,
+            unnest(b.page_numbers) p where b.id=any(v_inputs);
+          select encode(extensions.digest(v_job.version_fingerprint||':reduction:'||(v_level+1)::text||':'||v_job.id::text||':'||
+            array_to_string(v_inputs,','),'sha256'),'hex') into v_fingerprint;
+          v_batch_id:=public.create_material_processing_batch_internal(v_job.id,'reduction',v_pages,v_fingerprint);
+          update public.material_processing_batches set reduction_level=v_level+1,input_batch_ids=v_inputs where id=v_batch_id;
+        elsif cardinality(v_inputs)=1 and not exists(select 1 from public.material_processing_batches
+          where job_id=v_job.id and operation='final_summary') then
+          select page_numbers into v_pages from public.material_processing_batches where id=v_inputs[1];
+          select encode(extensions.digest(v_job.version_fingerprint||':final:'||v_job.id::text||':'||v_inputs[1]::text,'sha256'),'hex') into v_fingerprint;
+          v_batch_id:=public.create_material_processing_batch_internal(v_job.id,'final_summary',v_pages,v_fingerprint);
+          update public.material_processing_batches set input_batch_ids=v_inputs,reduction_level=v_level+1 where id=v_batch_id;
+        end if;
+      end if;
+    end if;
+    if v_batch_id is null then return jsonb_build_object('kind','none','material_id',p_material_id); end if;
+    select * into v_batch from public.material_processing_batches where id=v_batch_id;
+  end if;
+  select * into v_claim from public.claim_material_processing_batch_internal(v_job.id,v_batch.operation);
+  update public.material_processing_jobs set public_stage=case
+    when v_batch.operation='page_text' then 'analyzing_pages'
+    when v_batch.operation in ('page_visual','page_recovery') then 'recognizing_formulas_and_diagrams'
+    else 'creating_summary' end where id=v_job.id;
+  return public.material_analysis_work_payload(v_claim.batch_id,v_claim.lease_token);
+exception when lock_not_available then
+  return jsonb_build_object('kind','none','material_id',p_material_id);
+end
+$$;
+
+create or replace function public.submit_material_analysis_operation_internal(
+  p_batch_id uuid,p_lease_token uuid
+) returns table(idempotency_key text) language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_attempt uuid;
+begin
+  v_attempt:=public.mark_material_processing_batch_submitted_internal(p_batch_id,p_lease_token);
+  return query select a.idempotency_key from public.material_processing_attempts a where a.id=v_attempt;
+end
+$$;
+
+create or replace function public.record_material_analysis_response_internal(
+  p_batch_id uuid,p_lease_token uuid,p_response_id text,p_temporary_file_id text default null
+) returns void language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  perform public.mark_material_processing_response_known_internal(p_batch_id,p_lease_token,p_response_id);
+  if p_temporary_file_id is not null then
+    if length(btrim(p_temporary_file_id)) not between 8 and 200 then raise exception 'invalid_file_id'; end if;
+    update public.material_processing_batches set temporary_file_id=btrim(p_temporary_file_id),cleanup_state='pending',updated_at=now()
+    where id=p_batch_id and lease_token=p_lease_token;
+  end if;
+end
+$$;
+
+create or replace function public.create_material_analysis_file_intent_internal(
+  p_batch_id uuid,p_lease_token uuid
+) returns table(artifact_id uuid) language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_batch public.material_processing_batches%rowtype; v_id uuid:=gen_random_uuid();
+begin
+  select * into v_batch from public.material_processing_batches where id=p_batch_id
+    and lease_token=p_lease_token and status='prepared'
+    and operation in ('page_visual','page_recovery') for update;
+  if not found then raise exception 'file_intent_not_allowed'; end if;
+  select id into v_id from public.material_processing_artifacts
+    where batch_id=p_batch_id and state='upload_intent' and lease_token=p_lease_token
+    order by created_at desc limit 1;
+  if not found then
+    v_id:=gen_random_uuid();
+    insert into public.material_processing_artifacts(
+      id,batch_id,job_id,material_id,user_id,provider_filename,state,lease_token,lease_expires_at
+    ) values (
+      v_id,v_batch.id,v_batch.job_id,v_batch.material_id,v_batch.user_id,
+      'analysis-'||v_id::text||'.pdf','upload_intent',p_lease_token,v_batch.lease_expires_at
+    );
+  end if;
+  return query select v_id;
+end
+$$;
+
+create or replace function public.record_material_analysis_file_uploaded_internal(
+  p_artifact_id uuid,p_lease_token uuid,p_temporary_file_id text
+) returns void language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if length(btrim(p_temporary_file_id)) not between 8 and 200 then raise exception 'invalid_file_id'; end if;
+  update public.material_processing_artifacts a set provider_file_id=btrim(p_temporary_file_id),
+    state='uploaded',uploaded_at=now(),updated_at=now()
+  from public.material_processing_batches b where a.id=p_artifact_id and a.batch_id=b.id
+    and a.state='upload_intent' and a.lease_token=p_lease_token
+    and b.lease_token=p_lease_token and b.status='prepared';
+  if not found then raise exception 'file_upload_persistence_conflict'; end if;
+  update public.material_processing_batches b set temporary_file_id=btrim(p_temporary_file_id),updated_at=now()
+  from public.material_processing_artifacts a where a.id=p_artifact_id and b.id=a.batch_id;
+end
+$$;
+
+create or replace function public.record_material_analysis_file_recovery_internal(
+  p_artifact_id uuid,p_lease_token uuid,p_temporary_file_id text,p_deleted boolean
+) returns void language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if length(btrim(p_temporary_file_id)) not between 8 and 200 then raise exception 'invalid_file_id'; end if;
+  update public.material_processing_artifacts set provider_file_id=btrim(p_temporary_file_id),
+    state=case when p_deleted then 'cleaned' else 'manual_cleanup_required' end,
+    uploaded_at=coalesce(uploaded_at,now()),cleaned_at=case when p_deleted then now() else null end,
+    lease_token=null,lease_expires_at=null,updated_at=now()
+  where id=p_artifact_id and state in ('upload_intent','uploaded') and lease_token=p_lease_token;
+  if not found then raise exception 'file_recovery_conflict'; end if;
+end
+$$;
+
+create or replace function public.complete_material_analysis_operation_internal(
+  p_batch_id uuid,p_lease_token uuid,p_validated_result jsonb,p_validation_version text,
+  p_validation_hash text,p_summary_markdown text default null,p_cleanup_complete boolean default true
+) returns void language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_batch public.material_processing_batches%rowtype; v_page jsonb; v_status text;
+begin
+  select * into v_batch from public.material_processing_batches where id=p_batch_id
+    and lease_token=p_lease_token for update;
+  if not found then raise exception 'operation_completion_conflict'; end if;
+  if v_batch.operation in ('page_text','page_visual','page_recovery') then
+    if jsonb_typeof(p_validated_result->'pages')<>'array'
+      or jsonb_array_length(p_validated_result->'pages')<>cardinality(v_batch.page_numbers)
+      then raise exception 'invalid_page_batch_result'; end if;
+    for v_page in select value from jsonb_array_elements(p_validated_result->'pages') loop
+      v_status:=case when exists(select 1 from jsonb_array_elements(v_page->'warnings') w
+        where w->>'code' in ('partial_extraction','uncertain_extraction')) then 'partial' else 'completed' end;
+      perform public.complete_material_processing_page_internal(v_batch.job_id,(v_page->>'page_number')::integer,
+        p_lease_token,v_status,v_page,v_page->'warnings',p_validation_version,
+        encode(extensions.digest(v_page::text,'sha256'),'hex'));
+    end loop;
+    perform public.complete_material_processing_batch_internal(p_batch_id,p_lease_token,
+      jsonb_build_object('schema_version',1,'operation',v_batch.operation,'content',p_validated_result),
+      p_validation_version,p_validation_hash);
+  elsif v_batch.operation='reduction' then
+    perform public.complete_material_processing_batch_internal(p_batch_id,p_lease_token,
+      jsonb_build_object('schema_version',1,'operation','reduction','content',p_validated_result),
+      p_validation_version,p_validation_hash);
+  else
+    perform public.finalize_material_processing_job_internal(v_batch.job_id,p_lease_token,p_validated_result,
+      p_summary_markdown,p_validation_version,p_validation_hash);
+  end if;
+  if v_batch.temporary_file_id is not null then
+    update public.material_processing_artifacts set state='cleanup_pending',lease_token=null,
+      lease_expires_at=null,cleanup_retry_after=null,updated_at=now()
+    where batch_id=p_batch_id and state='uploaded';
+  end if;
+end
+$$;
+
+create or replace function public.fail_material_analysis_operation_internal(
+  p_batch_id uuid,p_lease_token uuid,p_failure_class text,p_retry_after_seconds integer default null,
+  p_temporary_file_id text default null,p_cleanup_complete boolean default true
+) returns void language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_batch public.material_processing_batches%rowtype; v_attempt uuid;
+  v_ambiguity_ceiling boolean:=false;
+begin
+  select * into v_batch from public.material_processing_batches where id=p_batch_id
+    and lease_token=p_lease_token for update;
+  if not found then raise exception 'operation_failure_conflict'; end if;
+  if p_failure_class='retryable_response' and v_batch.attempt_count>=v_batch.max_attempts then
+    p_failure_class:='non_retryable';
+  end if;
+  if p_failure_class='user_retry_required' and v_batch.attempt_count>=v_batch.max_attempts then
+    p_failure_class:='non_retryable';v_ambiguity_ceiling:=true;
+  end if;
+  if p_failure_class='non_retryable' and not v_ambiguity_ceiling
+    and v_batch.operation in ('page_text','page_visual','page_recovery') then
+    v_attempt:=v_batch.current_attempt_id;
+    update public.material_processing_attempts set status='failed',failure_code='validated_operation_failed',
+      budget_effect='retained',completed_at=now(),updated_at=now() where id=v_attempt;
+    update public.material_processing_batches set status='failed',failure_code='validated_operation_failed',
+      budget_state='consumed',completed_at=now(),lease_token=null,lease_expires_at=null,updated_at=now() where id=v_batch.id;
+    if v_batch.operation='page_recovery' then
+      update public.material_processing_pages set status='missing',active_batch_id=null,result_payload=null,
+        result_schema_version=null,validation_version='phase-c-validator-v2',
+        validation_hash=repeat('0',64),warning_payload=jsonb_build_array(jsonb_build_object(
+          'code','page_missing','detail','This page could not be analyzed.','source_pages',jsonb_build_array(page_number))),
+        terminal_at=now(),updated_at=now() where job_id=v_batch.job_id and page_number=any(v_batch.page_numbers)
+        and status='processing';
+    else
+      update public.material_processing_pages set status='pending',active_batch_id=null,route='visual',updated_at=now()
+        where job_id=v_batch.job_id and page_number=any(v_batch.page_numbers) and status='processing';
+    end if;
+    update public.material_processing_jobs set status='prepared',active_lease_token=null,active_lease_expires_at=null,
+      updated_at=now() where id=v_batch.job_id and active_lease_token=p_lease_token;
+  else
+    perform public.fail_material_processing_batch_internal(p_batch_id,p_lease_token,p_failure_class);
+    if p_failure_class in ('retryable_response','pre_dispatch_retryable') then
+      update public.material_processing_batches set retry_after=now()+make_interval(secs=>least(900,greatest(0,coalesce(p_retry_after_seconds,5))))
+        where id=p_batch_id;
+      if p_failure_class='retryable_response' then
+        update public.material_processing_pages set status='batched' where active_batch_id=p_batch_id and status='processing';
+      end if;
+      update public.material_processing_jobs set next_retry_at=now()+make_interval(secs=>least(900,greatest(0,coalesce(p_retry_after_seconds,5))))
+        where id=v_batch.job_id;
+    end if;
+  end if;
+  if p_temporary_file_id is not null then
+    update public.material_processing_batches set temporary_file_id=p_temporary_file_id,
+      cleanup_state=case when p_cleanup_complete then 'completed' else 'pending' end,
+      cleanup_retry_after=case when p_cleanup_complete then null else now()+interval '30 seconds' end where id=p_batch_id;
+    if p_failure_class<>'reconcile_only' then
+      update public.material_processing_artifacts set state='cleanup_pending',lease_token=null,
+        lease_expires_at=null,cleanup_retry_after=null,updated_at=now()
+      where batch_id=p_batch_id and provider_file_id=p_temporary_file_id and state='uploaded';
+    end if;
+  end if;
+end
+$$;
+
+create or replace function public.complete_material_analysis_cleanup_internal(
+  p_artifact_id uuid,p_lease_token uuid,p_temporary_file_id text,p_complete boolean
+) returns void language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_job uuid; v_attempts integer;
+begin
+  select cleanup_attempt_count into v_attempts from public.material_processing_artifacts
+    where id=p_artifact_id and lease_token=p_lease_token for update;
+  if not found then
+    if p_complete and exists(select 1 from public.material_processing_artifacts
+      where id=p_artifact_id and provider_file_id=p_temporary_file_id and state='cleaned') then
+      return;
+    end if;
+    raise exception 'cleanup_conflict';
+  end if;
+  update public.material_processing_artifacts set state=case
+      when p_complete then 'cleaned'
+      when v_attempts>=10 then 'manual_cleanup_required'
+      else 'cleanup_pending' end,
+    cleanup_retry_after=case when p_complete or v_attempts>=10 then null else now()+interval '60 seconds' end,
+    cleaned_at=case when p_complete then now() else null end,
+    lease_token=null,lease_expires_at=null,updated_at=now()
+  where id=p_artifact_id and lease_token=p_lease_token and provider_file_id=p_temporary_file_id
+  returning job_id into v_job;
+  if not found then raise exception 'cleanup_conflict'; end if;
+  update public.material_processing_jobs set active_lease_token=null,active_lease_expires_at=null,updated_at=now()
+  where id=v_job and active_lease_token=p_lease_token;
+end
 $$;
 
 do $$
 declare f regprocedure;
 begin
   foreach f in array array[
+    'public.create_material_processing_job_internal(uuid,text,boolean,integer,text,integer,jsonb,text)'::regprocedure,
     'public.create_material_processing_job_internal(uuid,text,boolean,integer,text)'::regprocedure,
     'public.create_material_processing_batch_internal(uuid,text,integer[],text)'::regprocedure,
     'public.claim_material_processing_batch_internal(uuid,text)'::regprocedure,
@@ -1063,7 +1703,20 @@ begin
     'public.fail_material_processing_batch_internal(uuid,uuid,text)'::regprocedure,
     'public.recover_expired_material_processing_batch_internal(uuid)'::regprocedure,
     'public.request_material_processing_retry_internal(uuid,uuid)'::regprocedure,
-    'public.finalize_material_processing_job_internal(uuid,uuid,jsonb,text,text,text)'::regprocedure
+    'public.finalize_material_processing_job_internal(uuid,uuid,jsonb,text,text,text)'::regprocedure,
+    'public.load_material_analysis_source_internal(uuid,uuid)'::regprocedure,
+    'public.prepare_material_analysis_internal(uuid,uuid,text,boolean,integer,text,jsonb,text,jsonb)'::regprocedure,
+    'public.prepare_material_analysis_internal(uuid,uuid,text,boolean,integer,text,jsonb)'::regprocedure,
+    'public.material_analysis_work_payload(uuid,uuid)'::regprocedure,
+    'public.claim_next_material_analysis_operation_internal(uuid,uuid)'::regprocedure,
+    'public.submit_material_analysis_operation_internal(uuid,uuid)'::regprocedure,
+    'public.create_material_analysis_file_intent_internal(uuid,uuid)'::regprocedure,
+    'public.record_material_analysis_file_uploaded_internal(uuid,uuid,text)'::regprocedure,
+    'public.record_material_analysis_file_recovery_internal(uuid,uuid,text,boolean)'::regprocedure,
+    'public.record_material_analysis_response_internal(uuid,uuid,text,text)'::regprocedure,
+    'public.complete_material_analysis_operation_internal(uuid,uuid,jsonb,text,text,text,boolean)'::regprocedure,
+    'public.fail_material_analysis_operation_internal(uuid,uuid,text,integer,text,boolean)'::regprocedure,
+    'public.complete_material_analysis_cleanup_internal(uuid,uuid,text,boolean)'::regprocedure
   ] loop
     execute format('alter function %s owner to material_analysis_executor',f);
     execute format('revoke all on function %s from public, anon, authenticated',f);
@@ -1087,11 +1740,13 @@ revoke all on function public.material_analysis_valid_page_payload(jsonb) from p
 revoke all on function public.material_analysis_valid_summary_payload(jsonb) from public,anon,authenticated,service_role;
 revoke all on function public.material_analysis_valid_batch_payload(jsonb,text) from public,anon,authenticated,service_role;
 revoke all on function public.material_analysis_valid_page_numbers(integer[]) from public,anon,authenticated,service_role;
+revoke all on function public.material_analysis_version_fingerprint(jsonb) from public,anon,authenticated,service_role;
 grant execute on function public.material_analysis_safe_warnings(jsonb) to material_analysis_executor;
 grant execute on function public.material_analysis_valid_page_payload(jsonb) to material_analysis_executor;
 grant execute on function public.material_analysis_valid_summary_payload(jsonb) to material_analysis_executor;
 grant execute on function public.material_analysis_valid_batch_payload(jsonb,text) to material_analysis_executor;
 grant execute on function public.material_analysis_valid_page_numbers(integer[]) to material_analysis_executor;
+grant execute on function public.material_analysis_version_fingerprint(jsonb) to material_analysis_executor;
 
 revoke all on function public.enforce_material_processing_job_row() from public,anon,authenticated,service_role;
 revoke all on function public.enforce_material_processing_page_row() from public,anon,authenticated,service_role;

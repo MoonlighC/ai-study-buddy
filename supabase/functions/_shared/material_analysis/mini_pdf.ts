@@ -8,6 +8,7 @@ export interface MiniPdfResult {
 }
 
 const fixedDate = new Date("2026-01-01T00:00:00.000Z");
+export const miniPdfVersion = "phase-c-mini-pdf-v1";
 
 export async function createMiniPdf(
   sourceBytes: Uint8Array,

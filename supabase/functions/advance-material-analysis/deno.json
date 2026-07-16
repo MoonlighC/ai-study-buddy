@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "pdf-lib": "npm:pdf-lib@1.17.1",
+    "remark-parse": "npm:remark-parse@11.0.0",
+    "serve": "https://deno.land/std@0.224.0/http/server.ts",
+    "supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4",
+    "unified": "npm:unified@11.0.5"
+  }
+}

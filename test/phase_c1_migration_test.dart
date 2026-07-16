@@ -82,7 +82,7 @@ void main() {
     expect(migration, contains('m.user_id=auth.uid()'));
   });
 
-  test('internal RPCs are service-only and do not accept user identity', () {
+  test('C1 and C2 internal RPCs are service-only', () {
     for (final function in [
       'create_material_processing_job_internal',
       'claim_material_processing_batch_internal',
@@ -94,10 +94,23 @@ void main() {
       'recover_expired_material_processing_batch_internal',
       'request_material_processing_retry_internal',
       'finalize_material_processing_job_internal',
+      'load_material_analysis_source_internal',
+      'prepare_material_analysis_internal',
+      'claim_next_material_analysis_operation_internal',
+      'submit_material_analysis_operation_internal',
+      'record_material_analysis_response_internal',
+      'complete_material_analysis_operation_internal',
+      'fail_material_analysis_operation_internal',
+      'complete_material_analysis_cleanup_internal',
     ]) {
       expect(migration, contains('function public.$function'));
     }
-    expect(migration, isNot(contains('p_user_id uuid')));
+    expect(
+      migration,
+      contains('p_material_id uuid,p_user_id uuid'),
+      reason:
+          'C2 receives only the server-derived verified principal internally',
+    );
     expect(
       migration,
       contains('revoke all on function %s from public, anon, authenticated'),

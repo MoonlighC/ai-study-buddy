@@ -39,6 +39,15 @@ export const pageAnalysisResultSchema = closed({
   trustworthy: { type: "boolean" },
 });
 
+export const pageBatchResultSchema = closed({
+  pages: {
+    type: "array",
+    minItems: 1,
+    maxItems: 10,
+    items: pageAnalysisResultSchema,
+  },
+});
+
 export const reductionResultSchema = closed({
   source_pages: pageArray,
   summary_markdown: { type: "string" },
@@ -312,6 +321,34 @@ export function validatePageResult(
     )
   ) {
     errors.push("equation_page_provenance");
+  }
+  return finish(errors);
+}
+
+export function validatePageBatchResult(
+  input: unknown,
+  expectedPages: number[],
+  pageCount = Math.max(...expectedPages),
+): ValidationResult {
+  const errors: string[] = [];
+  if (
+    !exactRecord(input, ["pages"], errors, "page_batch") ||
+    !boundedArray(input.pages, 1, 10)
+  ) return finish(errors);
+  const actualPages: number[] = [];
+  for (const item of input.pages) {
+    const pageNumber = isRecord(item) && Number.isInteger(item.page_number)
+      ? item.page_number as number
+      : -1;
+    actualPages.push(pageNumber);
+    const result = validatePageResult(item, pageNumber, pageCount);
+    errors.push(...result.errors.map((error) => `page_${pageNumber}:${error}`));
+  }
+  if (
+    !sameNumbers(actualPages, expectedPages) ||
+    new Set(actualPages).size !== actualPages.length
+  ) {
+    errors.push("page_batch_provenance");
   }
   return finish(errors);
 }

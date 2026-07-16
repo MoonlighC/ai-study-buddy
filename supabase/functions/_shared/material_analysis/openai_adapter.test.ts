@@ -1,0 +1,397 @@
+import {
+  parseRetryAfter,
+  ProviderBoundaryError,
+  ProviderRequest,
+  TrustedOpenAiAdapter,
+} from "./openai_adapter.ts";
+import { buildSyntheticPdf } from "./synthetic_pdf_fixtures.ts";
+
+Deno.test("C2 adapter keeps model detail schema and background server-only", async () => {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  const adapter = adapterWith((input, init) => {
+    calls.push({ url: String(input), init: init ?? {} });
+    return Promise.resolve(jsonResponse(completedResponse(pageBatch())));
+  });
+  const original = pngBytes();
+  await adapter.execute(imageRequest(original));
+  equal(calls.length, 1);
+  const body = JSON.parse(String(calls[0].init.body));
+  equal(body.model, "server-model");
+  equal(body.background, false);
+  equal(body.text.format.type, "json_schema");
+  equal(body.text.format.strict, true);
+  equal(body.input[0].content[1].detail, "high");
+  equal(
+    body.input[0].content[1].image_url,
+    `data:image/png;base64,${toBase64(original)}`,
+  );
+  equal("user_id" in body, false);
+  equal("routing" in body, false);
+});
+
+Deno.test("C2 adapter uploads named mini PDF then uses only persisted file ID", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  const adapter = adapterWith(async (input, init) => {
+    const url = String(input);
+    calls.push({ url, init: init ?? {} });
+    if (url.endsWith("/files") && init?.method === "POST") {
+      const form = init.body as FormData;
+      equal(form.get("purpose"), "user_data");
+      const file = form.get("file") as File;
+      equal(new Uint8Array(await file.arrayBuffer()), pdf);
+      return Promise.resolve(jsonResponse({ id: "file_12345678" }));
+    }
+    if (url.includes("/responses")) {
+      const body = JSON.parse(String(init?.body));
+      equal(body.input[0].content[1], {
+        type: "input_file",
+        file_id: "file_12345678",
+      });
+      return Promise.resolve(jsonResponse(completedResponse(pageBatch())));
+    }
+    return jsonResponse({ deleted: true });
+  });
+  const artifactId = "11111111-1111-4111-8111-111111111111";
+  const fileId = await adapter.uploadPdf(pdf, artifactId);
+  const result = await adapter.execute(
+    {
+      ...baseRequest(),
+      operation: "page_visual",
+      input: { kind: "pdf", bytes: pdf, pageNumbers: [1] },
+    },
+    undefined,
+    fileId,
+  );
+  equal(result.responseId, "resp_12345678");
+  equal(calls.filter((call) => call.url.includes("/responses")).length, 1);
+  equal(calls.filter((call) => call.init.method === "DELETE").length, 0);
+  const upload = calls.find((call) => call.url.endsWith("/files"));
+  const form = upload?.init.body as FormData;
+  equal((form.get("file") as File).name, `analysis-${artifactId}.pdf`);
+});
+
+Deno.test("C2 PDF execution refuses an unpersisted file identity before dispatch", async () => {
+  let calls = 0;
+  const adapter = adapterWith(() => {
+    calls++;
+    return Promise.resolve(jsonResponse(completedResponse(pageBatch())));
+  });
+  const error = await caught(() =>
+    adapter.execute({
+      ...baseRequest(),
+      operation: "page_visual",
+      input: { kind: "pdf", bytes: new Uint8Array([1]), pageNumbers: [1] },
+    })
+  );
+  equal(error.message, "persisted_pdf_file_id_required");
+  equal(calls, 0);
+});
+
+Deno.test("C2 file DELETE treats provider 404 as idempotent cleanup success", async () => {
+  let deletes = 0;
+  const adapter = adapterWith((_input, init) => {
+    equal(init?.method, "DELETE");
+    deletes++;
+    return Promise.resolve(jsonResponse({ error: "already gone" }, 404));
+  });
+  equal(await adapter.deleteFile("file_12345678"), true);
+  equal(await adapter.deleteFile("file_12345678"), true);
+  equal(deletes, 2);
+});
+
+Deno.test("C2 adapter classifies after-dispatch network ambiguity without response ID", async () => {
+  const adapter = adapterWith(() =>
+    Promise.reject(new TypeError("network details must stay private"))
+  );
+  const error = await caught(() => adapter.execute(imageRequest(pngBytes())));
+  equal(error instanceof ProviderBoundaryError, true);
+  equal((error as ProviderBoundaryError).dispatched, true);
+  equal((error as ProviderBoundaryError).responseId, undefined);
+  equal(error.message.includes("private"), false);
+});
+
+Deno.test("C2 adapter preserves explicit retryable HTTP status without raw body", async () => {
+  const adapter = adapterWith(() =>
+    Promise.resolve(
+      jsonResponse({ secret: "provider body" }, 429, { "retry-after": "17" }),
+    )
+  );
+  const error = await caught(() => adapter.execute(imageRequest(pngBytes())));
+  equal(error instanceof ProviderBoundaryError, true);
+  equal((error as ProviderBoundaryError).status, 429);
+  equal((error as ProviderBoundaryError).retryAfterSeconds, 17);
+  equal(error.message.includes("provider body"), false);
+});
+
+for (const status of [408, 429, 500]) {
+  Deno.test(`C2 HTTP ${status} never treats x-request-id as a response ID`, async () => {
+    const adapter = adapterWith(() =>
+      Promise.resolve(jsonResponse(
+        { error: { message: "private" } },
+        status,
+        { "x-request-id": "req_header_12345678" },
+      ))
+    );
+    const error = await caught(() => adapter.execute(imageRequest(pngBytes())));
+    equal((error as ProviderBoundaryError).responseId, undefined);
+  });
+}
+
+Deno.test("C2 HTTP error accepts only a documented response body ID", async () => {
+  const adapter = adapterWith(() =>
+    Promise.resolve(jsonResponse(
+      { object: "response", id: "resp_body_12345678", status: "failed" },
+      500,
+      { "x-request-id": "req_header_12345678" },
+    ))
+  );
+  const error = await caught(() => adapter.execute(imageRequest(pngBytes())));
+  equal((error as ProviderBoundaryError).responseId, "resp_body_12345678");
+});
+
+Deno.test("C2 invalid provider output with response ID becomes reconciliation evidence", async () => {
+  const adapter = adapterWith(() =>
+    Promise.resolve(jsonResponse(completedResponse({
+      pages: [{ ...pageBatch().pages[0], page_number: 2 }],
+    })))
+  );
+  const error = await caught(() => adapter.execute(imageRequest(pngBytes())));
+  equal(error instanceof ProviderBoundaryError, true);
+  equal((error as ProviderBoundaryError).responseId, "resp_12345678");
+});
+
+Deno.test("C2 retrieval validates reconciled output and never resubmits", async () => {
+  let requests = 0;
+  const adapter = adapterWith((input) => {
+    const url = String(input);
+    if (url.includes("/responses/")) {
+      requests++;
+      return Promise.resolve(jsonResponse(completedResponse(pageBatch())));
+    }
+    throw new Error("unexpected resubmission");
+  });
+  const result = await adapter.retrieve({
+    responseId: "resp_12345678",
+    request: imageRequest(pngBytes()),
+  });
+  equal(result.status, "completed");
+  equal(requests, 1);
+});
+
+for (const status of ["queued", "in_progress", "incomplete"]) {
+  Deno.test(`C2 response status ${status} is reconciliation evidence, never success`, async () => {
+    const adapter = adapterWith(() =>
+      Promise.resolve(jsonResponse({
+        ...completedResponse(pageBatch()),
+        status,
+        incomplete_details: status === "incomplete"
+          ? { reason: "max_output_tokens" }
+          : null,
+      }))
+    );
+    const error = await caught(() => adapter.execute(imageRequest(pngBytes())));
+    equal((error as ProviderBoundaryError).kind, "response_pending");
+    equal((error as ProviderBoundaryError).responseId, "resp_12345678");
+  });
+}
+
+for (const status of ["cancelled", "failed"]) {
+  Deno.test(`C2 terminal ${status} response is never persisted as success`, async () => {
+    const adapter = adapterWith(() =>
+      Promise.resolve(jsonResponse({
+        ...completedResponse(pageBatch()),
+        status,
+        error: status === "failed" ? { code: "provider_failed" } : null,
+      }))
+    );
+    const error = await caught(() => adapter.execute(imageRequest(pngBytes())));
+    equal((error as ProviderBoundaryError).kind, "response_failed");
+  });
+}
+
+Deno.test("C2 refusal is typed and never parsed as structured success", async () => {
+  const adapter = adapterWith(() =>
+    Promise.resolve(jsonResponse({
+      id: "resp_12345678",
+      object: "response",
+      status: "completed",
+      error: null,
+      incomplete_details: null,
+      output: [{
+        type: "message",
+        content: [{ type: "refusal", refusal: "No" }],
+      }],
+    }))
+  );
+  const error = await caught(() => adapter.execute(imageRequest(pngBytes())));
+  equal((error as ProviderBoundaryError).kind, "refusal");
+});
+
+for (
+  const [name, output] of [
+    ["empty", []],
+    ["duplicate", [outputText(pageBatch()), outputText(pageBatch())]],
+    ["truncated", [outputText('{"pages":')]],
+  ] as const
+) {
+  Deno.test(`C2 ${name} structured output is invalid`, async () => {
+    const adapter = adapterWith(() =>
+      Promise.resolve(jsonResponse({
+        ...completedResponse(pageBatch()),
+        output: [{ type: "message", content: output }],
+      }))
+    );
+    const error = await caught(() => adapter.execute(imageRequest(pngBytes())));
+    equal((error as ProviderBoundaryError).kind, "invalid_response");
+  });
+}
+
+Deno.test("C2 reconciliation may observe incomplete before completed without POST", async () => {
+  let reads = 0;
+  const adapter = adapterWith(() => {
+    reads++;
+    return Promise.resolve(
+      jsonResponse(
+        reads === 1
+          ? {
+            id: "resp_12345678",
+            object: "response",
+            status: "incomplete",
+            incomplete_details: { reason: "max_output_tokens" },
+          }
+          : completedResponse(pageBatch()),
+      ),
+    );
+  });
+  const first = await adapter.retrieve({
+    responseId: "resp_12345678",
+    request: imageRequest(pngBytes()),
+  });
+  const second = await adapter.retrieve({
+    responseId: "resp_12345678",
+    request: imageRequest(pngBytes()),
+  });
+  equal(first.status, "pending");
+  equal(second.status, "completed");
+  equal(reads, 2);
+});
+
+Deno.test("C2 Retry-After supports seconds and HTTP dates with clamping", () => {
+  const now = Date.UTC(2026, 0, 1, 0, 0, 0);
+  equal(parseRetryAfter("17", now), 17);
+  equal(parseRetryAfter("99999", now), 900);
+  equal(parseRetryAfter(new Date(now + 42_000).toUTCString(), now), 42);
+  equal(parseRetryAfter(new Date(now - 1_000).toUTCString(), now), 0);
+  equal(parseRetryAfter("not-a-date", now), undefined);
+});
+
+function adapterWith(fetcher: typeof fetch) {
+  return new TrustedOpenAiAdapter({
+    apiKey: "test-key-not-real",
+    model: "server-model",
+    fetcher,
+    timeoutMs: 1000,
+  });
+}
+
+function baseRequest(): ProviderRequest {
+  return {
+    operation: "page_text",
+    input: {
+      kind: "text",
+      text: '<original_page number="1">Safe text.</original_page>',
+    },
+    expectedPages: [1],
+    pageCount: 1,
+    idempotencyKey: "a".repeat(64),
+  };
+}
+
+function imageRequest(bytes: Uint8Array): ProviderRequest {
+  return {
+    ...baseRequest(),
+    operation: "page_visual",
+    input: { kind: "image", bytes, mimeType: "image/png" },
+  };
+}
+
+function pageBatch() {
+  return {
+    pages: [{
+      page_number: 1,
+      summary_markdown: "Safe summary.",
+      key_concepts: ["Concept"],
+      equations: [],
+      confidence: 0.9,
+      warnings: [],
+      trustworthy: true,
+    }],
+  };
+}
+
+function outputText(value: unknown) {
+  return {
+    type: "output_text",
+    text: typeof value === "string" ? value : JSON.stringify(value),
+  };
+}
+
+function completedResponse(value: unknown) {
+  return {
+    id: "resp_12345678",
+    object: "response",
+    status: "completed",
+    error: null,
+    incomplete_details: null,
+    output: [{ type: "message", content: [outputText(value)] }],
+  };
+}
+
+function pngBytes() {
+  return Uint8Array.from([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    1,
+    2,
+    3,
+  ]);
+}
+
+function jsonResponse(body: unknown, status = 200, headers?: HeadersInit) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...headers },
+  });
+}
+
+function toBase64(bytes: Uint8Array) {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+async function caught(action: () => Promise<unknown>): Promise<Error> {
+  try {
+    await action();
+  } catch (error) {
+    if (error instanceof Error) return error;
+  }
+  throw new Error("Expected error");
+}
+
+function equal(actual: unknown, expected: unknown) {
+  if (actual instanceof Uint8Array && expected instanceof Uint8Array) {
+    if (
+      actual.length === expected.length &&
+      actual.every((value, index) => value === expected[index])
+    ) return;
+  } else if (JSON.stringify(actual) === JSON.stringify(expected)) return;
+  throw new Error(
+    `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+  );
+}

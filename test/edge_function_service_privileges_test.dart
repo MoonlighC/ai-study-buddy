@@ -93,7 +93,7 @@ void main() {
       'supabase/functions/generate-quiz/index.ts',
     ).readAsString();
 
-    expect(summary, contains('.update({ summary })'));
+    expect(summary, contains('.update({ summary: input.summary })'));
     expect(flashcards, contains('.from("flashcards")'));
     expect(flashcards, contains('.insert(rows)'));
     expect(quiz, contains('.from("quizzes")'));

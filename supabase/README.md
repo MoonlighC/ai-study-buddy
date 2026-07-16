@@ -14,7 +14,7 @@ Future Edge Functions will be the only place that can call OpenAI. Flutter shoul
 
 ## Phase 8A: Generate Summary Edge Function
 
-The `generate-summary` Edge Function summarizes eligible synced materials. Manual pasted text keeps a concise summary; ready uploaded PDFs receive a longer structured study summary. The function currently summarizes at most the first 12,000 stored characters, so PDF summaries cover only that capped input. It requires an authenticated Supabase user and reads `OPENAI_API_KEY` only from Supabase function secrets.
+The `generate-summary` Edge Function summarizes eligible manual pasted text and keeps its concise legacy behavior. Uploaded PDFs and images are rejected there and must use the Phase C material-analysis path, preventing a second paid summary route. The legacy function summarizes at most the first 12,000 stored characters, requires an authenticated Supabase user, and reads `OPENAI_API_KEY` only from Supabase function secrets.
 
 Set the function secret with a placeholder value replaced locally:
 
@@ -321,3 +321,20 @@ an isolated staging user. The migration does not expose anon access, generated
 data writes, lifecycle fields, deletion operation tables, or service-only
 helpers. Existing generic Flutter synchronization errors remain appropriate;
 raw PostgREST privilege errors must not be displayed.
+
+## Phase C2 persistent analysis (not deployed)
+
+Phase C2 adds three deployable Edge Function directories:
+
+1. `prepare-material-analysis`
+2. `advance-material-analysis`
+3. `retry-material-analysis`
+
+They require the reviewed migration `010_material_analysis_processing.sql`,
+`OPENAI_API_KEY`, and optionally the server-only `MATERIAL_ANALYSIS_MODEL`.
+Do not deploy the functions or apply migration 010 until the separate rollout
+checkpoint is approved. The functions must be deployed only after migration
+010, and the model secret/configuration must never be exposed to Flutter.
+
+See `docs/phase-c2-persistent-server-processing.md` for the trust boundary,
+bounded operation design, retry semantics, and disposable verification command.
