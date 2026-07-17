@@ -602,7 +602,7 @@ function publicErrorCode(error: SafeAnalysisError) {
   if (error.code === "page_limit_exceeded") return "document_too_large";
   if (error.code === "invalid_source") return "corrupt_document";
   if (error.code === "invalid_request") return "invalid_request";
-  if (error.code === "material_unavailable") return "unsupported_source";
+  if (error.code === "material_unavailable") return "material_unavailable";
   return error.status === 422 ? "invalid_document" : "request_failed";
 }
 

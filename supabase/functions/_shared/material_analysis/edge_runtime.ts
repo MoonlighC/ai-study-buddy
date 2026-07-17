@@ -1,6 +1,6 @@
 import { createClient } from "supabase-js";
 import { resolveProjectKeys } from "../generation_runtime.ts";
-import { SourceMaterial } from "./engine.ts";
+import { SafeAnalysisError, SourceMaterial } from "./engine.ts";
 import { AnalysisDependencies, InternalWorkUnit } from "./handlers.ts";
 import { TrustedOpenAiAdapter } from "./openai_adapter.ts";
 
@@ -39,7 +39,7 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
         .eq("source_kind", "upload")
         .in("kind", ["pdf", "image"])
         .maybeSingle();
-      if (error || !data) throw new Error("trusted_rpc_failed");
+      requireOwnedMaterial(data, error);
       return await rpcOne(trusted, "load_material_analysis_source_internal", {
         p_material_id: materialId,
       });
@@ -202,6 +202,14 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
     provider: new TrustedOpenAiAdapter({ apiKey: openAiKey, model }),
     jitter: Math.random,
   };
+}
+
+export function requireOwnedMaterial(data: unknown, error: unknown): unknown {
+  if (error) throw new Error("owned_material_lookup_failed");
+  if (data === null || data === undefined) {
+    throw new SafeAnalysisError("material_unavailable", 404);
+  }
+  return data;
 }
 
 async function rpcOne(

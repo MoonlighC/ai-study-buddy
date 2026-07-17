@@ -5,6 +5,7 @@ import {
   createRetryMaterialAnalysisHandler,
   InternalWorkUnit,
 } from "./handlers.ts";
+import { SafeAnalysisError } from "./engine.ts";
 import { TrustedOpenAiAdapter } from "./openai_adapter.ts";
 import { buildSyntheticPdf } from "./synthetic_pdf_fixtures.ts";
 
@@ -51,7 +52,7 @@ Deno.test("C2 prepare denies cross-user and malformed requests", async () => {
     confirm_large_document: false,
   }));
   equal(denied.status, 404);
-  equal((await denied.json()).code, "unsupported_source");
+  equal((await denied.json()).code, "material_unavailable");
   const malformed = await createPrepareMaterialAnalysisHandler(fake.deps)(
     request({
       material_id: materialId,
@@ -274,6 +275,119 @@ Deno.test("C2 explicit retry authorizes then consumes without accepting attempt 
   equal(rejected.status, 400);
 });
 
+Deno.test("ownership misses are identical and safe for all public handlers", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  for (const scenario of publicHandlerScenarios()) {
+    const crossUser = fakeDependencies(pdf);
+    crossUser.deps.loadSource = () =>
+      Promise.reject(new SafeAnalysisError("material_unavailable", 404));
+    const crossResponse = await scenario.handler(crossUser.deps)(
+      request(scenario.body),
+    );
+    const crossBody = await crossResponse.text();
+
+    const nonexistent = fakeDependencies(pdf);
+    nonexistent.deps.loadSource = () =>
+      Promise.reject(new SafeAnalysisError("material_unavailable", 404));
+    const nonexistentResponse = await scenario.handler(nonexistent.deps)(
+      request(scenario.body),
+    );
+    const nonexistentBody = await nonexistentResponse.text();
+
+    equal(crossResponse.status, 404);
+    equal(nonexistentResponse.status, 404);
+    equal(crossBody, nonexistentBody);
+    equal(
+      crossBody,
+      JSON.stringify({
+        error: "Material unavailable.",
+        code: "material_unavailable",
+      }),
+    );
+  }
+});
+
+Deno.test("authentication and strict requests remain closed for all public handlers", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  for (const scenario of publicHandlerScenarios()) {
+    const fake = fakeDependencies(pdf);
+    const missingJwt = await scenario.handler(fake.deps)(
+      request(scenario.body, false),
+    );
+    equal(missingJwt.status, 401);
+    equal(
+      await missingJwt.text(),
+      JSON.stringify({
+        error: "Authentication required.",
+      }),
+    );
+
+    const malformed = await scenario.handler(fake.deps)(request({
+      ...scenario.body,
+      unexpected: "private",
+    }));
+    equal(malformed.status, 400);
+    equal((await malformed.json()).code, "invalid_request");
+  }
+});
+
+Deno.test("internal and network failures remain safe 500 responses", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  for (const scenario of publicHandlerScenarios()) {
+    for (
+      const rawDetail of [
+        "relation public.materials denied for user secret-user-id",
+        "network request exposed private.internal.example",
+      ]
+    ) {
+      const fake = fakeDependencies(pdf);
+      fake.deps.loadSource = () => Promise.reject(new Error(rawDetail));
+      const lines: string[] = [];
+      const original = console.log;
+      console.log = (line: unknown) => lines.push(String(line));
+      try {
+        const response = await scenario.handler(fake.deps)(
+          request(scenario.body),
+        );
+        const body = await response.text();
+        equal(response.status, 500);
+        equal(
+          body,
+          JSON.stringify({
+            error: "Material analysis is temporarily unavailable.",
+            code: "request_failed",
+          }),
+        );
+        equal(body.includes(rawDetail), false);
+      } finally {
+        console.log = original;
+      }
+      equal(lines.some((line) => line.includes(rawDetail)), false);
+    }
+  }
+});
+
+function publicHandlerScenarios() {
+  return [
+    {
+      handler: createPrepareMaterialAnalysisHandler,
+      body: {
+        material_id: materialId,
+        processing_mode: "recommended",
+        confirm_large_document: false,
+      },
+    },
+    {
+      handler: createAdvanceMaterialAnalysisHandler,
+      body: { material_id: materialId },
+    },
+    {
+      handler: createRetryMaterialAnalysisHandler,
+      body: { material_id: materialId },
+    },
+  ] as const;
+}
+
 function fakeDependencies(
   bytes: Uint8Array,
   kind: "pdf" | "image" = "pdf",
@@ -492,13 +606,15 @@ function publicStatus() {
   };
 }
 
-function request(body: Record<string, unknown>) {
+function request(body: Record<string, unknown>, authenticated = true) {
   return new Request("https://example.test", {
     method: "POST",
-    headers: {
-      Authorization: ["Bearer", runtimeAuthFixture].join(" "),
-      "Content-Type": "application/json",
-    },
+    headers: authenticated
+      ? {
+        Authorization: ["Bearer", runtimeAuthFixture].join(" "),
+        "Content-Type": "application/json",
+      }
+      : { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
