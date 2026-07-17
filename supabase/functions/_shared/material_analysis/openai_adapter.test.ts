@@ -4,6 +4,11 @@ import {
   ProviderRequest,
   TrustedOpenAiAdapter,
 } from "./openai_adapter.ts";
+import {
+  createReductionGroups,
+  projectSummaryToSafeMarkdown,
+} from "./engine.ts";
+import { StructuredSummary } from "./contracts.ts";
 import { buildSyntheticPdf } from "./synthetic_pdf_fixtures.ts";
 
 Deno.test("C2 adapter keeps model detail schema and background server-only", async () => {
@@ -86,6 +91,69 @@ Deno.test("C2 PDF execution refuses an unpersisted file identity before dispatch
   );
   equal(error.message, "persisted_pdf_file_id_required");
   equal(calls, 0);
+});
+
+Deno.test("final summary accepts bounded 20 21 22 and 100 page hierarchies", async () => {
+  for (const pageCount of [20, 21, 22, 100]) {
+    const pages = Array.from({ length: pageCount }, (_, index) => index + 1);
+    const hierarchy = reductionHierarchy(pages);
+    equal(
+      hierarchy.every((level) =>
+        level.every((inputCount) => inputCount >= 1 && inputCount <= 10)
+      ),
+      true,
+    );
+    equal(hierarchy[0].length, Math.ceil(pageCount / 10));
+    equal(hierarchy.at(-1)?.length, 1);
+    if (pageCount === 21) equal(hierarchy.map((level) => level.length), [3, 1]);
+
+    const summary = summaryForPages(pages);
+    const projection = projectSummaryToSafeMarkdown(summary);
+    equal(
+      new TextEncoder().encode(JSON.stringify(summary)).length < 1024 * 1024,
+      true,
+    );
+    equal(projection.length <= 100000, true);
+
+    let calls = 0;
+    const adapter = adapterWith((_input, init) => {
+      calls++;
+      const body = JSON.parse(String(init?.body));
+      equal(body.text.format.name, "phase_c_final_summary_v1");
+      return Promise.resolve(jsonResponse(completedResponse(summary)));
+    });
+    const result = await adapter.execute(finalSummaryRequest(pages));
+    equal(result.result, summary);
+    equal(calls, 1);
+  }
+});
+
+Deno.test("final summary rejects malformed manifests before dispatch", async () => {
+  const pages = Array.from({ length: 21 }, (_, index) => index + 1);
+  for (
+    const mutate of [
+      (payload: Record<string, any>) => payload.manifest.pop(),
+      (payload: Record<string, any>) =>
+        payload.manifest.push(payload.manifest[0]),
+      (payload: Record<string, any>) => payload.manifest[20].page_number = 22,
+      (payload: Record<string, any>) => payload.unexpected = true,
+    ]
+  ) {
+    let calls = 0;
+    const adapter = adapterWith(() => {
+      calls++;
+      return Promise.resolve(
+        jsonResponse(completedResponse(summaryForPages(pages))),
+      );
+    });
+    const request = finalSummaryRequest(pages);
+    const payload = JSON.parse(request.input.text);
+    mutate(payload);
+    request.input.text = JSON.stringify(payload);
+    const error = await caught(() => adapter.execute(request));
+    equal(error.message, "invalid_final_summary_request");
+    equal(calls, 0);
+  }
 });
 
 Deno.test("C2 file DELETE treats provider 404 as idempotent cleanup success", async () => {
@@ -313,6 +381,74 @@ function imageRequest(bytes: Uint8Array): ProviderRequest {
     ...baseRequest(),
     operation: "page_visual",
     input: { kind: "image", bytes, mimeType: "image/png" },
+  };
+}
+
+function finalSummaryRequest(
+  pages: number[],
+): ProviderRequest & { input: { kind: "text"; text: string } } {
+  const payload = {
+    operation: "final_summary",
+    validated_reduction: {
+      source_pages: pages,
+      summary_markdown: "Validated reduction.",
+      key_concepts: ["Concept"],
+      equation_ids: [],
+      warnings: [],
+      confidence: 0.9,
+    },
+    manifest: pages.map((page) => ({
+      page_number: page,
+      status: "completed",
+      route: "text",
+      warnings: [],
+    })),
+  };
+  return {
+    operation: "final_summary",
+    input: { kind: "text", text: JSON.stringify(payload) },
+    expectedPages: pages,
+    allowedEquationIds: [],
+    pageCount: pages.length,
+    idempotencyKey: "b".repeat(64),
+  };
+}
+
+function reductionHierarchy(pages: number[]): number[][] {
+  const levels: number[][] = [];
+  let current: unknown[] = pages;
+  while (current.length > 1) {
+    const groups = createReductionGroups(current);
+    levels.push(groups.map((group) => group.length));
+    current = groups.map((_, index) => index);
+  }
+  return levels;
+}
+
+function summaryForPages(pages: number[]): StructuredSummary {
+  return {
+    language: "en",
+    sections: [{
+      id: "section_1",
+      title: "Summary",
+      blocks: [{
+        kind: "prose",
+        markdown: "Safe structured summary.",
+        display: "block",
+      }],
+      source_pages: pages,
+      confidence: 0.9,
+    }],
+    key_concepts: [],
+    equations: [],
+    warnings: [],
+    partial_extraction: {
+      is_partial: false,
+      analyzed_pages: pages,
+      partial_pages: [],
+      missing_pages: [],
+      page_modes: pages.map((page) => ({ page, mode: "text" })),
+    },
   };
 }
 

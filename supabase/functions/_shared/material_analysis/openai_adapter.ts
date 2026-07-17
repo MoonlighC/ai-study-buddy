@@ -316,11 +316,21 @@ export function validateProviderOutput(
 }
 
 function validateProviderRequest(request: ProviderRequest) {
+  const maximumExpectedPages = request.operation === "final_summary" ? 100 : 10;
   if (
     !/^[0-9a-f]{64}$/.test(request.idempotencyKey) ||
-    request.expectedPages.length < 1 || request.expectedPages.length > 10 ||
+    request.expectedPages.length < 1 ||
+    request.expectedPages.length > maximumExpectedPages ||
+    new Set(request.expectedPages).size !== request.expectedPages.length ||
+    request.expectedPages.some((page, index) =>
+      !Number.isInteger(page) || page < 1 || page > request.pageCount ||
+      (index > 0 && page <= request.expectedPages[index - 1])
+    ) ||
     request.pageCount < 1 || request.pageCount > 100
   ) throw new Error("invalid_provider_request");
+  if (request.operation === "final_summary") {
+    validateFinalSummaryRequest(request);
+  }
   const schema = schemaFor(request.operation);
   if (!validateStructuredOutputSubset(schema).valid) {
     throw new Error("unsupported_provider_schema");
@@ -334,6 +344,46 @@ function validateProviderRequest(request: ProviderRequest) {
   }
   if (request.input.kind === "image" && request.expectedPages.join() !== "1") {
     throw new Error("invalid_image_mapping");
+  }
+}
+
+function validateFinalSummaryRequest(request: ProviderRequest) {
+  if (
+    request.input.kind !== "text" ||
+    request.expectedPages.length !== request.pageCount ||
+    request.expectedPages.some((page, index) => page !== index + 1) ||
+    new TextEncoder().encode(request.input.text).length > 1024 * 1024
+  ) throw new Error("invalid_final_summary_request");
+  let payload: unknown;
+  try {
+    payload = JSON.parse(request.input.text);
+  } catch {
+    throw new Error("invalid_final_summary_request");
+  }
+  if (
+    !isRecord(payload) ||
+    Object.keys(payload).sort().join() !==
+      "manifest,operation,validated_reduction" ||
+    payload.operation !== "final_summary" ||
+    !validateReductionResult(
+      payload.validated_reduction,
+      request.expectedPages,
+      request.allowedEquationIds ?? [],
+    ).valid ||
+    !Array.isArray(payload.manifest) ||
+    payload.manifest.length !== request.pageCount
+  ) throw new Error("invalid_final_summary_request");
+  for (let index = 0; index < payload.manifest.length; index++) {
+    const page = payload.manifest[index];
+    if (
+      !isRecord(page) ||
+      Object.keys(page).sort().join() !==
+        "page_number,route,status,warnings" ||
+      page.page_number !== index + 1 ||
+      !["completed", "partial", "missing"].includes(String(page.status)) ||
+      !["text", "visual"].includes(String(page.route)) ||
+      !Array.isArray(page.warnings)
+    ) throw new Error("invalid_final_summary_request");
   }
 }
 
