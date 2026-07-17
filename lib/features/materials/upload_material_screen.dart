@@ -11,6 +11,7 @@ import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../auth/auth_controller.dart';
 import 'material_upload.dart';
 import 'material_upload_queue.dart';
+import 'material_analysis_repository.dart';
 
 class UploadMaterialArgs {
   const UploadMaterialArgs({required this.subject, required this.kind});
@@ -32,6 +33,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   MaterialFilePickerBatch? _selection;
   String? _pickerError;
   bool _picking = false;
+  AnalysisProcessingMode _analysisMode = AnalysisProcessingMode.recommended;
 
   bool get isPdf => widget.args.kind == MaterialKind.pdf;
 
@@ -129,6 +131,43 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     ),
                   ],
                 ],
+                if (items.isEmpty) ...[
+                  const SizedBox(height: 8),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.auto_awesome_outlined),
+                    title: Text(l10n.analysisRecommended),
+                    subtitle: Text(l10n.analysisRecommendedDescription),
+                  ),
+                  ExpansionTile(
+                    key: const ValueKey('analysis-advanced-settings'),
+                    tilePadding: EdgeInsets.zero,
+                    title: Text(l10n.analysisAdvancedSettings),
+                    children: [
+                      RadioGroup<AnalysisProcessingMode>(
+                        groupValue: _analysisMode,
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _analysisMode = value);
+                          }
+                        },
+                        child: Column(
+                          children: [
+                            RadioListTile<AnalysisProcessingMode>(
+                              value: AnalysisProcessingMode.recommended,
+                              title: Text(l10n.analysisRecommended),
+                            ),
+                            RadioListTile<AnalysisProcessingMode>(
+                              value: AnalysisProcessingMode.economy,
+                              title: Text(l10n.analysisEconomy),
+                              subtitle: Text(l10n.analysisEconomyWarning),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 if (_pickerError != null) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -195,6 +234,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
       subjectId: widget.args.subject.id,
       kind: widget.args.kind,
       batch: selection,
+      analysisMode: _analysisMode,
     );
     if (!added) return;
     setState(() => _selection = null);

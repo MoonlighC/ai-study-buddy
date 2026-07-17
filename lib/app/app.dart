@@ -14,6 +14,7 @@ import '../features/favorites/favorite_repository.dart';
 import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
+import '../features/materials/material_analysis_repository.dart';
 import '../features/materials/material_file_picker.dart';
 import '../features/materials/material_upload_repository.dart';
 import '../features/materials/pdf_text_extraction_repository.dart';
@@ -34,6 +35,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.subjectDeletionRepository,
     this.accountDeletionRepository,
     this.materialRepository,
+    this.materialAnalysisRepository,
     this.materialUploadRepository,
     this.pdfTextExtractionRepository,
     this.imageTextExtractionRepository,
@@ -58,6 +60,7 @@ class StudyBuddyApp extends StatefulWidget {
   final SubjectDeletionRepository? subjectDeletionRepository;
   final AccountDeletionRepository? accountDeletionRepository;
   final MaterialRepository? materialRepository;
+  final MaterialAnalysisRepository? materialAnalysisRepository;
   final MaterialUploadRepository? materialUploadRepository;
   final PdfTextExtractionRepository? pdfTextExtractionRepository;
   final ImageTextExtractionRepository? imageTextExtractionRepository;
@@ -77,13 +80,15 @@ class StudyBuddyApp extends StatefulWidget {
   State<StudyBuddyApp> createState() => _StudyBuddyAppState();
 }
 
-class _StudyBuddyAppState extends State<StudyBuddyApp> {
+class _StudyBuddyAppState extends State<StudyBuddyApp>
+    with WidgetsBindingObserver {
   late final AppConfig config = widget.config ?? AppConfig.fromValues();
   late final AppState state = AppState(
     config: config,
     subjectRepository: widget.subjectRepository,
     subjectDeletionRepository: widget.subjectDeletionRepository,
     materialRepository: widget.materialRepository,
+    materialAnalysisRepository: widget.materialAnalysisRepository,
     materialUploadRepository: widget.materialUploadRepository,
     pdfTextExtractionRepository: widget.pdfTextExtractionRepository,
     imageTextExtractionRepository: widget.imageTextExtractionRepository,
@@ -108,14 +113,23 @@ class _StudyBuddyAppState extends State<StudyBuddyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     state.loadPreferences().ignore();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     authController.dispose();
-    state.materialUploadQueue.dispose();
+    state.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    state.setAnalysisLifecycleForegrounded(
+      lifecycle == AppLifecycleState.resumed,
+    );
   }
 
   @override

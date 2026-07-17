@@ -103,7 +103,10 @@ void main() {
 
       expect(generated, isTrue);
       expect(summaryRepository.generatedMaterialIds, ['material-1']);
-      expect(state.materialById('material-1')?.summary, 'Valid guarded summary.');
+      expect(
+        state.materialById('material-1')?.summary,
+        'Valid guarded summary.',
+      );
     });
 
     test('unauthenticated supabase summary generation fails safely', () async {
@@ -155,6 +158,35 @@ void main() {
         state.summaryGenerationErrorMessage,
         'Could not generate summary. Try again.',
       );
+    });
+
+    test('supabase uploaded material never calls legacy summary', () async {
+      final repository = _FakeSummaryRepository();
+      final state = AppState(
+        config: _supabaseConfig(),
+        materialRepository: _FakeMaterialRepository(
+          loadedMaterials: const [
+            StudyMaterial(
+              id: 'uploaded-material',
+              subjectId: 'subject-1',
+              title: 'Uploaded.pdf',
+              kind: MaterialKind.pdf,
+              content: _validMaterialContent,
+              createdLabel: 'Synced',
+              sourceKind: MaterialSourceKind.upload,
+              processingStatus: MaterialProcessingStatus.ready,
+            ),
+          ],
+        ),
+        summaryRepository: repository,
+      );
+      await state.loadMaterialsFor(user);
+
+      expect(
+        await state.generateSummaryFor(user, 'uploaded-material'),
+        isFalse,
+      );
+      expect(repository.generatedMaterialIds, isEmpty);
     });
   });
 }

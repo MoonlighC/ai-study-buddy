@@ -51,6 +51,7 @@ Deno.test("C2 prepare denies cross-user and malformed requests", async () => {
     confirm_large_document: false,
   }));
   equal(denied.status, 404);
+  equal((await denied.json()).code, "unsupported_source");
   const malformed = await createPrepareMaterialAnalysisHandler(fake.deps)(
     request({
       material_id: materialId,
@@ -60,6 +61,7 @@ Deno.test("C2 prepare denies cross-user and malformed requests", async () => {
     }),
   );
   equal(malformed.status, 400);
+  equal((await malformed.json()).code, "invalid_request");
   equal(fake.preparations.length, 0);
 });
 
@@ -92,6 +94,7 @@ Deno.test("C2 page 101 rejects before job budget upload or OpenAI", async () => 
     }),
   );
   equal(response.status, 422);
+  equal((await response.json()).code, "document_too_large");
   equal(fake.preparations.length, 0);
   equal(fake.providerRequests, 0);
 });
@@ -107,6 +110,7 @@ Deno.test("C2 image above 8 MiB rejects before budget upload or response", async
     }),
   );
   equal(response.status, 422);
+  equal((await response.json()).code, "corrupt_document");
   equal(fake.preparations.length, 0);
   equal(fake.fileIntents, 0);
   equal(fake.uploadRequests, 0);

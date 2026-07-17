@@ -3843,6 +3843,222 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You can select a maximum of 20 files.'**
   String get materialMaximumFilesError;
+
+  /// No description provided for @analysisRecommended.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended'**
+  String get analysisRecommended;
+
+  /// No description provided for @analysisRecommendedDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Best for formulas, diagrams, tables, and layout.'**
+  String get analysisRecommendedDescription;
+
+  /// No description provided for @analysisEconomy.
+  ///
+  /// In en, this message translates to:
+  /// **'Economy'**
+  String get analysisEconomy;
+
+  /// No description provided for @analysisAdvancedSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced settings'**
+  String get analysisAdvancedSettings;
+
+  /// No description provided for @analysisEconomyWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Formulas, diagrams, tables, and layout may be less accurate.'**
+  String get analysisEconomyWarning;
+
+  /// No description provided for @analysisSourcePageNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Source page {page}'**
+  String analysisSourcePageNumber(Object page);
+
+  /// No description provided for @analysisRetryAvailableIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry available in {seconds} seconds'**
+  String analysisRetryAvailableIn(Object seconds);
+
+  /// No description provided for @analysisPreparingDocument.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing document'**
+  String get analysisPreparingDocument;
+
+  /// No description provided for @analysisPageProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyzing pages {completed} of {pageCount}'**
+  String analysisPageProgress(Object completed, Object pageCount);
+
+  /// No description provided for @analysisRecognizingFormulas.
+  ///
+  /// In en, this message translates to:
+  /// **'Recognizing formulas and diagrams'**
+  String get analysisRecognizingFormulas;
+
+  /// No description provided for @analysisCreatingSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating summary'**
+  String get analysisCreatingSummary;
+
+  /// No description provided for @analysisConfirmLargeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm large document'**
+  String get analysisConfirmLargeTitle;
+
+  /// No description provided for @analysisConfirmLargeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue analysis'**
+  String get analysisConfirmLargeAction;
+
+  /// No description provided for @analysisLargeDocumentExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'This document is large. Analysis may take longer. Every page will be processed, formulas and diagrams may use visual analysis, and processing can resume when you reopen the app.'**
+  String get analysisLargeDocumentExplanation;
+
+  /// No description provided for @analysisDocumentTooLargeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Document is too large'**
+  String get analysisDocumentTooLargeTitle;
+
+  /// No description provided for @analysisDocumentTooLargeMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents over 100 pages cannot be analyzed.'**
+  String get analysisDocumentTooLargeMessage;
+
+  /// No description provided for @analysisResumeProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing can resume when you reopen the app.'**
+  String get analysisResumeProcessing;
+
+  /// No description provided for @analysisRetryProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry processing'**
+  String get analysisRetryProcessing;
+
+  /// No description provided for @analysisRetryAvailableLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry available later'**
+  String get analysisRetryAvailableLater;
+
+  /// No description provided for @analysisCompletedWithWarnings.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed with warnings'**
+  String get analysisCompletedWithWarnings;
+
+  /// No description provided for @analysisPartialPages.
+  ///
+  /// In en, this message translates to:
+  /// **'Partial pages'**
+  String get analysisPartialPages;
+
+  /// No description provided for @analysisMissingPages.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing pages'**
+  String get analysisMissingPages;
+
+  /// No description provided for @analysisVerifyFormulas.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify formulas'**
+  String get analysisVerifyFormulas;
+
+  /// No description provided for @analysisUncertainFormula.
+  ///
+  /// In en, this message translates to:
+  /// **'Uncertain formula'**
+  String get analysisUncertainFormula;
+
+  /// No description provided for @analysisSourcePage.
+  ///
+  /// In en, this message translates to:
+  /// **'Source page'**
+  String get analysisSourcePage;
+
+  /// No description provided for @analysisViewOriginalPage.
+  ///
+  /// In en, this message translates to:
+  /// **'View original page'**
+  String get analysisViewOriginalPage;
+
+  /// No description provided for @analysisCopyFormula.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy formula'**
+  String get analysisCopyFormula;
+
+  /// No description provided for @analysisMalformedFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'The structured summary could not be displayed. Showing the available summary instead.'**
+  String get analysisMalformedFallback;
+
+  /// No description provided for @analysisEquationSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Equation: {description}. Source page {page}.'**
+  String analysisEquationSemantics(String description, int page);
+
+  /// No description provided for @analysisFormulaCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Formula copied'**
+  String get analysisFormulaCopied;
+
+  /// No description provided for @analysisFormulaCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Formula could not be copied'**
+  String get analysisFormulaCopyFailed;
+
+  /// No description provided for @analysisWarningSourcePage.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning source page {page}'**
+  String analysisWarningSourcePage(int page);
+
+  /// No description provided for @analysisInvalidDocumentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Document could not be analyzed'**
+  String get analysisInvalidDocumentTitle;
+
+  /// No description provided for @analysisInvalidDocumentMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The document is invalid, damaged, or unsupported.'**
+  String get analysisInvalidDocumentMessage;
+
+  /// No description provided for @analysisTemporaryFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Document analysis is temporarily unavailable. Try again later.'**
+  String get analysisTemporaryFailure;
+
+  /// No description provided for @analysisProgressSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyzed {completed} of {pageCount} pages'**
+  String analysisProgressSemantics(int completed, int pageCount);
 }
 
 class _AppLocalizationsDelegate

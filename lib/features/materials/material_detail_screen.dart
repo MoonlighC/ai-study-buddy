@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
@@ -19,6 +21,8 @@ import '../quizzes/quiz_taking_screen.dart';
 import '../study_sessions/study_session_result_screen.dart';
 import 'material_presentation.dart';
 import 'summary_document_view.dart';
+import 'structured_summary_view.dart';
+import 'material_analysis_repository.dart';
 import 'material_viewer_screen.dart';
 import 'original_material_repository.dart';
 
@@ -39,6 +43,8 @@ class MaterialDetailScreen extends StatelessWidget {
         isUpload &&
         freshMaterial.processingStatus == MaterialProcessingStatus.ready &&
         freshMaterial.hasContentText;
+    final usesPersistentAnalysis =
+        state.config.effectiveBackendMode == AppBackendMode.supabase;
     final l10n = context.l10n;
     final viewerUser = AuthScope.read(context).user;
     final canViewOriginal =
@@ -86,6 +92,10 @@ class MaterialDetailScreen extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 16),
+            if (isUpload && usesPersistentAnalysis && !deleting) ...[
+              _MaterialAnalysisSection(material: freshMaterial),
+              const SizedBox(height: 16),
+            ],
             if (deleting)
               MaterialStatusPanel(
                 key: Key('material-delete-progress'),
@@ -94,8 +104,9 @@ class MaterialDetailScreen extends StatelessWidget {
                 icon: Icons.delete_outline,
                 progress: true,
               )
-            else if (freshMaterial.processingStatus ==
-                MaterialProcessingStatus.processing)
+            else if ((!isUpload || !usesPersistentAnalysis) &&
+                freshMaterial.processingStatus ==
+                    MaterialProcessingStatus.processing)
               _StaleRecoverySection(
                 materialId: freshMaterial.id,
                 processingMessage: freshMaterial.kind == MaterialKind.pdf
@@ -126,9 +137,13 @@ class MaterialDetailScreen extends StatelessWidget {
                 icon: Icons.warning_amber_rounded,
                 warning: true,
               )
-            else if (isUpload && freshMaterial.kind == MaterialKind.pdf)
+            else if (isUpload &&
+                !usesPersistentAnalysis &&
+                freshMaterial.kind == MaterialKind.pdf)
               _PdfExtractionSection(material: freshMaterial)
-            else if (isUpload && freshMaterial.kind == MaterialKind.image)
+            else if (isUpload &&
+                !usesPersistentAnalysis &&
+                freshMaterial.kind == MaterialKind.image)
               _ImageExtractionSection(material: freshMaterial),
             if (isUpload) ...[
               const SizedBox(height: 16),
@@ -160,7 +175,7 @@ class MaterialDetailScreen extends StatelessWidget {
                 ],
               ),
             ],
-            if (!isUpload || isReadyUpload) ...[
+            if (!isUpload || (!usesPersistentAnalysis && isReadyUpload)) ...[
               const SizedBox(height: 16),
               AiOutputSection(
                 key: const Key('summary-section'),
@@ -1065,6 +1080,196 @@ class _FlashcardsSection extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.localizedSafeMessage(message))),
     );
+  }
+}
+
+class _MaterialAnalysisSection extends StatefulWidget {
+  const _MaterialAnalysisSection({required this.material});
+  final StudyMaterial material;
+  @override
+  State<_MaterialAnalysisSection> createState() =>
+      _MaterialAnalysisSectionState();
+}
+
+class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
+  bool _started = false;
+  AppState? _state;
+  Timer? _retryTimer;
+  int? _retryRemaining;
+  int? _serverRetryValue;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _state = AppStateScope.read(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppStateScope.read(context).observeMaterialAnalysis(
+          AuthScope.read(context).user,
+          widget.material.id,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    _state?.stopObservingMaterialAnalysis(widget.material.id);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context),
+        status = state.analysisStatusFor(widget.material.id),
+        error = state.analysisErrorFor(widget.material.id),
+        actionInFlight = state.isMaterialAnalysisActionInFlight(
+          widget.material.id,
+        ),
+        l = context.l10n;
+    _syncRetryCountdown(status?.retryAfterSeconds);
+    if (error == AnalysisErrorCode.documentTooLarge) {
+      return MaterialStatusPanel(
+        title: l.analysisDocumentTooLargeTitle,
+        message: l.analysisDocumentTooLargeMessage,
+        icon: Icons.block_outlined,
+        warning: true,
+      );
+    }
+    if (status == null && error != null) {
+      final temporary = {
+        AnalysisErrorCode.network,
+        AnalysisErrorCode.rateLimited,
+        AnalysisErrorCode.serviceUnavailable,
+      }.contains(error);
+      return MaterialStatusPanel(
+        title: l.analysisInvalidDocumentTitle,
+        message: temporary
+            ? l.analysisTemporaryFailure
+            : l.analysisInvalidDocumentMessage,
+        icon: temporary ? Icons.cloud_off_outlined : Icons.error_outline,
+        warning: true,
+      );
+    }
+    if (status == null) {
+      return MaterialStatusPanel(
+        title: l.analysisPreparingDocument,
+        message: l.analysisResumeProcessing,
+        icon: Icons.hourglass_top_outlined,
+        progress: true,
+      );
+    }
+    if (status.confirmationRequired) {
+      return MaterialStatusPanel(
+        title: l.analysisConfirmLargeTitle,
+        message: l.analysisLargeDocumentExplanation,
+        icon: Icons.warning_amber_rounded,
+        warning: true,
+        actionLabel: l.analysisConfirmLargeAction,
+        onAction: actionInFlight
+            ? null
+            : () => state.confirmLargeMaterialAnalysis(
+                AuthScope.read(context).user,
+                widget.material.id,
+              ),
+      );
+    }
+    if (status.state == AnalysisState.userRetryRequired ||
+        status.state == AnalysisState.failed) {
+      return MaterialStatusPanel(
+        title: _stage(l, status),
+        message: status.canRetry
+            ? l.analysisRetryProcessing
+            : (_retryRemaining != null && _retryRemaining! > 0
+                  ? l.analysisRetryAvailableIn(_retryRemaining!)
+                  : l.analysisResumeProcessing),
+        icon: Icons.error_outline,
+        warning: true,
+        actionLabel: status.canRetry ? l.analysisRetryProcessing : null,
+        onAction: status.canRetry && !actionInFlight
+            ? () => state.retryMaterialAnalysis(
+                AuthScope.read(context).user,
+                widget.material.id,
+              )
+            : null,
+      );
+    }
+    final summary = status.summary;
+    final legacySummary = widget.material.summary?.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        MaterialStatusPanel(
+          title: status.state == AnalysisState.completedWithWarnings
+              ? l.analysisCompletedWithWarnings
+              : _stage(l, status),
+          message: _retryRemaining != null && _retryRemaining! > 0
+              ? l.analysisRetryAvailableIn(_retryRemaining!)
+              : status.publicStage == AnalysisPublicStage.analyzingPages
+              ? l.analysisPageProgress(status.completedPages, status.pageCount)
+              : _stage(l, status),
+          icon: status.state == AnalysisState.completed
+              ? Icons.check_circle_outline
+              : status.state == AnalysisState.completedWithWarnings
+              ? Icons.warning_amber_rounded
+              : Icons.auto_awesome_outlined,
+          progress: !status.isTerminal,
+          warning: status.state == AnalysisState.completedWithWarnings,
+        ),
+        if (status.pageCount > 0 && !status.isTerminal)
+          LinearProgressIndicator(
+            value: status.completedPages / status.pageCount,
+            semanticsLabel: l.analysisPageProgress(
+              status.completedPages,
+              status.pageCount,
+            ),
+          ),
+        if (status.structuredSummaryMalformed)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(l.analysisMalformedFallback),
+          ),
+        if (summary == null &&
+            legacySummary != null &&
+            legacySummary.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          SummaryDocumentView(markdown: legacySummary),
+        ],
+        if (summary != null) ...[
+          const SizedBox(height: 16),
+          StructuredSummaryView(summary: summary, material: widget.material),
+        ],
+      ],
+    );
+  }
+
+  String _stage(dynamic l, MaterialAnalysisStatus s) => switch (s.publicStage) {
+    AnalysisPublicStage.preparingDocument => l.analysisPreparingDocument,
+    AnalysisPublicStage.analyzingPages => l.analysisPageProgress(
+      s.completedPages,
+      s.pageCount,
+    ),
+    AnalysisPublicStage.recognizingFormulasAndDiagrams =>
+      l.analysisRecognizingFormulas,
+    AnalysisPublicStage.creatingSummary => l.analysisCreatingSummary,
+  };
+
+  void _syncRetryCountdown(int? seconds) {
+    if (_serverRetryValue == seconds) return;
+    _serverRetryValue = seconds;
+    _retryTimer?.cancel();
+    _retryRemaining = seconds;
+    if (seconds == null || seconds == 0) return;
+    _retryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() {
+        final current = _retryRemaining ?? 0;
+        _retryRemaining = current > 0 ? current - 1 : 0;
+        if (_retryRemaining == 0) timer.cancel();
+      });
+    });
   }
 }
 

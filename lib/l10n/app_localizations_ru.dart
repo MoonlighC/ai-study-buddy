@@ -2370,4 +2370,133 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get materialMaximumFilesError => 'Можно выбрать не более 20 файлов.';
+
+  @override
+  String get analysisRecommended => 'Рекомендуемый';
+
+  @override
+  String get analysisRecommendedDescription =>
+      'Лучший выбор для формул, диаграмм, таблиц и макета.';
+
+  @override
+  String get analysisEconomy => 'Экономичный';
+
+  @override
+  String get analysisAdvancedSettings => 'Расширенные настройки';
+
+  @override
+  String get analysisEconomyWarning =>
+      'Формулы, диаграммы, таблицы и макет могут быть распознаны менее точно.';
+
+  @override
+  String analysisSourcePageNumber(Object page) {
+    return 'Исходная страница $page';
+  }
+
+  @override
+  String analysisRetryAvailableIn(Object seconds) {
+    return 'Повтор будет доступен через $seconds с';
+  }
+
+  @override
+  String get analysisPreparingDocument => 'Подготовка документа';
+
+  @override
+  String analysisPageProgress(Object completed, Object pageCount) {
+    return 'Анализ страниц: $completed из $pageCount';
+  }
+
+  @override
+  String get analysisRecognizingFormulas => 'Распознавание формул и диаграмм';
+
+  @override
+  String get analysisCreatingSummary => 'Создание конспекта';
+
+  @override
+  String get analysisConfirmLargeTitle => 'Подтвердите большой документ';
+
+  @override
+  String get analysisConfirmLargeAction => 'Продолжить анализ';
+
+  @override
+  String get analysisLargeDocumentExplanation =>
+      'Это большой документ. Анализ может занять больше времени. Будет обработана каждая страница; формулы и диаграммы могут анализироваться визуально. Обработка продолжится после повторного открытия приложения.';
+
+  @override
+  String get analysisDocumentTooLargeTitle => 'Документ слишком большой';
+
+  @override
+  String get analysisDocumentTooLargeMessage =>
+      'Документы объёмом более 100 страниц нельзя анализировать.';
+
+  @override
+  String get analysisResumeProcessing =>
+      'Обработка продолжится после повторного открытия приложения.';
+
+  @override
+  String get analysisRetryProcessing => 'Повторить обработку';
+
+  @override
+  String get analysisRetryAvailableLater => 'Повтор будет доступен позже';
+
+  @override
+  String get analysisCompletedWithWarnings => 'Завершено с предупреждениями';
+
+  @override
+  String get analysisPartialPages => 'Частично обработанные страницы';
+
+  @override
+  String get analysisMissingPages => 'Пропущенные страницы';
+
+  @override
+  String get analysisVerifyFormulas => 'Проверьте формулы';
+
+  @override
+  String get analysisUncertainFormula => 'Неточная формула';
+
+  @override
+  String get analysisSourcePage => 'Исходная страница';
+
+  @override
+  String get analysisViewOriginalPage => 'Открыть исходную страницу';
+
+  @override
+  String get analysisCopyFormula => 'Копировать формулу';
+
+  @override
+  String get analysisMalformedFallback =>
+      'Структурированный конспект не удалось показать. Вместо него отображается доступный конспект.';
+
+  @override
+  String analysisEquationSemantics(String description, int page) {
+    return 'Формула: $description. Исходная страница $page.';
+  }
+
+  @override
+  String get analysisFormulaCopied => 'Формула скопирована';
+
+  @override
+  String get analysisFormulaCopyFailed => 'Не удалось скопировать формулу';
+
+  @override
+  String analysisWarningSourcePage(int page) {
+    return 'Страница предупреждения $page';
+  }
+
+  @override
+  String get analysisInvalidDocumentTitle =>
+      'Не удалось проанализировать документ';
+
+  @override
+  String get analysisInvalidDocumentMessage =>
+      'Документ повреждён, недопустим или не поддерживается.';
+
+  @override
+  String get analysisTemporaryFailure =>
+      'Анализ документа временно недоступен. Повторите попытку позже.';
+
+  @override
+  String analysisProgressSemantics(int completed, int pageCount) {
+    return 'Проанализировано страниц: $completed из $pageCount';
+  }
 }

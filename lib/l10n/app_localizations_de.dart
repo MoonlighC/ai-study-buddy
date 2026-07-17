@@ -2333,4 +2333,134 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get materialMaximumFilesError =>
       'Du kannst höchstens 20 Dateien auswählen.';
+
+  @override
+  String get analysisRecommended => 'Empfohlen';
+
+  @override
+  String get analysisRecommendedDescription =>
+      'Am besten für Formeln, Diagramme, Tabellen und Layout.';
+
+  @override
+  String get analysisEconomy => 'Sparmodus';
+
+  @override
+  String get analysisAdvancedSettings => 'Erweiterte Einstellungen';
+
+  @override
+  String get analysisEconomyWarning =>
+      'Formeln, Diagramme, Tabellen und Layout können weniger genau sein.';
+
+  @override
+  String analysisSourcePageNumber(Object page) {
+    return 'Quellseite $page';
+  }
+
+  @override
+  String analysisRetryAvailableIn(Object seconds) {
+    return 'Erneuter Versuch in $seconds Sekunden verfügbar';
+  }
+
+  @override
+  String get analysisPreparingDocument => 'Dokument wird vorbereitet';
+
+  @override
+  String analysisPageProgress(Object completed, Object pageCount) {
+    return 'Seiten $completed von $pageCount werden analysiert';
+  }
+
+  @override
+  String get analysisRecognizingFormulas =>
+      'Formeln und Diagramme werden erkannt';
+
+  @override
+  String get analysisCreatingSummary => 'Zusammenfassung wird erstellt';
+
+  @override
+  String get analysisConfirmLargeTitle => 'Großes Dokument bestätigen';
+
+  @override
+  String get analysisConfirmLargeAction => 'Analyse fortsetzen';
+
+  @override
+  String get analysisLargeDocumentExplanation =>
+      'Dieses Dokument ist groß. Die Analyse kann länger dauern. Jede Seite wird verarbeitet; Formeln und Diagramme können visuell analysiert werden. Beim erneuten Öffnen der App wird die Verarbeitung fortgesetzt.';
+
+  @override
+  String get analysisDocumentTooLargeTitle => 'Dokument ist zu groß';
+
+  @override
+  String get analysisDocumentTooLargeMessage =>
+      'Dokumente mit mehr als 100 Seiten können nicht analysiert werden.';
+
+  @override
+  String get analysisResumeProcessing =>
+      'Die Verarbeitung kann beim erneuten Öffnen der App fortgesetzt werden.';
+
+  @override
+  String get analysisRetryProcessing => 'Verarbeitung wiederholen';
+
+  @override
+  String get analysisRetryAvailableLater => 'Später erneut verfügbar';
+
+  @override
+  String get analysisCompletedWithWarnings => 'Mit Warnungen abgeschlossen';
+
+  @override
+  String get analysisPartialPages => 'Teilweise Seiten';
+
+  @override
+  String get analysisMissingPages => 'Fehlende Seiten';
+
+  @override
+  String get analysisVerifyFormulas => 'Formeln überprüfen';
+
+  @override
+  String get analysisUncertainFormula => 'Unsichere Formel';
+
+  @override
+  String get analysisSourcePage => 'Quellseite';
+
+  @override
+  String get analysisViewOriginalPage => 'Originalseite anzeigen';
+
+  @override
+  String get analysisCopyFormula => 'Formel kopieren';
+
+  @override
+  String get analysisMalformedFallback =>
+      'Die strukturierte Zusammenfassung konnte nicht angezeigt werden. Die verfügbare Zusammenfassung wird stattdessen gezeigt.';
+
+  @override
+  String analysisEquationSemantics(String description, int page) {
+    return 'Gleichung: $description. Quellseite $page.';
+  }
+
+  @override
+  String get analysisFormulaCopied => 'Formel kopiert';
+
+  @override
+  String get analysisFormulaCopyFailed => 'Formel konnte nicht kopiert werden';
+
+  @override
+  String analysisWarningSourcePage(int page) {
+    return 'Warnungsquelle Seite $page';
+  }
+
+  @override
+  String get analysisInvalidDocumentTitle =>
+      'Dokument konnte nicht analysiert werden';
+
+  @override
+  String get analysisInvalidDocumentMessage =>
+      'Das Dokument ist ungültig, beschädigt oder wird nicht unterstützt.';
+
+  @override
+  String get analysisTemporaryFailure =>
+      'Die Dokumentanalyse ist vorübergehend nicht verfügbar. Versuche es später erneut.';
+
+  @override
+  String analysisProgressSemantics(int completed, int pageCount) {
+    return '$completed von $pageCount Seiten analysiert';
+  }
 }

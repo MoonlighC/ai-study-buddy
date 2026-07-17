@@ -517,7 +517,10 @@ function createPublicHandler(
         reason: safe.code,
         status: safe.status,
       });
-      return json({ error: publicMessage(safe.status) }, safe.status);
+      return json({
+        error: publicMessage(safe.status),
+        code: publicErrorCode(safe),
+      }, safe.status);
     }
   };
 }
@@ -593,6 +596,14 @@ function publicMessage(status: number) {
   if (status === 409) return "Material analysis is busy.";
   if (status === 422) return "Material cannot be analyzed.";
   return "Material analysis is temporarily unavailable.";
+}
+
+function publicErrorCode(error: SafeAnalysisError) {
+  if (error.code === "page_limit_exceeded") return "document_too_large";
+  if (error.code === "invalid_source") return "corrupt_document";
+  if (error.code === "invalid_request") return "invalid_request";
+  if (error.code === "material_unavailable") return "unsupported_source";
+  return error.status === 422 ? "invalid_document" : "request_failed";
 }
 
 function json(body: Record<string, unknown>, status = 200) {

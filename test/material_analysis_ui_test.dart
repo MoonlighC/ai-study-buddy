@@ -1,0 +1,264 @@
+import 'dart:async';
+
+import 'package:ai_study_buddy/app/app_config.dart';
+import 'package:ai_study_buddy/app/app_state.dart';
+import 'package:ai_study_buddy/core/models/material.dart';
+import 'package:ai_study_buddy/features/auth/auth_controller.dart';
+import 'package:ai_study_buddy/features/auth/auth_models.dart';
+import 'package:ai_study_buddy/features/auth/auth_repository.dart';
+import 'package:ai_study_buddy/features/materials/material_analysis_repository.dart';
+import 'package:ai_study_buddy/features/materials/material_detail_screen.dart';
+import 'package:ai_study_buddy/features/materials/structured_summary.dart';
+import 'package:ai_study_buddy/l10n/app_localizations.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+const _user = AuthUser(
+  id: '11111111-1111-4111-8111-111111111111',
+  email: 'student@example.test',
+);
+const _material = StudyMaterial(
+  id: '22222222-2222-4222-8222-222222222222',
+  subjectId: 'subject',
+  title: 'lecture.pdf',
+  kind: MaterialKind.pdf,
+  content: '',
+  createdLabel: 'Today',
+  sourceKind: MaterialSourceKind.upload,
+  storageBucket: 'study-materials',
+  storagePath:
+      '11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/lecture.pdf',
+  mimeType: 'application/pdf',
+  fileSizeBytes: 1024,
+  processingStatus: MaterialProcessingStatus.pending,
+);
+
+void main() {
+  for (final (stage, text) in [
+    (AnalysisPublicStage.preparingDocument, 'Preparing document'),
+    (AnalysisPublicStage.analyzingPages, 'Analyzing pages 2 of 4'),
+    (
+      AnalysisPublicStage.recognizingFormulasAndDiagrams,
+      'Recognizing formulas and diagrams',
+    ),
+    (AnalysisPublicStage.creatingSummary, 'Creating summary'),
+  ]) {
+    testWidgets('renders exact public stage ${stage.name}', (tester) async {
+      final advance = Completer<MaterialAnalysisStatus>();
+      await _pump(
+        tester,
+        _UiRepo(
+          status: _status(stage: stage),
+          onAdvance: () => advance.future,
+        ),
+      );
+      expect(find.text(text), findsWidgets);
+      if (stage == AnalysisPublicStage.analyzingPages) {
+        final progress = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator).last,
+        );
+        expect(progress.value, 0.5);
+        expect(progress.semanticsLabel, 'Analyzing pages 2 of 4');
+      }
+      advance.complete(
+        _status(
+          stage: AnalysisPublicStage.creatingSummary,
+          state: AnalysisState.completed,
+          completedPages: 4,
+        ),
+      );
+    });
+  }
+
+  testWidgets('confirmation action disables synchronously and sends once', (
+    tester,
+  ) async {
+    final prepare = Completer<MaterialAnalysisStatus>();
+    final repo = _UiRepo(
+      status: _status(
+        stage: AnalysisPublicStage.preparingDocument,
+        state: AnalysisState.awaitingConfirmation,
+        pageCount: 21,
+        completedPages: 0,
+        confirmationRequired: true,
+      ),
+      onPrepare: () => prepare.future,
+    );
+    await _pump(tester, repo);
+    final action = find.text('Continue analysis');
+    expect(action, findsOneWidget);
+    await tester.tap(action);
+    await tester.pump();
+    expect(repo.prepares, 1);
+    final inkWell = tester.widget<InkWell>(
+      find.ancestor(of: action, matching: find.byType(InkWell)),
+    );
+    expect(inkWell.onTap, isNull);
+    prepare.complete(
+      _status(
+        stage: AnalysisPublicStage.analyzingPages,
+        pageCount: 21,
+        completedPages: 0,
+      ),
+    );
+  });
+
+  testWidgets(
+    'completed warnings and partial/missing pages survive dark large text',
+    (tester) async {
+      await _pump(
+        tester,
+        _UiRepo(
+          status: _status(
+            stage: AnalysisPublicStage.creatingSummary,
+            state: AnalysisState.completedWithWarnings,
+            completedPages: 4,
+            summary: _summary(),
+          ),
+        ),
+        dark: true,
+        textScale: 2,
+      );
+      await tester.scrollUntilVisible(
+        find.text('Completed with warnings'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Completed with warnings'), findsOneWidget);
+      expect(find.text('Partial pages'), findsOneWidget);
+      expect(find.text('Missing pages'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+}
+
+Future<void> _pump(
+  WidgetTester tester,
+  _UiRepo repo, {
+  bool dark = false,
+  double textScale = 1,
+}) async {
+  final auth = AuthController(
+    authRepository: MockAuthRepository(initialUser: _user),
+    profileRepository: NoopProfileRepository(),
+  );
+  await auth.initialize();
+  final state = AppState(
+    config: const AppConfig(
+      backendMode: AppBackendMode.supabase,
+      supabaseUrl: 'https://example.supabase.co',
+      supabaseAnonKey: 'sb_publishable_test-client-key',
+    ),
+    materialAnalysisRepository: repo,
+  );
+  addTearDown(auth.dispose);
+  addTearDown(state.dispose);
+  await tester.pumpWidget(
+    MediaQuery(
+      data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+      child: AppStateScope(
+        state: state,
+        child: AuthScope(
+          controller: auth,
+          child: MaterialApp(
+            theme: ThemeData.light(),
+            darkTheme: ThemeData.dark(),
+            themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const MaterialDetailScreen(material: _material),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+  await tester.pump();
+  await tester.pump();
+}
+
+class _UiRepo implements MaterialAnalysisRepository {
+  _UiRepo({required this.status, this.onAdvance, this.onPrepare});
+
+  final MaterialAnalysisStatus status;
+  final Future<MaterialAnalysisStatus> Function()? onAdvance, onPrepare;
+  int prepares = 0;
+  @override
+  Future<MaterialAnalysisStatus> fetchStatus({
+    required AuthUser user,
+    required String materialId,
+  }) async => status;
+  @override
+  Future<MaterialAnalysisStatus> advance({
+    required AuthUser user,
+    required String materialId,
+  }) => onAdvance?.call() ?? Future.value(status);
+  @override
+  Future<MaterialAnalysisStatus> prepare({
+    required AuthUser user,
+    required String materialId,
+    required AnalysisProcessingMode mode,
+    required bool confirmLargeDocument,
+  }) {
+    prepares += 1;
+    return onPrepare?.call() ?? Future.value(status);
+  }
+
+  @override
+  Future<MaterialAnalysisStatus> retry({
+    required AuthUser user,
+    required String materialId,
+  }) async => status;
+}
+
+MaterialAnalysisStatus _status({
+  required AnalysisPublicStage stage,
+  AnalysisState state = AnalysisState.processing,
+  int pageCount = 4,
+  int completedPages = 2,
+  bool confirmationRequired = false,
+  StructuredSummary? summary,
+}) => MaterialAnalysisStatus(
+  materialId: _material.id,
+  processingMode: AnalysisProcessingMode.recommended,
+  state: state,
+  publicStage: stage,
+  pageCount: pageCount,
+  completedPages: completedPages,
+  confirmationRequired: confirmationRequired,
+  canRetry: false,
+  retryAfterSeconds: null,
+  warnings: const [],
+  summarySchemaVersion: summary == null ? null : 1,
+  summary: summary,
+  structuredSummaryMalformed: false,
+);
+
+StructuredSummary _summary() => const StructuredSummary(
+  schemaVersion: 1,
+  language: 'en',
+  sections: [
+    StructuredSection(
+      id: 'section',
+      title: 'Section',
+      blocks: [ProseBlock(markdown: 'Text', display: SummaryDisplay.block)],
+      sourcePages: [1],
+      confidence: 0.8,
+    ),
+  ],
+  keyConcepts: [],
+  equations: [],
+  warnings: [],
+  partialExtraction: PartialExtraction(
+    isPartial: true,
+    analyzedPages: [1, 4],
+    partialPages: [2],
+    missingPages: [3],
+    pageModes: [
+      PageMode(page: 1, mode: PageModeKind.text),
+      PageMode(page: 2, mode: PageModeKind.visual),
+      PageMode(page: 3, mode: PageModeKind.visual),
+      PageMode(page: 4, mode: PageModeKind.text),
+    ],
+  ),
+);

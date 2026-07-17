@@ -10,6 +10,7 @@ import 'features/favorites/supabase_favorite_repository.dart';
 import 'features/flashcards/flashcard_repository.dart';
 import 'features/generation/summary_repository.dart';
 import 'features/materials/supabase_material_repository.dart';
+import 'features/materials/material_analysis_repository.dart';
 import 'features/materials/supabase_material_upload_repository.dart';
 import 'features/materials/pdf_text_extraction_repository.dart';
 import 'features/materials/image_text_extraction_repository.dart';
@@ -45,6 +46,11 @@ Future<void> main() async {
       materialRepository: supabaseClient == null
           ? null
           : SupabaseMaterialRepository(supabaseClient),
+      materialAnalysisRepository: supabaseClient == null
+          ? null
+          : SupabaseMaterialAnalysisRepository(
+              SupabaseMaterialAnalysisDataSource(supabaseClient),
+            ),
       materialUploadRepository: supabaseClient == null
           ? null
           : SupabaseMaterialUploadRepository(

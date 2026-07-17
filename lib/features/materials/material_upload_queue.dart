@@ -6,6 +6,7 @@ import '../../core/models/material.dart';
 import '../auth/auth_models.dart';
 import 'material_upload.dart';
 import 'material_upload_repository.dart';
+import 'material_analysis_repository.dart';
 
 enum MaterialUploadQueueStatus { queued, uploading, processing, ready, failed }
 
@@ -109,12 +110,14 @@ class MaterialQueueWorkGuard {
     this.queueId,
     this.userId,
     this.generation,
+    this.analysisMode,
   );
 
   final MaterialUploadQueueController _controller;
   final String queueId;
   final String userId;
   final int generation;
+  final AnalysisProcessingMode analysisMode;
 
   bool get isCurrent => _controller._isWorkCurrent(this);
   bool get isSessionCurrent => _controller._isSessionCurrent(this);
@@ -170,6 +173,7 @@ class MaterialUploadQueueController extends ChangeNotifier {
     required String subjectId,
     required MaterialKind kind,
     required MaterialFilePickerBatch batch,
+    AnalysisProcessingMode analysisMode = AnalysisProcessingMode.recommended,
   }) {
     bindSession(user.id);
     if (batch.errorCode != null ||
@@ -198,6 +202,7 @@ class MaterialUploadQueueController extends ChangeNotifier {
         kind: kind,
         file: file,
         plannedMaterialId: _materialIdGenerator(),
+        analysisMode: analysisMode,
       );
       added = true;
     }
@@ -317,6 +322,7 @@ class MaterialUploadQueueController extends ChangeNotifier {
       queueId,
       payload.user.id,
       generation,
+      payload.analysisMode,
     );
     final index = _indexOf(queueId);
     if (index < 0 || !guard.isCurrent) return;
@@ -512,6 +518,7 @@ class _PendingQueuePayload {
     required this.subjectId,
     required this.kind,
     required this.plannedMaterialId,
+    required this.analysisMode,
     this.file,
     this.material,
   });
@@ -520,6 +527,7 @@ class _PendingQueuePayload {
   final String subjectId;
   final MaterialKind kind;
   final String plannedMaterialId;
+  final AnalysisProcessingMode analysisMode;
   final SelectedMaterialFile? file;
   final StudyMaterial? material;
 
@@ -529,6 +537,7 @@ class _PendingQueuePayload {
         subjectId: subjectId,
         kind: kind,
         plannedMaterialId: plannedMaterialId,
+        analysisMode: analysisMode,
         material: authoritativeMaterial,
       );
 }

@@ -8,6 +8,7 @@ import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_file_picker.dart';
 import 'package:ai_study_buddy/features/materials/material_upload.dart';
 import 'package:ai_study_buddy/features/materials/material_upload_repository.dart';
+import 'package:ai_study_buddy/features/materials/upload_material_screen.dart';
 import 'package:ai_study_buddy/mock/mock_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,56 @@ const testUser = AuthUser(
 );
 
 void main() {
+  testWidgets(
+    'Recommended is default and Economy stays collapsed with warning',
+    (tester) async {
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpWidget(
+        StudyBuddyApp(
+          authRepository: MockAuthRepository(initialUser: testUser),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _pushRoute(
+        tester,
+        AppRoutes.uploadMaterial,
+        arguments: UploadMaterialArgs(
+          subject: MockData.subjects.first,
+          kind: MaterialKind.pdf,
+        ),
+      );
+      await tester.scrollUntilVisible(
+        find.text('Recommended'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.text('Recommended'), findsOneWidget);
+      expect(
+        find.text('Best for formulas, diagrams, tables, and layout.'),
+        findsOneWidget,
+      );
+      expect(find.text('Economy'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('Advanced settings'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.text('Advanced settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Economy'), findsOneWidget);
+      expect(
+        find.text(
+          'Formulas, diagrams, tables, and layout may be less accurate.',
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final scenario
       in <
         ({

@@ -21,6 +21,7 @@ import '../features/favorites/favorite_repository.dart';
 import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
+import '../features/materials/material_analysis_repository.dart';
 import '../features/materials/material_file_picker.dart';
 import '../features/materials/material_upload.dart';
 import '../features/materials/material_upload_repository.dart';
@@ -36,11 +37,14 @@ import '../features/subjects/subject_repository.dart';
 import '../mock/mock_ai_service.dart';
 import '../mock/mock_data.dart';
 
+enum AnalysisExplicitAction { preflight, confirmation, retry }
+
 class AppState extends ChangeNotifier {
   AppState({
     AppConfig? config,
     SubjectRepository? subjectRepository,
     MaterialRepository? materialRepository,
+    MaterialAnalysisRepository? materialAnalysisRepository,
     MaterialUploadRepository? materialUploadRepository,
     PdfTextExtractionRepository? pdfTextExtractionRepository,
     ImageTextExtractionRepository? imageTextExtractionRepository,
@@ -77,6 +81,9 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyMaterialUploadRepository()
                : MockMaterialUploadRepository()),
+       materialAnalysisRepository =
+           materialAnalysisRepository ??
+           const EmptyMaterialAnalysisRepository(),
        materialFilePicker =
            materialFilePicker ?? const PlatformMaterialFilePicker(),
        pdfTextExtractionRepository =
@@ -177,6 +184,7 @@ class AppState extends ChangeNotifier {
   final AppPreferencesStore preferencesStore;
   final SubjectRepository subjectRepository;
   final MaterialRepository materialRepository;
+  final MaterialAnalysisRepository materialAnalysisRepository;
   final MaterialUploadRepository materialUploadRepository;
   final PdfTextExtractionRepository pdfTextExtractionRepository;
   final ImageTextExtractionRepository imageTextExtractionRepository;
@@ -213,6 +221,16 @@ class AppState extends ChangeNotifier {
   final Map<String, DeletionSafeCode> _subjectDeletionErrors = {};
   final Map<String, String> _materialLifecycleErrors = {};
   final Map<String, String> _staleMaterialProcessors = {};
+  final Map<String, MaterialAnalysisStatus> _analysisStatuses = {};
+  final Map<String, AnalysisErrorCode> _analysisErrors = {};
+  final Map<String, int> _analysisGenerations = {};
+  final Map<String, int> _analysisLoops = {};
+  final Set<String> _analysisPending = {};
+  final Map<String, Future<void>> _analysisObservations = {};
+  final Map<String, _AnalysisActionGuard> _analysisActions = {};
+  String? _analysisUserId;
+  AuthUser? _analysisUser;
+  bool _analysisForegrounded = true;
   int _materialCounter = 0;
   int _sessionCounter = 0;
   AppLanguagePreference _languagePreference = AppLanguagePreference.system;
@@ -270,6 +288,20 @@ class AppState extends ChangeNotifier {
 
   List<StudyMaterial> get materials => List.unmodifiable(_materials);
 
+  @override
+  void dispose() {
+    _analysisForegrounded = false;
+    _analysisUserId = null;
+    _analysisUser = null;
+    for (final id in _analysisGenerations.keys.toList()) {
+      _nextAnalysis(id);
+    }
+    _analysisObservations.clear();
+    _analysisActions.clear();
+    materialUploadQueue.dispose();
+    super.dispose();
+  }
+
   bool get isLoadingMaterials => _isLoadingMaterials;
 
   bool get isCreatingMaterial => _isCreatingMaterial;
@@ -321,6 +353,264 @@ class AppState extends ChangeNotifier {
       _extractingImageIds.contains(materialId);
   String? imageExtractionErrorFor(String materialId) =>
       _imageExtractionErrors[materialId];
+  MaterialAnalysisStatus? analysisStatusFor(String id) => _analysisStatuses[id];
+  AnalysisErrorCode? analysisErrorFor(String id) => _analysisErrors[id];
+  int get activeAnalysisLoopCount => _analysisLoops.length;
+  bool isMaterialAnalysisActionInFlight(String id) =>
+      _analysisActions.containsKey(id);
+  AnalysisExplicitAction? materialAnalysisActionFor(String id) =>
+      _analysisActions[id]?.action;
+
+  Future<void> observeMaterialAnalysis(
+    AuthUser? user,
+    String id, {
+    bool force = false,
+  }) {
+    if (user == null) return Future.value();
+    _bindAnalysis(user);
+    if (!force &&
+        (_analysisLoops.containsKey(id) ||
+            const {
+              AnalysisErrorCode.documentTooLarge,
+              AnalysisErrorCode.invalidDocument,
+              AnalysisErrorCode.unsupportedSource,
+              AnalysisErrorCode.corruptDocument,
+            }.contains(_analysisErrors[id]))) {
+      return Future.value();
+    }
+    final existing = _analysisObservations[id];
+    if (existing != null) return existing;
+    final operation = _observeMaterialAnalysis(user, id);
+    _analysisObservations[id] = operation;
+    return operation.whenComplete(() {
+      if (identical(_analysisObservations[id], operation)) {
+        _analysisObservations.remove(id);
+      }
+    });
+  }
+
+  Future<void> _observeMaterialAnalysis(AuthUser user, String id) async {
+    final generation = _nextAnalysis(id);
+    try {
+      final status = await materialAnalysisRepository.fetchStatus(
+        user: user,
+        materialId: id,
+      );
+      if (!_currentAnalysis(user, id, generation)) return;
+      _analysisStatuses[id] = status;
+      _analysisErrors.remove(id);
+      notifyListeners();
+      _scheduleAnalysis(user, id);
+    } on MaterialAnalysisException catch (e) {
+      if (!_currentAnalysis(user, id, generation)) return;
+      if (e.code == AnalysisErrorCode.statusNotFound) {
+        await _action(
+          user,
+          id,
+          AnalysisExplicitAction.preflight,
+          () => materialAnalysisRepository.prepare(
+            user: user,
+            materialId: id,
+            mode: AnalysisProcessingMode.recommended,
+            confirmLargeDocument: false,
+          ),
+        );
+        return;
+      }
+      _analysisErrors.putIfAbsent(id, () => e.code);
+      notifyListeners();
+    }
+  }
+
+  void stopObservingMaterialAnalysis(String id) {}
+  void setAnalysisLifecycleForegrounded(bool value) {
+    if (_analysisForegrounded == value) return;
+    _analysisForegrounded = value;
+    if (!value) {
+      for (final id in _analysisLoops.keys.toList()) {
+        _nextAnalysis(id);
+      }
+      return;
+    }
+    final user = _analysisUser;
+    if (user != null) {
+      for (final id in _analysisStatuses.keys.toList()) {
+        unawaited(observeMaterialAnalysis(user, id, force: true));
+      }
+    }
+  }
+
+  Future<bool> confirmLargeMaterialAnalysis(AuthUser? user, String id) async {
+    final s = _analysisStatuses[id];
+    if (user == null ||
+        s == null ||
+        !s.confirmationRequired ||
+        s.pageCount < 21 ||
+        s.pageCount > 100) {
+      return false;
+    }
+    return _action(
+      user,
+      id,
+      AnalysisExplicitAction.confirmation,
+      () => materialAnalysisRepository.prepare(
+        user: user,
+        materialId: id,
+        mode: s.processingMode,
+        confirmLargeDocument: true,
+      ),
+    );
+  }
+
+  Future<bool> retryMaterialAnalysis(AuthUser? user, String id) async {
+    final s = _analysisStatuses[id];
+    if (user == null ||
+        s == null ||
+        s.state != AnalysisState.userRetryRequired ||
+        !s.canRetry) {
+      return false;
+    }
+    return _action(
+      user,
+      id,
+      AnalysisExplicitAction.retry,
+      () => materialAnalysisRepository.retry(user: user, materialId: id),
+    );
+  }
+
+  Future<bool> _action(
+    AuthUser user,
+    String id,
+    AnalysisExplicitAction action,
+    Future<MaterialAnalysisStatus> Function() call,
+  ) async {
+    _bindAnalysis(user);
+    final guard = _beginAnalysisAction(id, action);
+    if (guard == null) return false;
+    final g = _nextAnalysis(id);
+    try {
+      final s = await call();
+      if (!_currentAnalysis(user, id, g)) return false;
+      _analysisStatuses[id] = s;
+      _analysisErrors.remove(id);
+      notifyListeners();
+      _scheduleAnalysis(user, id);
+      return true;
+    } on MaterialAnalysisException catch (error) {
+      if (_currentAnalysis(user, id, g)) {
+        _analysisErrors[id] = error.code;
+        notifyListeners();
+      }
+      return false;
+    } finally {
+      _endAnalysisAction(guard);
+    }
+  }
+
+  _AnalysisActionGuard? _beginAnalysisAction(
+    String id,
+    AnalysisExplicitAction action,
+  ) {
+    if (_analysisActions.containsKey(id)) return null;
+    final guard = _AnalysisActionGuard(id: id, action: action);
+    _analysisActions[id] = guard;
+    notifyListeners();
+    return guard;
+  }
+
+  void _endAnalysisAction(_AnalysisActionGuard guard) {
+    if (identical(_analysisActions[guard.id], guard)) {
+      _analysisActions.remove(guard.id);
+      notifyListeners();
+    }
+  }
+
+  void _bindAnalysis(AuthUser user) {
+    if (_analysisUserId == user.id) {
+      _analysisUser = user;
+      return;
+    }
+    _analysisUserId = user.id;
+    _analysisUser = user;
+    _analysisStatuses.clear();
+    _analysisErrors.clear();
+    for (final id in _analysisGenerations.keys.toList()) {
+      _nextAnalysis(id);
+    }
+    _analysisLoops.clear();
+    _analysisPending.clear();
+    _analysisObservations.clear();
+    _analysisActions.clear();
+  }
+
+  int _nextAnalysis(String id) =>
+      _analysisGenerations.update(id, (v) => v + 1, ifAbsent: () => 1);
+  bool _currentAnalysis(AuthUser user, String id, int g) =>
+      _analysisUserId == user.id && _analysisGenerations[id] == g;
+  void _scheduleAnalysis(AuthUser user, String id) {
+    final s = _analysisStatuses[id];
+    if (!_analysisForegrounded ||
+        s == null ||
+        s.isTerminal ||
+        s.confirmationRequired) {
+      return;
+    }
+    if (_analysisLoops.containsKey(id)) return;
+    if (_analysisLoops.length >= 2) {
+      _analysisPending.add(id);
+      return;
+    }
+    _analysisPending.remove(id);
+    final g = _nextAnalysis(id);
+    _analysisLoops[id] = g;
+    unawaited(_runAnalysis(user, id, g));
+  }
+
+  Future<void> _runAnalysis(AuthUser user, String id, int g) async {
+    var delay = const Duration(milliseconds: 700);
+    try {
+      while (_analysisForegrounded && _currentAnalysis(user, id, g)) {
+        final before = _analysisStatuses[id];
+        if (before == null ||
+            before.isTerminal ||
+            before.confirmationRequired) {
+          break;
+        }
+        try {
+          final s = await materialAnalysisRepository.advance(
+            user: user,
+            materialId: id,
+          );
+          if (!_currentAnalysis(user, id, g)) break;
+          _analysisStatuses[id] = s;
+          notifyListeners();
+          if (s.isTerminal || s.confirmationRequired) break;
+          delay = Duration(
+            milliseconds: s.retryAfterSeconds == null
+                ? 700
+                : (s.retryAfterSeconds! * 1000).clamp(700, 30000),
+          );
+        } on MaterialAnalysisException {
+          delay = Duration(
+            milliseconds: (delay.inMilliseconds * 2).clamp(1000, 30000),
+          );
+        }
+        await Future<void>.delayed(delay);
+      }
+    } finally {
+      if (_analysisLoops[id] == g) {
+        _analysisLoops.remove(id);
+      }
+      if (_analysisForegrounded && _analysisUserId == user.id) {
+        _scheduleAnalysis(user, id);
+        for (final next in _analysisPending.toList()) {
+          if (_analysisLoops.length >= 2) break;
+          _scheduleAnalysis(user, next);
+        }
+      }
+      notifyListeners();
+    }
+  }
 
   List<StudyMaterial> get favoriteMaterials {
     return _materials
@@ -441,6 +731,7 @@ class AppState extends ChangeNotifier {
       _clearMaterialWorkState();
     }
     materialUploadQueue.bindSession(user?.id);
+    if (user != null) _bindAnalysis(user);
     await loadSubjectsFor(user);
     await loadMaterialsFor(user);
     await loadMaterialFavoritesFor(user);
@@ -609,6 +900,7 @@ class AppState extends ChangeNotifier {
     required String subjectId,
     required MaterialKind kind,
     required MaterialFilePickerBatch batch,
+    AnalysisProcessingMode analysisMode = AnalysisProcessingMode.recommended,
   }) {
     if (kind == MaterialKind.pastedText) return false;
     if (config.effectiveBackendMode == AppBackendMode.supabase &&
@@ -627,6 +919,7 @@ class AppState extends ChangeNotifier {
       subjectId: subjectId,
       kind: kind,
       batch: batch,
+      analysisMode: analysisMode,
     );
   }
 
@@ -932,38 +1225,78 @@ class AppState extends ChangeNotifier {
   Future<MaterialQueueProcessingResult> _processQueuedMaterial(
     AuthUser user,
     StudyMaterial material,
-    MaterialQueueWorkGuard guard,
+    MaterialQueueWorkGuard queueGuard,
   ) async {
-    if (!guard.isCurrent) {
+    if (!queueGuard.isCurrent) {
       return MaterialQueueProcessingResult(
         material: material,
         succeeded: false,
       );
     }
-    final succeeded = material.kind == MaterialKind.pdf
-        ? await extractPdfTextFor(user, material.id, queueGuard: guard)
-        : await extractImageTextFor(user, material.id, queueGuard: guard);
-    if (!guard.isCurrent) {
+    if (config.effectiveBackendMode != AppBackendMode.supabase ||
+        materialAnalysisRepository is EmptyMaterialAnalysisRepository) {
+      final succeeded = material.kind == MaterialKind.pdf
+          ? await extractPdfTextFor(user, material.id, queueGuard: queueGuard)
+          : await extractImageTextFor(
+              user,
+              material.id,
+              queueGuard: queueGuard,
+            );
+      final authoritative = materialById(material.id) ?? material;
       return MaterialQueueProcessingResult(
-        material: material,
-        succeeded: false,
+        material: authoritative,
+        succeeded:
+            succeeded &&
+            authoritative.processingStatus == MaterialProcessingStatus.ready &&
+            authoritative.hasContentText,
       );
     }
-    final authoritative = materialById(material.id) ?? material;
-    final consentRequired =
-        authoritative.kind == MaterialKind.pdf &&
-        const {
-          'ocr_available',
-          'mixed_ocr_available',
-        }.contains(authoritative.pdfExtraction?.classification);
-    return MaterialQueueProcessingResult(
-      material: authoritative,
-      succeeded:
-          succeeded &&
-          authoritative.processingStatus == MaterialProcessingStatus.ready &&
-          authoritative.hasContentText,
-      consentRequired: consentRequired,
+    _bindAnalysis(user);
+    final actionGuard = _beginAnalysisAction(
+      material.id,
+      AnalysisExplicitAction.preflight,
     );
+    if (actionGuard == null) {
+      return MaterialQueueProcessingResult(material: material, succeeded: true);
+    }
+    final generation = _nextAnalysis(material.id);
+    try {
+      final status = await materialAnalysisRepository.prepare(
+        user: user,
+        materialId: material.id,
+        mode: queueGuard.analysisMode,
+        confirmLargeDocument: false,
+      );
+      if (!queueGuard.isCurrent ||
+          !_currentAnalysis(user, material.id, generation)) {
+        return MaterialQueueProcessingResult(
+          material: material,
+          succeeded: false,
+        );
+      }
+      _analysisStatuses[material.id] = status;
+      _analysisErrors.remove(material.id);
+      notifyListeners();
+      _scheduleAnalysis(user, material.id);
+      return MaterialQueueProcessingResult(material: material, succeeded: true);
+    } on MaterialAnalysisException catch (e) {
+      if (_currentAnalysis(user, material.id, generation)) {
+        _analysisErrors[material.id] = e.code;
+        notifyListeners();
+      }
+      if (e.code == AnalysisErrorCode.documentTooLarge) {
+        return MaterialQueueProcessingResult(
+          material: material,
+          succeeded: true,
+        );
+      }
+      return MaterialQueueProcessingResult(
+        material: material,
+        succeeded: false,
+      );
+    } finally {
+      _endAnalysisAction(actionGuard);
+    }
   }
 
   Future<bool> deleteSubjectFor(AuthUser? user, String subjectId) async {
@@ -1098,6 +1431,12 @@ class AppState extends ChangeNotifier {
     _imageExtractionErrors.remove(materialId);
     _staleMaterialProcessors.remove(materialId);
     _materialLifecycleErrors.remove(materialId);
+    _analysisStatuses.remove(materialId);
+    _analysisErrors.remove(materialId);
+    _analysisPending.remove(materialId);
+    _analysisObservations.remove(materialId);
+    _analysisActions.remove(materialId);
+    _nextAnalysis(materialId);
   }
 
   Future<void> inspectMaterialRecoveryFor(
@@ -1408,6 +1747,17 @@ class AppState extends ChangeNotifier {
     _extractingImageIds.clear();
     _imageExtractionErrors.clear();
     _staleMaterialProcessors.clear();
+    _analysisUserId = null;
+    _analysisUser = null;
+    _analysisStatuses.clear();
+    _analysisErrors.clear();
+    for (final id in _analysisGenerations.keys.toList()) {
+      _nextAnalysis(id);
+    }
+    _analysisLoops.clear();
+    _analysisPending.clear();
+    _analysisObservations.clear();
+    _analysisActions.clear();
   }
 
   void clearSyncedWorkspaceForSignOut() {
@@ -1768,6 +2118,12 @@ class AppState extends ChangeNotifier {
     final material = materialById(materialId);
     if (material == null) {
       _summaryGenerationErrorMessage = 'Material unavailable.';
+      notifyListeners();
+      return false;
+    }
+    if (config.effectiveBackendMode == AppBackendMode.supabase &&
+        material.sourceKind == MaterialSourceKind.upload) {
+      _summaryGenerationErrorMessage = 'Could not generate summary. Try again.';
       notifyListeners();
       return false;
     }
@@ -2532,6 +2888,13 @@ class AppState extends ChangeNotifier {
     }
     return topics;
   }
+}
+
+class _AnalysisActionGuard {
+  const _AnalysisActionGuard({required this.id, required this.action});
+
+  final String id;
+  final AnalysisExplicitAction action;
 }
 
 enum AppLanguagePreference { system, english, german, russian }

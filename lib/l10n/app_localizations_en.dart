@@ -2291,4 +2291,132 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get materialMaximumFilesError =>
       'You can select a maximum of 20 files.';
+
+  @override
+  String get analysisRecommended => 'Recommended';
+
+  @override
+  String get analysisRecommendedDescription =>
+      'Best for formulas, diagrams, tables, and layout.';
+
+  @override
+  String get analysisEconomy => 'Economy';
+
+  @override
+  String get analysisAdvancedSettings => 'Advanced settings';
+
+  @override
+  String get analysisEconomyWarning =>
+      'Formulas, diagrams, tables, and layout may be less accurate.';
+
+  @override
+  String analysisSourcePageNumber(Object page) {
+    return 'Source page $page';
+  }
+
+  @override
+  String analysisRetryAvailableIn(Object seconds) {
+    return 'Retry available in $seconds seconds';
+  }
+
+  @override
+  String get analysisPreparingDocument => 'Preparing document';
+
+  @override
+  String analysisPageProgress(Object completed, Object pageCount) {
+    return 'Analyzing pages $completed of $pageCount';
+  }
+
+  @override
+  String get analysisRecognizingFormulas => 'Recognizing formulas and diagrams';
+
+  @override
+  String get analysisCreatingSummary => 'Creating summary';
+
+  @override
+  String get analysisConfirmLargeTitle => 'Confirm large document';
+
+  @override
+  String get analysisConfirmLargeAction => 'Continue analysis';
+
+  @override
+  String get analysisLargeDocumentExplanation =>
+      'This document is large. Analysis may take longer. Every page will be processed, formulas and diagrams may use visual analysis, and processing can resume when you reopen the app.';
+
+  @override
+  String get analysisDocumentTooLargeTitle => 'Document is too large';
+
+  @override
+  String get analysisDocumentTooLargeMessage =>
+      'Documents over 100 pages cannot be analyzed.';
+
+  @override
+  String get analysisResumeProcessing =>
+      'Processing can resume when you reopen the app.';
+
+  @override
+  String get analysisRetryProcessing => 'Retry processing';
+
+  @override
+  String get analysisRetryAvailableLater => 'Retry available later';
+
+  @override
+  String get analysisCompletedWithWarnings => 'Completed with warnings';
+
+  @override
+  String get analysisPartialPages => 'Partial pages';
+
+  @override
+  String get analysisMissingPages => 'Missing pages';
+
+  @override
+  String get analysisVerifyFormulas => 'Verify formulas';
+
+  @override
+  String get analysisUncertainFormula => 'Uncertain formula';
+
+  @override
+  String get analysisSourcePage => 'Source page';
+
+  @override
+  String get analysisViewOriginalPage => 'View original page';
+
+  @override
+  String get analysisCopyFormula => 'Copy formula';
+
+  @override
+  String get analysisMalformedFallback =>
+      'The structured summary could not be displayed. Showing the available summary instead.';
+
+  @override
+  String analysisEquationSemantics(String description, int page) {
+    return 'Equation: $description. Source page $page.';
+  }
+
+  @override
+  String get analysisFormulaCopied => 'Formula copied';
+
+  @override
+  String get analysisFormulaCopyFailed => 'Formula could not be copied';
+
+  @override
+  String analysisWarningSourcePage(int page) {
+    return 'Warning source page $page';
+  }
+
+  @override
+  String get analysisInvalidDocumentTitle => 'Document could not be analyzed';
+
+  @override
+  String get analysisInvalidDocumentMessage =>
+      'The document is invalid, damaged, or unsupported.';
+
+  @override
+  String get analysisTemporaryFailure =>
+      'Document analysis is temporarily unavailable. Try again later.';
+
+  @override
+  String analysisProgressSemantics(int completed, int pageCount) {
+    return 'Analyzed $completed of $pageCount pages';
+  }
 }
