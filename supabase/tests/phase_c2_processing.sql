@@ -34,9 +34,9 @@ before update on public.material_processing_jobs for each row
 execute function pg_temp.force_c2_finalize_rollback();
 
 select pg_temp.assert_c2(
-  to_regprocedure('public.prepare_material_analysis_internal(uuid,uuid,text,boolean,integer,text,jsonb)') is not null
-  and to_regprocedure('public.prepare_material_analysis_internal(uuid,uuid,text,boolean,integer,text,jsonb,text,jsonb)') is not null
-  and to_regprocedure('public.claim_next_material_analysis_operation_internal(uuid,uuid)') is not null
+  to_regprocedure('public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb)') is not null
+  and to_regprocedure('public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb,text,jsonb)') is not null
+  and to_regprocedure('public.claim_next_material_analysis_operation_internal(uuid)') is not null
   and to_regprocedure('public.complete_material_analysis_operation_internal(uuid,uuid,jsonb,text,text,text,boolean)') is not null
   and to_regprocedure('public.create_material_analysis_file_intent_internal(uuid,uuid)') is not null
   and to_regprocedure('public.record_material_analysis_file_uploaded_internal(uuid,uuid,text)') is not null
@@ -74,11 +74,10 @@ insert into public.materials(
 );
 
 select pg_temp.assert_c2(
-  (select count(*)=1 from public.load_material_analysis_source_internal(
-    '88888888-8888-4888-8888-888888888801','88888888-8888-4888-8888-888888888888'))
-  and (select count(*)=0 from public.load_material_analysis_source_internal(
-    '88888888-8888-4888-8888-888888888801','99999999-9999-4999-8999-999999999999')),
-  'source owner succeeds and cross-user is denied'
+  (select user_id='88888888-8888-4888-8888-888888888888'
+    from public.load_material_analysis_source_internal(
+      '88888888-8888-4888-8888-888888888801')),
+  'trusted source load derives the authoritative owner'
 );
 
 do $$
@@ -87,12 +86,12 @@ declare v_job uuid; v_same uuid; v_work jsonb; v_batch uuid; v_lease uuid;
   v_summary jsonb; v_contract jsonb; v_new uuid;
 begin
   v_job:=public.prepare_material_analysis_internal(
-    '88888888-8888-4888-8888-888888888801','88888888-8888-4888-8888-888888888888',
+    '88888888-8888-4888-8888-888888888801',
     'recommended',false,1,repeat('a',64),
     '[{"page_number":1,"route":"text","normalized_text":"Reliable selectable study text for the bounded page operation.","routing_signals":{"router_version":"phase-c-router-v1"},"routing_confidence":0.9,"input_hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]'
   );
   v_same:=public.prepare_material_analysis_internal(
-    '88888888-8888-4888-8888-888888888801','88888888-8888-4888-8888-888888888888',
+    '88888888-8888-4888-8888-888888888801',
     'recommended',false,1,repeat('a',64),
     '[{"page_number":1,"route":"text","normalized_text":"Reliable selectable study text for the bounded page operation.","routing_signals":{"router_version":"phase-c-router-v1"},"routing_confidence":0.9,"input_hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]'
   );
@@ -101,7 +100,7 @@ begin
     from public.material_processing_pages where job_id=v_job),'exact manifest 1..P');
 
   v_work:=public.claim_next_material_analysis_operation_internal(
-    '88888888-8888-4888-8888-888888888801','88888888-8888-4888-8888-888888888888');
+    '88888888-8888-4888-8888-888888888801');
   perform pg_temp.assert_c2(v_work->>'kind'='page_text','bounded text work claimed');
   v_batch:=(v_work->>'batch_id')::uuid;v_lease:=(v_work->>'lease_token')::uuid;
   select idempotency_key into v_key1 from public.submit_material_analysis_operation_internal(v_batch,v_lease);
@@ -117,7 +116,7 @@ begin
   perform pg_temp.assert_c2((select consumed_at is not null from public.material_processing_retry_authorizations
     where id=v_auth),'retry authorization consumed');
   v_work:=public.claim_next_material_analysis_operation_internal(
-    '88888888-8888-4888-8888-888888888801','88888888-8888-4888-8888-888888888888');
+    '88888888-8888-4888-8888-888888888801');
   v_lease:=(v_work->>'lease_token')::uuid;
   select idempotency_key into v_key2 from public.submit_material_analysis_operation_internal(v_batch,v_lease);
   select current_attempt_id into v_attempt2 from public.material_processing_batches where id=v_batch;
@@ -135,7 +134,7 @@ begin
 
   -- One leaf reduction, then one final summary; each claim owns one bounded unit.
   v_work:=public.claim_next_material_analysis_operation_internal(
-    '88888888-8888-4888-8888-888888888801','88888888-8888-4888-8888-888888888888');
+    '88888888-8888-4888-8888-888888888801');
   perform pg_temp.assert_c2(v_work->>'kind'='reduction' and jsonb_array_length(v_work->'page_numbers')<=10,
     'bounded leaf reduction claimed');
   v_batch:=(v_work->>'batch_id')::uuid;v_lease:=(v_work->>'lease_token')::uuid;
@@ -146,7 +145,7 @@ begin
     'phase-c-validator-v2',repeat('d',64),null,true);
 
   v_work:=public.claim_next_material_analysis_operation_internal(
-    '88888888-8888-4888-8888-888888888801','88888888-8888-4888-8888-888888888888');
+    '88888888-8888-4888-8888-888888888801');
   perform pg_temp.assert_c2(v_work->>'kind'='final_summary','final summary claimed after persisted reduction');
   v_batch:=(v_work->>'batch_id')::uuid;v_lease:=(v_work->>'lease_token')::uuid;
   perform public.submit_material_analysis_operation_internal(v_batch,v_lease);
@@ -183,7 +182,7 @@ begin
     'final_summary_schema_version','phase-c-final-schema-v1','validator_version','phase-c-validator-v2',
     'openai_configuration_version','phase-c-server-v1','mini_pdf_version','phase-c-mini-pdf-v1');
   v_new:=public.prepare_material_analysis_internal(
-    '88888888-8888-4888-8888-888888888801','88888888-8888-4888-8888-888888888888',
+    '88888888-8888-4888-8888-888888888801',
     'recommended',false,1,repeat('a',64),v_contract,
     public.material_analysis_version_fingerprint(v_contract),
     '[{"page_number":1,"route":"text","normalized_text":"Reliable selectable study text for the new generation.","routing_signals":{"router_version":"phase-c-router-v1"},"routing_confidence":0.9,"input_hash":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}]');
@@ -197,7 +196,7 @@ $$;
 
 select pg_temp.expect_c2_failure($sql$
   select public.prepare_material_analysis_internal(
-    '88888888-8888-4888-8888-888888888801','88888888-8888-4888-8888-888888888888',
+    '88888888-8888-4888-8888-888888888801',
     'recommended',false,2,repeat('a',64),'[]'::jsonb)
 $sql$,'invalid_preparation');
 
@@ -223,11 +222,11 @@ declare v_job uuid; v_work jsonb; v_batch uuid; v_lease uuid; v_artifact uuid; i
   v_second uuid:='77777777-7777-4777-8777-777777777779';
 begin
   v_job:=public.prepare_material_analysis_internal(
-    '88888888-8888-4888-8888-888888888802','88888888-8888-4888-8888-888888888888',
+    '88888888-8888-4888-8888-888888888802',
     'recommended',false,1,repeat('1',64),
     '[{"page_number":1,"route":"visual","normalized_text":"","routing_signals":{"router_version":"phase-c-router-v1"},"routing_confidence":1,"input_hash":"2222222222222222222222222222222222222222222222222222222222222222"}]');
   v_work:=public.claim_next_material_analysis_operation_internal(
-    '88888888-8888-4888-8888-888888888802','88888888-8888-4888-8888-888888888888');
+    '88888888-8888-4888-8888-888888888802');
   v_batch:=(v_work->>'batch_id')::uuid; v_lease:=(v_work->>'lease_token')::uuid;
   select artifact_id into v_artifact from public.create_material_analysis_file_intent_internal(v_batch,v_lease);
   perform pg_temp.assert_c2((select state='upload_intent' and provider_file_id is null
@@ -250,7 +249,7 @@ begin
     update public.material_processing_artifacts set cleanup_retry_after=now()-interval '1 second'
       where id=v_artifact;
     v_work:=public.claim_next_material_analysis_operation_internal(
-      '88888888-8888-4888-8888-888888888802','88888888-8888-4888-8888-888888888888');
+      '88888888-8888-4888-8888-888888888802');
     perform pg_temp.assert_c2(v_work->>'kind'='cleanup','cleanup remains a bounded independent work unit');
     perform public.complete_material_analysis_cleanup_internal(
       v_artifact,(v_work->>'lease_token')::uuid,'file_lifecycle_12345678',false);
@@ -265,7 +264,7 @@ begin
     'analysis-'||v_second::text||'.pdf','file_idempotent_12345678','cleanup_pending'
     from public.material_processing_batches b where b.id=v_batch;
   v_work:=public.claim_next_material_analysis_operation_internal(
-    '88888888-8888-4888-8888-888888888802','88888888-8888-4888-8888-888888888888');
+    '88888888-8888-4888-8888-888888888802');
   perform public.complete_material_analysis_cleanup_internal(
     v_second,(v_work->>'lease_token')::uuid,'file_idempotent_12345678',true);
   perform public.complete_material_analysis_cleanup_internal(

@@ -12,16 +12,21 @@ review-only draft and no callable processing Edge Function exists yet.
   or budget telemetry into material metadata. Flutter and public RPCs must
   ignore legacy private metadata defensively; cleanup is deferred to a later,
   separately approved migration.
-- Processing tables force RLS and grant `anon`, `authenticated`, and
-  `service_role` no direct table access. Every Phase C `SECURITY DEFINER` is
-  explicitly owned by the no-login, non-superuser, non-BYPASSRLS
-  `material_analysis_executor` role. Explicit FORCE-RLS policies grant only
-  that role the table operations required inside the functions. Therefore
-  function behavior does not depend on the migration runner or table-owner RLS
-  bypass. The public status RPC derives identity solely from `auth.uid()`.
-  Internal definers receive identifiers, derive owners from material/job joins,
-  validate composite owner relationships, lock rows, use a fixed search path,
-  and are service-role-only.
+- Hosted Supabase does not expose a true-superuser migration path. PostgreSQL 17
+  also gives a non-superuser role creator an automatic administrator membership
+  in a role it creates, with the bootstrap superuser as grantor; the managed
+  migration role cannot reliably revoke that membership. Phase C therefore
+  creates no custom executor role.
+- Processing tables force RLS and grant `PUBLIC`, `anon`, `authenticated`, and
+  `service_role` no direct table access. RLS remains defense in depth for
+  non-bypass roles, but authorization never depends on it: every Phase C
+  `SECURITY DEFINER` is explicitly owned by the managed `postgres` role, which
+  has `BYPASSRLS`. Every definer has the fixed `pg_catalog, public` search path,
+  explicit narrow grants, and authoritative relationship checks. The three
+  authenticated RPCs derive identity solely from `auth.uid()`; the internal
+  RPCs accept no authoritative user identifier, derive ownership through
+  material/job relationships, validate composite identities and leases, lock
+  exact rows, and are executable only by `service_role`.
 - The two-material claim limit is serialized with a transaction-scoped advisory
   lock derived from the authoritative job owner. Submitted and ambiguous work
   can never return to submission through lease expiry: it becomes

@@ -31,9 +31,17 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
       return error || !data.user ? null : data.user.id;
     },
     async loadSource(principalId, materialId) {
+      const { data, error } = await authenticated.from("materials")
+        .select("id")
+        .eq("id", materialId)
+        .eq("user_id", principalId)
+        .is("deleted_at", null)
+        .eq("source_kind", "upload")
+        .in("kind", ["pdf", "image"])
+        .maybeSingle();
+      if (error || !data) throw new Error("trusted_rpc_failed");
       return await rpcOne(trusted, "load_material_analysis_source_internal", {
         p_material_id: materialId,
-        p_user_id: principalId,
       });
     },
     async downloadPrivate(material: SourceMaterial) {
@@ -47,7 +55,6 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
     async prepareInternal(input) {
       return await rpcOne(trusted, "prepare_material_analysis_internal", {
         p_material_id: input.material_id,
-        p_user_id: input.principal_id,
         p_processing_mode: input.processing_mode,
         p_confirmation: input.confirm_large_document,
         p_page_count: input.page_count,
@@ -63,7 +70,6 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
         "claim_next_material_analysis_operation_internal",
         {
           p_material_id: input.material_id,
-          p_user_id: input.principal_id,
         },
       );
       return value as InternalWorkUnit;

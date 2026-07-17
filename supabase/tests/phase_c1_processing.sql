@@ -35,6 +35,16 @@ begin
 end
 $$;
 
+create or replace function pg_temp.statement_is_denied(statement text)
+returns boolean language plpgsql as $$
+begin
+  execute statement;
+  return false;
+exception when others then
+  return true;
+end
+$$;
+
 select pg_temp.assert_true(
   (select count(*) = 5 from pg_catalog.pg_class
     where relnamespace='public'::regnamespace and relname in (
@@ -71,25 +81,11 @@ select pg_temp.assert_true(
   'RLS and FORCE RLS enabled'
 );
 select pg_temp.assert_true(
-  (select not rolcanlogin and not rolsuper and not rolcreatedb and
-      not rolcreaterole and not rolinherit and not rolreplication and
-      not rolbypassrls
-    from pg_catalog.pg_roles where rolname='material_analysis_executor'),
-  'executor role has exact safe attributes'
-);
-select pg_temp.assert_true(
   not exists (
-    select 1 from pg_catalog.pg_auth_members membership
-    join pg_catalog.pg_roles executor on executor.oid=membership.roleid
-    where executor.rolname='material_analysis_executor'
+    select 1 from pg_catalog.pg_roles
+    where rolname='material_analysis_executor'
   ),
-  'executor role has no permanent members'
-);
-select pg_temp.assert_true(
-  not pg_catalog.has_schema_privilege(
-    'material_analysis_executor','public','create'
-  ),
-  'executor role has no permanent schema CREATE privilege'
+  'no custom Phase C executor role exists'
 );
 select pg_temp.assert_true(
   not exists (
@@ -98,9 +94,9 @@ select pg_temp.assert_true(
       p.proname like '%material_processing%' or p.proname in (
         'confirm_material_analysis','authorize_material_analysis_retry','get_material_analysis_status'
       )
-    ) and pg_catalog.pg_get_userbyid(p.proowner) <> 'material_analysis_executor'
+    ) and pg_catalog.pg_get_userbyid(p.proowner) <> 'postgres'
   ),
-  'all Phase C definers have explicit executor owner'
+  'all Phase C definers have the explicit managed postgres owner'
 );
 select pg_temp.assert_true(
   not pg_catalog.has_table_privilege('anon','public.material_processing_jobs','select') and
@@ -135,6 +131,7 @@ insert into public.materials(id,user_id,subject_id,title,kind) values
   ('dddddddd-dddd-dddd-dddd-ddddddddddd1','33333333-3333-3333-3333-333333333333',null,'Account cascade','pdf'),
   ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1','11111111-1111-1111-1111-111111111111',null,'Exact finalization','pdf'),
   ('99999999-9999-9999-9999-999999999991','11111111-1111-1111-1111-111111111111',null,'Incomplete manifest','pdf'),
+  ('abababab-abab-4bab-8bab-ababababab01','11111111-1111-1111-1111-111111111111',null,'Confirmation fixture','pdf'),
   ('ffffffff-ffff-ffff-ffff-fffffffffff1','11111111-1111-1111-1111-111111111111',null,'Material cascade','pdf');
 
 set role service_role;
@@ -147,6 +144,7 @@ select public.create_material_processing_job_internal('cccccccc-cccc-cccc-cccc-c
 select public.create_material_processing_job_internal('dddddddd-dddd-dddd-dddd-ddddddddddd1','recommended',false,1,'general') as job_d1 \gset
 select public.create_material_processing_job_internal('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1','recommended',false,1,'general') as job_e1 \gset
 select public.create_material_processing_job_internal('99999999-9999-9999-9999-999999999991','recommended',false,3,'general') as job_g1 \gset
+select public.create_material_processing_job_internal('abababab-abab-4bab-8bab-ababababab01','recommended',false,21,'general') as job_confirm \gset
 select public.create_material_processing_job_internal('ffffffff-ffff-ffff-ffff-fffffffffff1','recommended',false,1,'general') as job_f1 \gset
 select public.create_material_processing_batch_internal(
   :'job_a1',
@@ -163,6 +161,13 @@ select public.create_material_processing_batch_internal(
 select public.create_material_processing_batch_internal(
   :'job_b2',
   'page_text',array[1],repeat('8',64));
+reset role;
+
+set role service_role;
+select 1 / case when pg_temp.statement_is_denied(
+  $sql$update public.material_processing_jobs set updated_at=now()
+    where id='00000000-0000-0000-0000-000000000000'$sql$
+) then 1 else 0 end;
 reset role;
 
 select pg_temp.assert_true(
@@ -230,7 +235,30 @@ select 1 / case when count(*)=1 then 1 else 0 end
 from public.get_material_analysis_status('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1');
 select 1 / case when count(*)=0 then 1 else 0 end
 from public.get_material_analysis_status('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1');
+select 1 / case when pg_temp.statement_is_denied(
+  $sql$select public.confirm_material_analysis('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1')$sql$
+) then 1 else 0 end;
+select public.confirm_material_analysis('abababab-abab-4bab-8bab-ababababab01');
 reset role;
+
+select pg_catalog.set_config('request.jwt.claim.sub','',false);
+set role authenticated;
+select 1 / case when count(*)=0 then 1 else 0 end
+from public.get_material_analysis_status('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1');
+select 1 / case when pg_temp.statement_is_denied(
+  $sql$select public.confirm_material_analysis('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1')$sql$
+) then 1 else 0 end;
+select 1 / case when pg_temp.statement_is_denied(
+  $sql$select public.authorize_material_analysis_retry('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1')$sql$
+) then 1 else 0 end;
+reset role;
+select pg_catalog.set_config('request.jwt.claim.sub','11111111-1111-1111-1111-111111111111',false);
+
+select pg_temp.assert_true(
+  (select status='prepared' and confirmation_authorized_at is not null
+    from public.material_processing_jobs where id=:'job_confirm'),
+  'owner confirmation succeeds while cross-user and null-user calls are non-revealing'
+);
 
 -- Malformed canonical payloads fail before any persistence.
 do $$

@@ -2,37 +2,23 @@
 -- legacy OCR metadata intact. It is not deployed by the C1 implementation.
 
 do $$
-declare executor pg_catalog.pg_roles%rowtype;
+declare migration_owner pg_catalog.pg_roles%rowtype;
 begin
-  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'material_analysis_executor') then
-    create role material_analysis_executor
-      nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls;
+  if current_user <> 'postgres' then
+    raise exception 'unexpected_material_analysis_migration_owner';
   end if;
 
-  select * into strict executor
+  select * into strict migration_owner
   from pg_catalog.pg_roles
-  where rolname = 'material_analysis_executor';
-  if executor.rolcanlogin or executor.rolsuper or executor.rolcreatedb or
-      executor.rolcreaterole or executor.rolinherit or executor.rolreplication or
-      executor.rolbypassrls then
-    raise exception 'unsafe_material_analysis_executor_role';
-  end if;
-
-  if exists (
-    select 1 from pg_catalog.pg_auth_members membership
-    where membership.roleid = executor.oid
-  ) then
-    raise exception 'unexpected_material_analysis_executor_member';
-  end if;
-  if pg_catalog.has_schema_privilege(
-    'material_analysis_executor', 'public', 'create'
-  ) then
-    raise exception 'unexpected_material_analysis_executor_schema_create';
+  where rolname = current_user;
+  if not migration_owner.rolcanlogin or migration_owner.rolsuper or
+      not migration_owner.rolcreatedb or not migration_owner.rolcreaterole or
+      not migration_owner.rolinherit or not migration_owner.rolreplication or
+      not migration_owner.rolbypassrls then
+    raise exception 'unexpected_material_analysis_migration_owner_attributes';
   end if;
 end
 $$;
-
-grant usage on schema public, auth, extensions to material_analysis_executor;
 
 alter table public.materials
   add column if not exists summary_payload jsonb,
@@ -460,21 +446,6 @@ alter table public.material_processing_attempts force row level security;
 alter table public.material_processing_retry_authorizations enable row level security;
 alter table public.material_processing_retry_authorizations force row level security;
 
-create policy material_analysis_executor_jobs on public.material_processing_jobs
-  for all to material_analysis_executor using (true) with check (true);
-create policy material_analysis_executor_artifacts on public.material_processing_artifacts
-  for all to material_analysis_executor using (true) with check (true);
-create policy material_analysis_executor_pages on public.material_processing_pages
-  for all to material_analysis_executor using (true) with check (true);
-create policy material_analysis_executor_batches on public.material_processing_batches
-  for all to material_analysis_executor using (true) with check (true);
-create policy material_analysis_executor_attempts on public.material_processing_attempts
-  for all to material_analysis_executor using (true) with check (true);
-create policy material_analysis_executor_retry_authorizations on public.material_processing_retry_authorizations
-  for all to material_analysis_executor using (true) with check (true);
-create policy material_analysis_executor_materials on public.materials
-  for all to material_analysis_executor using (true) with check (true);
-
 alter table public.material_processing_jobs owner to postgres;
 alter table public.material_processing_artifacts owner to postgres;
 alter table public.material_processing_pages owner to postgres;
@@ -488,16 +459,6 @@ revoke all on table public.material_processing_pages from public, anon, authenti
 revoke all on table public.material_processing_batches from public, anon, authenticated, service_role;
 revoke all on table public.material_processing_attempts from public, anon, authenticated, service_role;
 revoke all on table public.material_processing_retry_authorizations from public, anon, authenticated, service_role;
-
-grant select, insert, update, delete on public.material_processing_jobs to material_analysis_executor;
-grant select, insert, update, delete on public.material_processing_artifacts to material_analysis_executor;
-grant select, insert, update, delete on public.material_processing_pages to material_analysis_executor;
-grant select, insert, update, delete on public.material_processing_batches to material_analysis_executor;
-grant select, insert, update, delete on public.material_processing_attempts to material_analysis_executor;
-grant select, insert, update, delete on public.material_processing_retry_authorizations to material_analysis_executor;
-grant select on public.materials to material_analysis_executor;
-grant update (summary, summary_payload, summary_schema_version, summary_processing_mode,
-  summary_validation_version, summary_validation_hash) on public.materials to material_analysis_executor;
 
 create or replace function public.enforce_material_processing_job_row()
 returns trigger language plpgsql
@@ -1190,7 +1151,7 @@ $$;
 -- C2 trusted orchestration boundary. Public requests never supply any value
 -- accepted by these service-only functions except the authenticated material.
 create or replace function public.load_material_analysis_source_internal(
-  p_material_id uuid,p_user_id uuid
+  p_material_id uuid
 ) returns table(
   id uuid,user_id uuid,kind text,source_kind text,storage_bucket text,
   storage_path text,mime_type text,file_size_bytes bigint,
@@ -1201,12 +1162,12 @@ as $$
   select m.id,m.user_id,m.kind,m.source_kind,m.storage_bucket,m.storage_path,
     m.mime_type,m.file_size_bytes,m.processing_status,m.deleted_at,m.metadata
   from public.materials m
-  where m.id=p_material_id and m.user_id=p_user_id and m.deleted_at is null
+  where m.id=p_material_id and m.deleted_at is null
     and m.source_kind='upload' and m.kind in ('pdf','image')
 $$;
 
 create or replace function public.prepare_material_analysis_internal(
-  p_material_id uuid,p_user_id uuid,p_processing_mode text,p_confirmation boolean,
+  p_material_id uuid,p_processing_mode text,p_confirmation boolean,
   p_page_count integer,p_source_hash text,p_version_contract jsonb,
   p_version_fingerprint text,p_page_plans jsonb
 ) returns uuid language plpgsql security definer
@@ -1229,7 +1190,7 @@ begin
     or (p_version_contract->>'page_count')::integer<>p_page_count
     or p_version_fingerprint<>public.material_analysis_version_fingerprint(p_version_contract)
     then raise exception 'invalid_preparation'; end if;
-  select * into v_material from public.materials where id=p_material_id and user_id=p_user_id
+  select * into v_material from public.materials where id=p_material_id
     and deleted_at is null and source_kind='upload' and kind in ('pdf','image') for update;
   if not found then raise exception 'material_unavailable'; end if;
   select array_agg((value->>'page_number')::integer order by (value->>'page_number')::integer)
@@ -1245,7 +1206,7 @@ begin
   select * into v_job from public.material_processing_jobs where material_id=p_material_id
     order by generation desc limit 1 for update;
   if found then
-    if v_job.user_id<>p_user_id then raise exception 'incompatible_existing_analysis'; end if;
+    if v_job.user_id<>v_material.user_id then raise exception 'incompatible_existing_analysis'; end if;
     if v_job.version_fingerprint=p_version_fingerprint then
       if v_job.status='awaiting_confirmation' and p_confirmation then
         update public.material_processing_jobs set status='prepared',confirmation_authorized_at=now(),updated_at=now()
@@ -1276,7 +1237,7 @@ end
 $$;
 
 create or replace function public.prepare_material_analysis_internal(
-  p_material_id uuid,p_user_id uuid,p_processing_mode text,p_confirmation boolean,
+  p_material_id uuid,p_processing_mode text,p_confirmation boolean,
   p_page_count integer,p_source_hash text,p_page_plans jsonb
 ) returns uuid language plpgsql security definer
 set search_path = pg_catalog, public
@@ -1293,7 +1254,7 @@ begin
     'validator_version','phase-c-validator-v2','openai_configuration_version','phase-c-server-v1',
     'mini_pdf_version','phase-c-mini-pdf-v1');
   return public.prepare_material_analysis_internal(
-    p_material_id,p_user_id,p_processing_mode,p_confirmation,p_page_count,p_source_hash,
+    p_material_id,p_processing_mode,p_confirmation,p_page_count,p_source_hash,
     v_contract,public.material_analysis_version_fingerprint(v_contract),p_page_plans);
 end
 $$;
@@ -1348,7 +1309,7 @@ end
 $$;
 
 create or replace function public.claim_next_material_analysis_operation_internal(
-  p_material_id uuid,p_user_id uuid
+  p_material_id uuid
 ) returns jsonb language plpgsql security definer
 set search_path = pg_catalog, public
 as $$
@@ -1360,7 +1321,7 @@ declare v_job public.material_processing_jobs%rowtype; v_batch public.material_p
 begin
   select j.* into v_job from public.material_processing_jobs j join public.materials m
     on m.id=j.material_id and m.user_id=j.user_id
-    where j.material_id=p_material_id and j.user_id=p_user_id and m.deleted_at is null
+    where j.material_id=p_material_id and m.deleted_at is null
     order by j.generation desc limit 1 for update of j;
   if not found then raise exception 'analysis_unavailable'; end if;
   if v_job.active_lease_token is not null and v_job.active_lease_expires_at<=now() then
@@ -1710,47 +1671,43 @@ begin
 end
 $$;
 
--- PostgreSQL permits a non-superuser to transfer ownership only when it can
--- SET ROLE to the new owner, and the new owner must have CREATE on the
--- containing schema. Managed Supabase migration roles have CREATEROLE but are
--- not superusers, so grant the captured current_user direct membership and the
--- executor CREATE on public only for the ownership and ACL changes below. Both
--- role identifiers are quoted with %I. The explicit normal and guarded
--- exception-path revokes minimize the privilege lifetime; PL/pgSQL rolls back
--- this block before entering its exception handler, and the enclosing migration
--- transaction also rolls back either grant if any later statement aborts.
+-- Hosted Supabase runs migrations with SET ROLE postgres. PostgreSQL 17 does
+-- not provide a portable custom-role ownership transfer path to that managed
+-- non-superuser, so every Phase C function is explicitly postgres-owned. The
+-- SECURITY DEFINER RPCs authorize through authoritative rows and never rely on
+-- the owner's BYPASSRLS behavior; FORCE RLS remains defense in depth for every
+-- non-bypass role. Direct processing-table access remains revoked for all API
+-- roles, and Edge Functions access processing state only through the narrowly
+-- granted RPCs below. Source ownership is checked separately through the
+-- existing authenticated materials boundary before trusted orchestration.
 do $$
 declare
   f regprocedure;
-  migration_role name := current_user;
-  membership_granted boolean := false;
-  schema_create_granted boolean := false;
 begin
-  if migration_role = 'material_analysis_executor' then
-    raise exception 'migration_role_must_differ_from_executor';
-  end if;
-  if exists (
-    select 1
-    from pg_catalog.pg_auth_members membership
-    join pg_catalog.pg_roles executor on executor.oid = membership.roleid
-    where executor.rolname = 'material_analysis_executor'
-  ) then
-    raise exception 'unexpected_material_analysis_executor_member';
-  end if;
-  if pg_catalog.has_schema_privilege(
-    'material_analysis_executor', 'public', 'create'
-  ) then
-    raise exception 'unexpected_material_analysis_executor_schema_create';
+  if current_user <> 'postgres' then
+    raise exception 'unexpected_material_analysis_migration_owner';
   end if;
 
-  grant create on schema public to material_analysis_executor;
-  schema_create_granted := true;
-
-  execute format(
-    'grant %I to %I',
-    'material_analysis_executor', migration_role
-  );
-  membership_granted := true;
+  foreach f in array array[
+    'public.material_analysis_safe_warnings(jsonb)'::regprocedure,
+    'public.material_analysis_valid_page_payload(jsonb)'::regprocedure,
+    'public.material_analysis_valid_summary_payload(jsonb)'::regprocedure,
+    'public.material_analysis_valid_batch_payload(jsonb,text)'::regprocedure,
+    'public.material_analysis_valid_page_numbers(integer[])'::regprocedure,
+    'public.material_analysis_version_fingerprint(jsonb)'::regprocedure,
+    'public.enforce_material_processing_job_row()'::regprocedure,
+    'public.enforce_material_processing_page_row()'::regprocedure,
+    'public.enforce_material_processing_batch_row()'::regprocedure,
+    'public.enforce_material_processing_attempt_row()'::regprocedure,
+    'public.refresh_material_processing_progress()'::regprocedure,
+    'public.reject_material_processing_status_self_transition()'::regprocedure
+  ] loop
+    execute format('alter function %s owner to postgres',f);
+    execute format(
+      'revoke all on function %s from public, anon, authenticated, service_role',
+      f
+    );
+  end loop;
 
   foreach f in array array[
     'public.create_material_processing_job_internal(uuid,text,boolean,integer,text,integer,jsonb,text)'::regprocedure,
@@ -1766,11 +1723,11 @@ begin
     'public.recover_expired_material_processing_batch_internal(uuid)'::regprocedure,
     'public.request_material_processing_retry_internal(uuid,uuid)'::regprocedure,
     'public.finalize_material_processing_job_internal(uuid,uuid,jsonb,text,text,text)'::regprocedure,
-    'public.load_material_analysis_source_internal(uuid,uuid)'::regprocedure,
-    'public.prepare_material_analysis_internal(uuid,uuid,text,boolean,integer,text,jsonb,text,jsonb)'::regprocedure,
-    'public.prepare_material_analysis_internal(uuid,uuid,text,boolean,integer,text,jsonb)'::regprocedure,
+    'public.load_material_analysis_source_internal(uuid)'::regprocedure,
+    'public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb,text,jsonb)'::regprocedure,
+    'public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb)'::regprocedure,
     'public.material_analysis_work_payload(uuid,uuid)'::regprocedure,
-    'public.claim_next_material_analysis_operation_internal(uuid,uuid)'::regprocedure,
+    'public.claim_next_material_analysis_operation_internal(uuid)'::regprocedure,
     'public.submit_material_analysis_operation_internal(uuid,uuid)'::regprocedure,
     'public.create_material_analysis_file_intent_internal(uuid,uuid)'::regprocedure,
     'public.record_material_analysis_file_uploaded_internal(uuid,uuid,text)'::regprocedure,
@@ -1780,8 +1737,11 @@ begin
     'public.fail_material_analysis_operation_internal(uuid,uuid,text,integer,text,boolean)'::regprocedure,
     'public.complete_material_analysis_cleanup_internal(uuid,uuid,text,boolean)'::regprocedure
   ] loop
-    execute format('alter function %s owner to material_analysis_executor',f);
-    execute format('revoke all on function %s from public, anon, authenticated',f);
+    execute format('alter function %s owner to postgres',f);
+    execute format(
+      'revoke all on function %s from public, anon, authenticated, service_role',
+      f
+    );
     execute format('grant execute on function %s to service_role',f);
   end loop;
 
@@ -1790,55 +1750,13 @@ begin
     'public.authorize_material_analysis_retry(uuid)'::regprocedure,
     'public.get_material_analysis_status(uuid)'::regprocedure
   ] loop
-    execute format('alter function %s owner to material_analysis_executor',f);
-    execute format('revoke all on function %s from public, anon, service_role',f);
+    execute format('alter function %s owner to postgres',f);
+    execute format(
+      'revoke all on function %s from public, anon, authenticated, service_role',
+      f
+    );
     execute format('grant execute on function %s to authenticated',f);
   end loop;
-
-  execute format(
-    'revoke %I from %I',
-    'material_analysis_executor', migration_role
-  );
-  membership_granted := false;
-
-  revoke create on schema public from material_analysis_executor;
-  schema_create_granted := false;
-
-  if exists (
-    select 1
-    from pg_catalog.pg_auth_members membership
-    join pg_catalog.pg_roles executor on executor.oid = membership.roleid
-    join pg_catalog.pg_roles member on member.oid = membership.member
-    where executor.rolname = 'material_analysis_executor'
-      and member.rolname = migration_role
-  ) then
-    raise exception 'temporary_executor_membership_not_revoked';
-  end if;
-  if pg_catalog.has_schema_privilege(
-    'material_analysis_executor', 'public', 'create'
-  ) then
-    raise exception 'temporary_executor_schema_create_not_revoked';
-  end if;
-exception when others then
-  if membership_granted and exists (
-    select 1
-    from pg_catalog.pg_auth_members membership
-    join pg_catalog.pg_roles executor on executor.oid = membership.roleid
-    join pg_catalog.pg_roles member on member.oid = membership.member
-    where executor.rolname = 'material_analysis_executor'
-      and member.rolname = migration_role
-  ) then
-    execute format(
-      'revoke %I from %I',
-      'material_analysis_executor', migration_role
-    );
-  end if;
-  if schema_create_granted and pg_catalog.has_schema_privilege(
-    'material_analysis_executor', 'public', 'create'
-  ) then
-    revoke create on schema public from material_analysis_executor;
-  end if;
-  raise;
 end
 $$;
 
@@ -1848,12 +1766,6 @@ revoke all on function public.material_analysis_valid_summary_payload(jsonb) fro
 revoke all on function public.material_analysis_valid_batch_payload(jsonb,text) from public,anon,authenticated,service_role;
 revoke all on function public.material_analysis_valid_page_numbers(integer[]) from public,anon,authenticated,service_role;
 revoke all on function public.material_analysis_version_fingerprint(jsonb) from public,anon,authenticated,service_role;
-grant execute on function public.material_analysis_safe_warnings(jsonb) to material_analysis_executor;
-grant execute on function public.material_analysis_valid_page_payload(jsonb) to material_analysis_executor;
-grant execute on function public.material_analysis_valid_summary_payload(jsonb) to material_analysis_executor;
-grant execute on function public.material_analysis_valid_batch_payload(jsonb,text) to material_analysis_executor;
-grant execute on function public.material_analysis_valid_page_numbers(integer[]) to material_analysis_executor;
-grant execute on function public.material_analysis_version_fingerprint(jsonb) to material_analysis_executor;
 
 revoke all on function public.enforce_material_processing_job_row() from public,anon,authenticated,service_role;
 revoke all on function public.enforce_material_processing_page_row() from public,anon,authenticated,service_role;

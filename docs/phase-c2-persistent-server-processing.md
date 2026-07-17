@@ -25,6 +25,16 @@ batches, attempts, leases, routing signals, normalized text, budgets, Storage
 identity, model configuration, provider response IDs, and temporary file IDs
 remain service-only.
 
+Phase C database access uses postgres-owned `SECURITY DEFINER` RPCs because
+hosted Supabase provides no supported true-superuser migration path and
+PostgreSQL 17 role creation introduces an automatic creator membership that a
+managed migration role cannot portably remove. The processing tables retain RLS
+and FORCE RLS as defense in depth, but the postgres-owned definers do not rely
+on those policies. They use a fixed `pg_catalog, public` search path, explicit
+row relationships and lease checks, and narrowly separated grants: authenticated
+users receive only the three public RPCs, while `service_role` receives only the
+internal RPCs. No API role receives direct processing-table DML.
+
 ## Provider and ambiguity behavior
 
 The OpenAI adapter uses the Responses API with server-selected model and

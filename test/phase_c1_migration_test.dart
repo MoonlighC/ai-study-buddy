@@ -29,6 +29,7 @@ void main() {
       'material_processing_jobs',
       'material_processing_pages',
       'material_processing_batches',
+      'material_processing_artifacts',
       'material_processing_attempts',
       'material_processing_retry_authorizations',
     ]) {
@@ -109,11 +110,11 @@ void main() {
     ]) {
       expect(migration, contains('function public.$function'));
     }
+    expect(migration, isNot(contains('p_user_id')));
     expect(
       migration,
-      contains('p_material_id uuid,p_user_id uuid'),
-      reason:
-          'C2 receives only the server-derived verified principal internally',
+      contains('where m.id=p_material_id and m.deleted_at is null'),
+      reason: 'trusted C2 RPCs derive ownership from authoritative rows',
     );
     expect(
       migration,
@@ -127,36 +128,21 @@ void main() {
       RegExp(
         r'security definer[\s\S]{0,80}set search_path = pg_catalog, public',
       ).allMatches(migration).length,
-      greaterThanOrEqualTo(11),
+      29,
     );
     for (final trigger in ['job', 'page', 'batch']) {
       expect(migration, contains('enforce_material_processing_${trigger}_row'));
     }
     expect(migration, contains('terminal_batch_immutable'));
     expect(migration, contains('page_attempt_budget_exhausted'));
-    expect(migration, contains('owner to material_analysis_executor'));
+    expect(migration, contains("if current_user <> 'postgres' then"));
     expect(
       migration,
-      contains(
-        'nologin nosuperuser nocreatedb nocreaterole noinherit '
-        'noreplication nobypassrls',
-      ),
+      contains("raise exception 'unexpected_material_analysis_migration_owner'"),
     );
-    expect(migration, contains('migration_role name := current_user'));
-    expect(migration, contains("'grant %i to %i'"));
-    expect(migration, contains("'revoke %i from %i'"));
-    expect(
-      migration,
-      contains('grant create on schema public to material_analysis_executor'),
-    );
-    expect(
-      migration,
-      contains(
-        'revoke create on schema public from material_analysis_executor',
-      ),
-    );
-    expect(migration, contains('pg_catalog.pg_auth_members'));
-    expect(migration, contains('unsafe_material_analysis_executor_role'));
+    expect(migration, contains("alter function %s owner to postgres"));
+    expect(migration, isNot(contains('material_analysis_executor')));
+    expect(migration, isNot(contains('pg_catalog.pg_auth_members')));
   });
 
   test(

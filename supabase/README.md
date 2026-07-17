@@ -336,5 +336,13 @@ Do not deploy the functions or apply migration 010 until the separate rollout
 checkpoint is approved. The functions must be deployed only after migration
 010, and the model secret/configuration must never be exposed to Flutter.
 
+Migration 010 creates no custom executor role. Its Phase C `SECURITY DEFINER`
+RPCs are explicitly owned by the managed `postgres` role and use a fixed
+`pg_catalog, public` search path. RLS and FORCE RLS remain defense in depth;
+authorization is enforced by authoritative row relationships because the owner
+has `BYPASSRLS`. API roles have no direct processing-table DML: authenticated
+users receive only the three public RPCs and `service_role` receives only the
+internal RPCs.
+
 See `docs/phase-c2-persistent-server-processing.md` for the trust boundary,
 bounded operation design, retry semantics, and disposable verification command.
