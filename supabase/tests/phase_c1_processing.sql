@@ -71,9 +71,25 @@ select pg_temp.assert_true(
   'RLS and FORCE RLS enabled'
 );
 select pg_temp.assert_true(
-  (select not rolsuper and not rolbypassrls and not rolcanlogin
+  (select not rolcanlogin and not rolsuper and not rolcreatedb and
+      not rolcreaterole and not rolinherit and not rolreplication and
+      not rolbypassrls
     from pg_catalog.pg_roles where rolname='material_analysis_executor'),
-  'executor role is explicit non-bypass no-login'
+  'executor role has exact safe attributes'
+);
+select pg_temp.assert_true(
+  not exists (
+    select 1 from pg_catalog.pg_auth_members membership
+    join pg_catalog.pg_roles executor on executor.oid=membership.roleid
+    where executor.rolname='material_analysis_executor'
+  ),
+  'executor role has no permanent members'
+);
+select pg_temp.assert_true(
+  not pg_catalog.has_schema_privilege(
+    'material_analysis_executor','public','create'
+  ),
+  'executor role has no permanent schema CREATE privilege'
 );
 select pg_temp.assert_true(
   not exists (

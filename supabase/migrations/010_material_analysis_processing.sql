@@ -2,9 +2,32 @@
 -- legacy OCR metadata intact. It is not deployed by the C1 implementation.
 
 do $$
+declare executor pg_catalog.pg_roles%rowtype;
 begin
   if not exists (select 1 from pg_catalog.pg_roles where rolname = 'material_analysis_executor') then
-    create role material_analysis_executor nologin nosuperuser noinherit nobypassrls;
+    create role material_analysis_executor
+      nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls;
+  end if;
+
+  select * into strict executor
+  from pg_catalog.pg_roles
+  where rolname = 'material_analysis_executor';
+  if executor.rolcanlogin or executor.rolsuper or executor.rolcreatedb or
+      executor.rolcreaterole or executor.rolinherit or executor.rolreplication or
+      executor.rolbypassrls then
+    raise exception 'unsafe_material_analysis_executor_role';
+  end if;
+
+  if exists (
+    select 1 from pg_catalog.pg_auth_members membership
+    where membership.roleid = executor.oid
+  ) then
+    raise exception 'unexpected_material_analysis_executor_member';
+  end if;
+  if pg_catalog.has_schema_privilege(
+    'material_analysis_executor', 'public', 'create'
+  ) then
+    raise exception 'unexpected_material_analysis_executor_schema_create';
   end if;
 end
 $$;
@@ -1687,9 +1710,48 @@ begin
 end
 $$;
 
+-- PostgreSQL permits a non-superuser to transfer ownership only when it can
+-- SET ROLE to the new owner, and the new owner must have CREATE on the
+-- containing schema. Managed Supabase migration roles have CREATEROLE but are
+-- not superusers, so grant the captured current_user direct membership and the
+-- executor CREATE on public only for the ownership and ACL changes below. Both
+-- role identifiers are quoted with %I. The explicit normal and guarded
+-- exception-path revokes minimize the privilege lifetime; PL/pgSQL rolls back
+-- this block before entering its exception handler, and the enclosing migration
+-- transaction also rolls back either grant if any later statement aborts.
 do $$
-declare f regprocedure;
+declare
+  f regprocedure;
+  migration_role name := current_user;
+  membership_granted boolean := false;
+  schema_create_granted boolean := false;
 begin
+  if migration_role = 'material_analysis_executor' then
+    raise exception 'migration_role_must_differ_from_executor';
+  end if;
+  if exists (
+    select 1
+    from pg_catalog.pg_auth_members membership
+    join pg_catalog.pg_roles executor on executor.oid = membership.roleid
+    where executor.rolname = 'material_analysis_executor'
+  ) then
+    raise exception 'unexpected_material_analysis_executor_member';
+  end if;
+  if pg_catalog.has_schema_privilege(
+    'material_analysis_executor', 'public', 'create'
+  ) then
+    raise exception 'unexpected_material_analysis_executor_schema_create';
+  end if;
+
+  grant create on schema public to material_analysis_executor;
+  schema_create_granted := true;
+
+  execute format(
+    'grant %I to %I',
+    'material_analysis_executor', migration_role
+  );
+  membership_granted := true;
+
   foreach f in array array[
     'public.create_material_processing_job_internal(uuid,text,boolean,integer,text,integer,jsonb,text)'::regprocedure,
     'public.create_material_processing_job_internal(uuid,text,boolean,integer,text)'::regprocedure,
@@ -1722,18 +1784,63 @@ begin
     execute format('revoke all on function %s from public, anon, authenticated',f);
     execute format('grant execute on function %s to service_role',f);
   end loop;
+
+  foreach f in array array[
+    'public.confirm_material_analysis(uuid)'::regprocedure,
+    'public.authorize_material_analysis_retry(uuid)'::regprocedure,
+    'public.get_material_analysis_status(uuid)'::regprocedure
+  ] loop
+    execute format('alter function %s owner to material_analysis_executor',f);
+    execute format('revoke all on function %s from public, anon, service_role',f);
+    execute format('grant execute on function %s to authenticated',f);
+  end loop;
+
+  execute format(
+    'revoke %I from %I',
+    'material_analysis_executor', migration_role
+  );
+  membership_granted := false;
+
+  revoke create on schema public from material_analysis_executor;
+  schema_create_granted := false;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_auth_members membership
+    join pg_catalog.pg_roles executor on executor.oid = membership.roleid
+    join pg_catalog.pg_roles member on member.oid = membership.member
+    where executor.rolname = 'material_analysis_executor'
+      and member.rolname = migration_role
+  ) then
+    raise exception 'temporary_executor_membership_not_revoked';
+  end if;
+  if pg_catalog.has_schema_privilege(
+    'material_analysis_executor', 'public', 'create'
+  ) then
+    raise exception 'temporary_executor_schema_create_not_revoked';
+  end if;
+exception when others then
+  if membership_granted and exists (
+    select 1
+    from pg_catalog.pg_auth_members membership
+    join pg_catalog.pg_roles executor on executor.oid = membership.roleid
+    join pg_catalog.pg_roles member on member.oid = membership.member
+    where executor.rolname = 'material_analysis_executor'
+      and member.rolname = migration_role
+  ) then
+    execute format(
+      'revoke %I from %I',
+      'material_analysis_executor', migration_role
+    );
+  end if;
+  if schema_create_granted and pg_catalog.has_schema_privilege(
+    'material_analysis_executor', 'public', 'create'
+  ) then
+    revoke create on schema public from material_analysis_executor;
+  end if;
+  raise;
 end
 $$;
-
-alter function public.confirm_material_analysis(uuid) owner to material_analysis_executor;
-alter function public.authorize_material_analysis_retry(uuid) owner to material_analysis_executor;
-alter function public.get_material_analysis_status(uuid) owner to material_analysis_executor;
-revoke all on function public.confirm_material_analysis(uuid) from public,anon,service_role;
-revoke all on function public.authorize_material_analysis_retry(uuid) from public,anon,service_role;
-revoke all on function public.get_material_analysis_status(uuid) from public,anon,service_role;
-grant execute on function public.confirm_material_analysis(uuid) to authenticated;
-grant execute on function public.authorize_material_analysis_retry(uuid) to authenticated;
-grant execute on function public.get_material_analysis_status(uuid) to authenticated;
 
 revoke all on function public.material_analysis_safe_warnings(jsonb) from public,anon,authenticated,service_role;
 revoke all on function public.material_analysis_valid_page_payload(jsonb) from public,anon,authenticated,service_role;

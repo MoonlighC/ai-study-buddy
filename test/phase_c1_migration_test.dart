@@ -75,8 +75,12 @@ void main() {
     );
     expect(
       migration,
+      contains("'public.get_material_analysis_status(uuid)'::regprocedure"),
+    );
+    expect(
+      migration,
       contains(
-        'grant execute on function public.get_material_analysis_status(uuid) to authenticated',
+        "execute format('grant execute on function %s to authenticated',f)",
       ),
     );
     expect(migration, contains('m.user_id=auth.uid()'));
@@ -131,7 +135,28 @@ void main() {
     expect(migration, contains('terminal_batch_immutable'));
     expect(migration, contains('page_attempt_budget_exhausted'));
     expect(migration, contains('owner to material_analysis_executor'));
-    expect(migration, contains('nologin nosuperuser noinherit nobypassrls'));
+    expect(
+      migration,
+      contains(
+        'nologin nosuperuser nocreatedb nocreaterole noinherit '
+        'noreplication nobypassrls',
+      ),
+    );
+    expect(migration, contains('migration_role name := current_user'));
+    expect(migration, contains("'grant %i to %i'"));
+    expect(migration, contains("'revoke %i from %i'"));
+    expect(
+      migration,
+      contains('grant create on schema public to material_analysis_executor'),
+    );
+    expect(
+      migration,
+      contains(
+        'revoke create on schema public from material_analysis_executor',
+      ),
+    );
+    expect(migration, contains('pg_catalog.pg_auth_members'));
+    expect(migration, contains('unsafe_material_analysis_executor_role'));
   });
 
   test(
