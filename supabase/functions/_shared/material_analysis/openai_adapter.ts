@@ -316,7 +316,11 @@ export function validateProviderOutput(
 }
 
 function validateProviderRequest(request: ProviderRequest) {
-  const maximumExpectedPages = request.operation === "final_summary" ? 100 : 10;
+  const maximumExpectedPages = ["reduction", "final_summary"].includes(
+      request.operation,
+    )
+    ? 100
+    : 10;
   if (
     !/^[0-9a-f]{64}$/.test(request.idempotencyKey) ||
     request.expectedPages.length < 1 ||
@@ -330,6 +334,8 @@ function validateProviderRequest(request: ProviderRequest) {
   ) throw new Error("invalid_provider_request");
   if (request.operation === "final_summary") {
     validateFinalSummaryRequest(request);
+  } else if (request.operation === "reduction") {
+    validateReductionRequest(request);
   }
   const schema = schemaFor(request.operation);
   if (!validateStructuredOutputSubset(schema).valid) {
@@ -345,6 +351,27 @@ function validateProviderRequest(request: ProviderRequest) {
   if (request.input.kind === "image" && request.expectedPages.join() !== "1") {
     throw new Error("invalid_image_mapping");
   }
+}
+
+function validateReductionRequest(request: ProviderRequest) {
+  if (
+    request.input.kind !== "text" ||
+    new TextEncoder().encode(request.input.text).length > 1024 * 1024
+  ) throw new Error("invalid_reduction_request");
+  let payload: unknown;
+  try {
+    payload = JSON.parse(request.input.text);
+  } catch {
+    throw new Error("invalid_reduction_request");
+  }
+  if (
+    !isRecord(payload) ||
+    Object.keys(payload).sort().join() !== "equation_ids,inputs" ||
+    !Array.isArray(payload.inputs) ||
+    payload.inputs.length < 1 ||
+    payload.inputs.length > 10 ||
+    !Array.isArray(payload.equation_ids)
+  ) throw new Error("invalid_reduction_request");
 }
 
 function validateFinalSummaryRequest(request: ProviderRequest) {

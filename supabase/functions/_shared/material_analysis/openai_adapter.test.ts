@@ -128,6 +128,65 @@ Deno.test("final summary accepts bounded 20 21 22 and 100 page hierarchies", asy
   }
 });
 
+Deno.test("21-page parent reduction permits three bounded inputs", async () => {
+  const pages = Array.from({ length: 21 }, (_, index) => index + 1);
+  const reduction = reductionForPages(pages);
+  let calls = 0;
+  const adapter = adapterWith(() => {
+    calls++;
+    return Promise.resolve(jsonResponse(completedResponse(reduction)));
+  });
+  const result = await adapter.execute({
+    operation: "reduction",
+    input: {
+      kind: "text",
+      text: JSON.stringify({
+        inputs: [
+          reductionForPages(pages.slice(0, 10)),
+          reductionForPages(pages.slice(10, 20)),
+          reductionForPages(pages.slice(20)),
+        ],
+        equation_ids: [[], [], []],
+      }),
+    },
+    expectedPages: pages,
+    allowedEquationIds: [],
+    pageCount: pages.length,
+    idempotencyKey: "c".repeat(64),
+  });
+  equal(result.result, reduction);
+  equal(calls, 1);
+});
+
+Deno.test("parent reduction rejects more than ten inputs before dispatch", async () => {
+  const pages = Array.from({ length: 100 }, (_, index) => index + 1);
+  let calls = 0;
+  const adapter = adapterWith(() => {
+    calls++;
+    return Promise.resolve(
+      jsonResponse(completedResponse(reductionForPages(pages))),
+    );
+  });
+  const error = await caught(() =>
+    adapter.execute({
+      operation: "reduction",
+      input: {
+        kind: "text",
+        text: JSON.stringify({
+          inputs: Array.from({ length: 11 }, () => reductionForPages([1])),
+          equation_ids: Array.from({ length: 11 }, () => []),
+        }),
+      },
+      expectedPages: pages,
+      allowedEquationIds: [],
+      pageCount: pages.length,
+      idempotencyKey: "d".repeat(64),
+    })
+  );
+  equal(error.message, "invalid_reduction_request");
+  equal(calls, 0);
+});
+
 Deno.test("final summary rejects malformed manifests before dispatch", async () => {
   const pages = Array.from({ length: 21 }, (_, index) => index + 1);
   for (
@@ -509,6 +568,17 @@ function summaryForPages(pages: number[]): StructuredSummary {
       missing_pages: [],
       page_modes: pages.map((page) => ({ page, mode: "text" })),
     },
+  };
+}
+
+function reductionForPages(pages: number[]) {
+  return {
+    source_pages: pages,
+    summary_markdown: "Validated reduction.",
+    key_concepts: ["Concept"],
+    equation_ids: [],
+    warnings: [],
+    confidence: 0.9,
   };
 }
 
