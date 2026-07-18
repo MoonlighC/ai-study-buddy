@@ -30,6 +30,9 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
       const { data, error } = await authenticated.auth.getUser(candidate);
       return error || !data.user ? null : data.user.id;
     },
+    async verifyServiceJwt(candidate) {
+      return constantTimeEqual(candidate, trustedKey);
+    },
     async loadSource(principalId, materialId) {
       const { data, error } = await authenticated.from("materials")
         .select("id")
@@ -156,6 +159,25 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
         p_cleanup_complete: input.cleanup_complete ?? true,
       });
     },
+    async loadDiagnosticTarget(batchId) {
+      return await rpcOne(
+        trusted,
+        "load_material_analysis_diagnostic_target_internal",
+        { p_batch_id: batchId },
+      ) as never;
+    },
+    async recordDiagnostic(input) {
+      await rpcVoid(
+        trusted,
+        "record_material_analysis_diagnostic_internal",
+        {
+          p_batch_id: input.batch_id,
+          p_diagnostic_code: input.diagnostic_code,
+          p_diagnostic_metadata: input.diagnostic_metadata,
+          p_diagnostic_version: input.diagnostic_version,
+        },
+      );
+    },
     async reconcileOperation(input) {
       await rpcVoid(trusted, "complete_material_analysis_operation_internal", {
         p_batch_id: input.batch_id,
@@ -202,6 +224,21 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
     provider: new TrustedOpenAiAdapter({ apiKey: openAiKey, model }),
     jitter: Math.random,
   };
+}
+
+async function constantTimeEqual(left: string, right: string) {
+  const encoder = new TextEncoder();
+  const [leftDigest, rightDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(left)),
+    crypto.subtle.digest("SHA-256", encoder.encode(right)),
+  ]);
+  const leftBytes = new Uint8Array(leftDigest);
+  const rightBytes = new Uint8Array(rightDigest);
+  let difference = 0;
+  for (let index = 0; index < leftBytes.length; index++) {
+    difference |= leftBytes[index] ^ rightBytes[index];
+  }
+  return difference === 0;
 }
 
 export function requireOwnedMaterial(data: unknown, error: unknown): unknown {

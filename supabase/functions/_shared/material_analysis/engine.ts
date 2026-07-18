@@ -435,7 +435,7 @@ export function sanitizePublicStatus(value: unknown): MaterialAnalysisStatus {
 }
 
 export function analysisLog(
-  operation: "prepare" | "advance" | "retry",
+  operation: "prepare" | "advance" | "retry" | "diagnostic",
   stage: string,
   details: Record<string, unknown> = {},
   write: (line: string) => void = console.log,
@@ -447,6 +447,16 @@ export function analysisLog(
       "page_count",
       "completed_pages",
       "retry_after_seconds",
+      "refusal_count",
+      "output_item_count",
+      "structured_candidate_count",
+      "parsed_json_byte_length",
+      "top_level_key_count",
+      "requested_page_number",
+      "returned_page_number",
+      "warning_count",
+      "equation_count",
+      "source_page_count",
     ]
   ) {
     const value = details[key];
@@ -454,11 +464,38 @@ export function analysisLog(
       safe[key] = Math.max(0, Math.min(1000, Math.trunc(value)));
     }
   }
-  for (const key of ["reason", "public_stage", "state", "operation_kind"]) {
+  for (
+    const key of [
+      "reason",
+      "public_stage",
+      "state",
+      "operation_kind",
+      "response_status",
+      "validator_stage",
+    ]
+  ) {
     const value = details[key];
-    if (typeof value === "string" && /^[a-z0-9_-]{1,64}$/.test(value)) {
+    const safeValidatorStage = key === "validator_stage" &&
+      typeof value === "string" && [
+      "validateResponseEnvelope",
+      "extractSingleStructuredCandidate",
+      "parseStructuredJson",
+      "validatePageSchema",
+      "validatePageSemantics",
+      "validatePageMarkdown",
+      "validatePageLatex",
+      "validatePageProvenance",
+      "persistValidatedPage",
+    ].includes(value);
+    if (
+      typeof value === "string" &&
+      (safeValidatorStage || /^[a-z0-9_-]{1,64}$/.test(value))
+    ) {
       safe[key] = value;
     }
+  }
+  for (const key of ["error_present", "incomplete_details_present"]) {
+    if (typeof details[key] === "boolean") safe[key] = details[key];
   }
   write(JSON.stringify(safe));
 }

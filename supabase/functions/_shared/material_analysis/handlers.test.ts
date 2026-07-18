@@ -1,6 +1,8 @@
 import {
   AnalysisDependencies,
   createAdvanceMaterialAnalysisHandler,
+  createMaterialAnalysisDiagnosticHandler,
+  createMaterialAnalysisDispatchHandler,
   createPrepareMaterialAnalysisHandler,
   createRetryMaterialAnalysisHandler,
   InternalWorkUnit,
@@ -19,6 +21,7 @@ const artifactId = crypto.randomUUID();
 const retryAuthorizationId = crypto.randomUUID();
 const runtimeAuthFixture = ["fixture", crypto.randomUUID()].join("_");
 const runtimeApiFixture = ["safe", "mock", crypto.randomUUID()].join("_");
+const runtimeServiceFixture = ["service", crypto.randomUUID()].join("_");
 
 Deno.test("C2 prepare owner succeeds with exact 1..P manifest", async () => {
   const pdf = await buildSyntheticPdf(["text", "text"]);
@@ -98,6 +101,85 @@ Deno.test("C2 page 101 rejects before job budget upload or OpenAI", async () => 
   equal((await response.json()).code, "document_too_large");
   equal(fake.preparations.length, 0);
   equal(fake.providerRequests, 0);
+});
+
+Deno.test("diagnostic handler retrieves once without POST, upload, attempt, budget, or public diagnostic", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const fake = fakeDependencies(pdf);
+  const response = await createMaterialAnalysisDiagnosticHandler(fake.deps)(
+    diagnosticRequest(batchId),
+  );
+  equal(response.status, 200);
+  equal(await response.json(), { status: "recorded" });
+  equal(fake.providerRequests, 1);
+  equal(fake.providerMethods, ["GET"]);
+  equal(fake.uploadRequests, 0);
+  equal(fake.submissions, 0);
+  equal(fake.completions, 0);
+  equal(fake.failures.length, 0);
+  equal(fake.diagnostics.length, 1);
+  equal(fake.diagnostics[0].diagnostic_code, "page_persistence_failed");
+});
+
+Deno.test("diagnostic handler persists a specific code without provider content", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const fake = fakeDependencies(pdf, "pdf", "diagnostic_latex_failure");
+  const response = await createMaterialAnalysisDiagnosticHandler(fake.deps)(
+    diagnosticRequest(batchId),
+  );
+  equal(response.status, 200);
+  equal(fake.providerMethods, ["GET"]);
+  equal(fake.diagnostics[0].diagnostic_code, "page_latex_failed");
+  equal(
+    JSON.stringify(fake.diagnostics[0]).includes("private provider content"),
+    false,
+  );
+});
+
+Deno.test("diagnostic database write failure stays generic and never retries provider", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const fake = fakeDependencies(pdf);
+  fake.deps.recordDiagnostic = () =>
+    Promise.reject(new Error("private database detail"));
+  const response = await createMaterialAnalysisDiagnosticHandler(fake.deps)(
+    diagnosticRequest(batchId),
+  );
+  equal(response.status, 500);
+  equal(await response.json(), {
+    error: "Material analysis is temporarily unavailable.",
+  });
+  equal(fake.providerMethods, ["GET"]);
+  equal(fake.providerRequests, 1);
+  equal(fake.uploadRequests, 0);
+  equal(fake.submissions, 0);
+  equal(fake.diagnostics.length, 0);
+});
+
+Deno.test("diagnostic handler rejects non-service callers before provider access", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const fake = fakeDependencies(pdf);
+  const response = await createMaterialAnalysisDiagnosticHandler(fake.deps)(
+    request({ batch_id: batchId }),
+  );
+  equal(response.status, 401);
+  equal(fake.providerRequests, 0);
+  equal(fake.diagnostics.length, 0);
+});
+
+Deno.test("forged diagnostic header is inert for a normal authenticated user", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const fake = fakeDependencies(pdf);
+  const withHeader = await createMaterialAnalysisDispatchHandler(fake.deps)(
+    normalDiagnosticShapedRequest(true),
+  );
+  const withoutHeader = await createMaterialAnalysisDispatchHandler(fake.deps)(
+    normalDiagnosticShapedRequest(false),
+  );
+  equal(withHeader.status, withoutHeader.status);
+  equal(await withHeader.json(), await withoutHeader.json());
+  equal(fake.providerRequests, 0);
+  equal(fake.uploadRequests, 0);
+  equal(fake.diagnostics.length, 0);
 });
 
 Deno.test("C2 image above 8 MiB rejects before budget upload or response", async () => {
@@ -416,6 +498,7 @@ function fakeDependencies(
     | "file_persistence_failure"
     | "response_persistence_transient"
     | "completion_failure"
+    | "diagnostic_latex_failure"
     | "http_429" = "success",
 ) {
   const state = {
@@ -434,11 +517,13 @@ function fakeDependencies(
     retryAuthorizations: 0,
     retryConsumptions: 0,
     providerRequests: 0,
+    providerMethods: [] as string[],
     uploadRequests: 0,
     deleteRequests: 0,
     fileIntents: 0,
     fileRecoveries: 0,
     responsePersistenceAttempts: 0,
+    diagnostics: [] as Array<Record<string, unknown>>,
     observedImageBytes: new Uint8Array(),
   };
   const provider = new TrustedOpenAiAdapter({
@@ -462,6 +547,25 @@ function fakeDependencies(
         throw new Error("unexpected provider endpoint");
       }
       state.providerRequests++;
+      state.providerMethods.push(init?.method ?? "GET");
+      if ((init?.method ?? "GET") === "GET") {
+        const payload = pageBatch();
+        if (providerMode === "diagnostic_latex_failure") {
+          (payload.pages[0] as Record<string, unknown>).equations = [{
+            id: "eq_bad",
+            latex: String.raw`\href{private provider content}{x}`,
+            explanation_markdown: "",
+            source_page: 1,
+            display: "block",
+            confidence: 0.9,
+            uncertainty: false,
+          }];
+        }
+        return new Response(JSON.stringify(completedResponse(payload)), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       const body = JSON.parse(String(init?.body));
       const dataUrl = body.input[0].content.find((
         item: Record<string, unknown>,
@@ -485,6 +589,7 @@ function fakeDependencies(
   const deps: AnalysisDependencies = {
     verifyJwt: (jwt) =>
       Promise.resolve(jwt === runtimeAuthFixture ? owner : null),
+    verifyServiceJwt: (jwt) => Promise.resolve(jwt === runtimeServiceFixture),
     loadSource: () => Promise.resolve(state.source),
     downloadPrivate: () => Promise.resolve(Uint8Array.from(bytes)),
     prepareInternal: (input) => {
@@ -543,6 +648,20 @@ function fakeDependencies(
       return Promise.resolve();
     },
     getStatus: () => Promise.resolve(state.status),
+    loadDiagnosticTarget: (requestedBatchId) =>
+      Promise.resolve({
+        batch_id: requestedBatchId,
+        operation: "page_visual",
+        status: "failed",
+        response_id: "resp_12345678",
+        page_numbers: [1],
+        page_count: 1,
+        cleanup_state: "pending",
+      }),
+    recordDiagnostic: (input) => {
+      state.diagnostics.push(structuredClone(input));
+      return Promise.resolve();
+    },
     provider,
     jitter: () => 0,
   };
@@ -634,6 +753,33 @@ function request(body: Record<string, unknown>, authenticated = true) {
       }
       : { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+function diagnosticRequest(requestedBatchId: string) {
+  return new Request("https://example.test", {
+    method: "POST",
+    headers: {
+      Authorization: ["Bearer", runtimeServiceFixture].join(" "),
+      "Content-Type": "application/json",
+      "x-material-analysis-operation": "diagnose-preserved-response-v1",
+    },
+    body: JSON.stringify({ batch_id: requestedBatchId }),
+  });
+}
+
+function normalDiagnosticShapedRequest(withHeader: boolean) {
+  const headers: Record<string, string> = {
+    Authorization: ["Bearer", runtimeAuthFixture].join(" "),
+    "Content-Type": "application/json",
+  };
+  if (withHeader) {
+    headers["x-material-analysis-operation"] = "diagnose-preserved-response-v1";
+  }
+  return new Request("https://example.test", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ batch_id: batchId }),
   });
 }
 

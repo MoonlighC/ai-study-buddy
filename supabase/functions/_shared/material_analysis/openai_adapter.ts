@@ -7,6 +7,10 @@ import {
   validateStructuredOutputSubset,
   validateSummarySemantics,
 } from "./schemas.ts";
+import {
+  diagnosePageResponse,
+  DiagnosticOutcome,
+} from "./response_diagnostics.ts";
 
 export type AnalysisOperation =
   | "page_text"
@@ -160,6 +164,45 @@ export class TrustedOpenAiAdapter {
       return { status: "completed", result: parsed };
     } catch (_) {
       return { status: "failed" };
+    }
+  }
+
+  async diagnoseRetrieved(input: {
+    responseId: string;
+    request: ProviderRequest;
+  }): Promise<DiagnosticOutcome> {
+    validateProviderRequest(input.request);
+    if (
+      input.request.operation !== "page_visual" ||
+      input.request.expectedPages.length !== 1
+    ) throw new Error("invalid_diagnostic_request");
+    const responseId = providerId(input.responseId, "invalid_response_id");
+    try {
+      const response = await this.requestJson(
+        `https://api.openai.com/v1/responses/${encodeURIComponent(responseId)}`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${this.options.apiKey}` },
+        },
+        false,
+      );
+      const diagnostic = diagnosePageResponse(
+        response,
+        input.request.expectedPages[0],
+        input.request.pageCount,
+      );
+      return diagnostic.ok
+        ? { ok: true, metadata: diagnostic.metadata }
+        : diagnostic;
+    } catch (_) {
+      return {
+        ok: false,
+        code: "validation_unknown",
+        metadata: {
+          requested_page_number: input.request.expectedPages[0],
+          validator_stage: "validateResponseEnvelope",
+        },
+      };
     }
   }
 

@@ -25,6 +25,11 @@ import {
   TrustedOpenAiAdapter,
 } from "./openai_adapter.ts";
 import { StructuredSummary } from "./contracts.ts";
+import {
+  DiagnosticCode,
+  DiagnosticMetadata,
+  diagnosticVersion,
+} from "./response_diagnostics.ts";
 
 export type InternalWorkUnit = {
   kind:
@@ -52,6 +57,7 @@ export type InternalWorkUnit = {
 
 export type AnalysisDependencies = {
   verifyJwt(jwt: string): Promise<string | null>;
+  verifyServiceJwt?(jwt: string): Promise<boolean>;
   loadSource(principalId: string, materialId: string): Promise<unknown>;
   downloadPrivate(material: SourceMaterial): Promise<Uint8Array>;
   prepareInternal(input: {
@@ -130,8 +136,25 @@ export type AnalysisDependencies = {
   authorizeRetry(principalId: string, materialId: string): Promise<string>;
   consumeRetry(materialId: string, authorizationId: string): Promise<void>;
   getStatus(principalId: string, materialId: string): Promise<unknown>;
+  loadDiagnosticTarget?(batchId: string): Promise<DiagnosticTarget>;
+  recordDiagnostic?(input: {
+    batch_id: string;
+    diagnostic_code: DiagnosticCode;
+    diagnostic_metadata: DiagnosticMetadata;
+    diagnostic_version: number;
+  }): Promise<void>;
   provider: TrustedOpenAiAdapter;
   jitter(): number;
+};
+
+export type DiagnosticTarget = {
+  batch_id: string;
+  operation: "page_visual";
+  status: "failed";
+  response_id: string;
+  page_numbers: number[];
+  page_count: number;
+  cleanup_state: "not_required" | "pending" | "completed";
 };
 
 const corsHeaders = {
@@ -220,6 +243,91 @@ export function createAdvanceMaterialAnalysisHandler(
     if (work.kind !== "none") await executeOneWorkUnit(deps, work, material);
     return await deps.getStatus(principalId, body.material_id);
   });
+}
+
+export function createMaterialAnalysisDispatchHandler(
+  deps: AnalysisDependencies,
+) {
+  const advance = createAdvanceMaterialAnalysisHandler(deps);
+  const diagnostic = createMaterialAnalysisDiagnosticHandler(deps);
+  return async (request: Request): Promise<Response> => {
+    if (
+      request.headers.get("x-material-analysis-operation") !==
+        "diagnose-preserved-response-v1"
+    ) return advance(request);
+    const jwt = bearerToken(request);
+    let authorized = false;
+    try {
+      authorized = !!jwt && !!deps.verifyServiceJwt &&
+        await deps.verifyServiceJwt(jwt);
+    } catch (_) {
+      authorized = false;
+    }
+    return authorized ? diagnostic(request) : advance(request);
+  };
+}
+
+export function createMaterialAnalysisDiagnosticHandler(
+  deps: AnalysisDependencies,
+) {
+  return async (request: Request): Promise<Response> => {
+    if (request.method !== "POST") {
+      return json({ error: "Method not allowed." }, 405);
+    }
+    const jwt = bearerToken(request);
+    if (
+      !jwt || !deps.verifyServiceJwt || !deps.loadDiagnosticTarget ||
+      !deps.recordDiagnostic || !(await deps.verifyServiceJwt(jwt))
+    ) return json({ error: "Authentication required." }, 401);
+    try {
+      const batchId = parseDiagnosticRequest(await safeJson(request));
+      const target = validateDiagnosticTarget(
+        await deps.loadDiagnosticTarget(batchId),
+        batchId,
+      );
+      const requestDefinition: ProviderRequest = {
+        operation: "page_visual",
+        input: {
+          kind: "pdf",
+          bytes: new Uint8Array(),
+          pageNumbers: target.page_numbers,
+        },
+        expectedPages: target.page_numbers,
+        pageCount: target.page_count,
+        idempotencyKey: "0".repeat(64),
+      };
+      const result = await deps.provider.diagnoseRetrieved({
+        responseId: target.response_id,
+        request: requestDefinition,
+      });
+      const diagnostic = result.ok
+        ? {
+          code: "page_persistence_failed" as const,
+          metadata: {
+            ...result.metadata,
+            validator_stage: "persistValidatedPage" as const,
+          },
+        }
+        : { code: result.code, metadata: result.metadata };
+      await deps.recordDiagnostic({
+        batch_id: target.batch_id,
+        diagnostic_code: diagnostic.code,
+        diagnostic_metadata: diagnostic.metadata,
+        diagnostic_version: diagnosticVersion,
+      });
+      analysisLog("diagnostic", "recorded", {
+        reason: diagnostic.code,
+        ...diagnostic.metadata,
+      });
+      return json({ status: "recorded" });
+    } catch (_) {
+      analysisLog("diagnostic", "failed", { reason: "validation_unknown" });
+      return json(
+        { error: "Material analysis is temporarily unavailable." },
+        500,
+      );
+    }
+  };
 }
 
 export function createRetryMaterialAnalysisHandler(deps: AnalysisDependencies) {
@@ -579,6 +687,46 @@ function operationFromPayload(value: unknown) {
   return isRecord(value) && typeof value.operation === "string"
     ? value.operation
     : "";
+}
+
+function bearerToken(request: Request) {
+  const authorization = request.headers.get("Authorization") ?? "";
+  return authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+}
+
+function parseDiagnosticRequest(value: unknown) {
+  if (
+    !isRecord(value) || Object.keys(value).join() !== "batch_id" ||
+    typeof value.batch_id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(value.batch_id)
+  ) throw new SafeAnalysisError("invalid_request", 400);
+  return value.batch_id;
+}
+
+function validateDiagnosticTarget(value: unknown, batchId: string) {
+  const pageCount = isRecord(value) && Number.isInteger(value.page_count)
+    ? value.page_count as number
+    : -1;
+  if (
+    !isRecord(value) ||
+    Object.keys(value).sort().join() !==
+      "batch_id,cleanup_state,operation,page_count,page_numbers,response_id,status" ||
+    value.batch_id !== batchId || value.operation !== "page_visual" ||
+    value.status !== "failed" ||
+    typeof value.response_id !== "string" ||
+    !/^[A-Za-z0-9_.-]{8,200}$/.test(value.response_id) ||
+    !Array.isArray(value.page_numbers) || value.page_numbers.length !== 1 ||
+    !Number.isInteger(value.page_numbers[0]) || value.page_numbers[0] < 1 ||
+    value.page_numbers[0] > 100 || pageCount < value.page_numbers[0] ||
+    pageCount > 100 ||
+    !["not_required", "pending", "completed"].includes(
+      String(value.cleanup_state),
+    )
+  ) throw new SafeAnalysisError("work_unavailable", 500);
+  return value as unknown as DiagnosticTarget;
 }
 
 async function safeJson(request: Request) {

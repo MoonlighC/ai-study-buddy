@@ -79,6 +79,8 @@ with expected(signature) as (
     'public.complete_material_analysis_operation_internal(uuid,uuid,jsonb,text,text,text,boolean)'::regprocedure,
     'public.fail_material_analysis_operation_internal(uuid,uuid,text,integer,text,boolean)'::regprocedure,
     'public.complete_material_analysis_cleanup_internal(uuid,uuid,text,boolean)'::regprocedure,
+    'public.load_material_analysis_diagnostic_target_internal(uuid)'::regprocedure,
+    'public.record_material_analysis_diagnostic_internal(uuid,text,jsonb,integer)'::regprocedure,
     'public.confirm_material_analysis(uuid)'::regprocedure,
     'public.authorize_material_analysis_retry(uuid)'::regprocedure,
     'public.get_material_analysis_status(uuid)'::regprocedure
@@ -91,10 +93,10 @@ with expected(signature) as (
     and procedure.oid::regprocedure in (select signature from expected)
 )
 select pg_temp.assert_role_portability(
-  (select count(*)=29 from expected) and
+  (select count(*)=31 from expected) and
   not exists(select signature from expected except select signature from actual) and
   not exists(select signature from actual except select signature from expected),
-  'postgres owns exactly the 26 internal and three public Phase C definers'
+  'postgres owns exactly the 28 internal and three public Phase C definers'
 );
 
 with phase_c_helper(signature) as (
@@ -105,6 +107,7 @@ with phase_c_helper(signature) as (
     'public.material_analysis_valid_batch_payload(jsonb,text)'::regprocedure,
     'public.material_analysis_valid_page_numbers(integer[])'::regprocedure,
     'public.material_analysis_version_fingerprint(jsonb)'::regprocedure,
+    'public.material_analysis_valid_diagnostic_metadata(jsonb)'::regprocedure,
     'public.enforce_material_processing_job_row()'::regprocedure,
     'public.enforce_material_processing_page_row()'::regprocedure,
     'public.enforce_material_processing_batch_row()'::regprocedure,
@@ -129,7 +132,7 @@ select pg_temp.assert_role_portability(
         where privilege.grantee=0 and privilege.privilege_type='EXECUTE'
       )
   ),
-  'postgres owns all twelve helpers and no API role can execute them directly'
+  'postgres owns all thirteen helpers and no API role can execute them directly'
 );
 
 with phase_c_definer as (
@@ -141,7 +144,7 @@ with phase_c_definer as (
       or procedure.proname like '%material_analysis%')
 )
 select pg_temp.assert_role_portability(
-  (select count(*)=29 from phase_c_definer)
+  (select count(*)=31 from phase_c_definer)
   and not exists (
     select 1 from phase_c_definer
     where pg_catalog.pg_get_userbyid(proowner)<>'postgres'
@@ -178,7 +181,9 @@ with internal(signature) as (
     'public.record_material_analysis_response_internal(uuid,uuid,text,text)'::regprocedure,
     'public.complete_material_analysis_operation_internal(uuid,uuid,jsonb,text,text,text,boolean)'::regprocedure,
     'public.fail_material_analysis_operation_internal(uuid,uuid,text,integer,text,boolean)'::regprocedure,
-    'public.complete_material_analysis_cleanup_internal(uuid,uuid,text,boolean)'::regprocedure
+    'public.complete_material_analysis_cleanup_internal(uuid,uuid,text,boolean)'::regprocedure,
+    'public.load_material_analysis_diagnostic_target_internal(uuid)'::regprocedure,
+    'public.record_material_analysis_diagnostic_internal(uuid,text,jsonb,integer)'::regprocedure
   ])
 )
 select pg_temp.assert_role_portability(

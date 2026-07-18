@@ -405,6 +405,56 @@ Deno.test("C2 retrieval validates reconciled output and never resubmits", async 
   equal(requests, 1);
 });
 
+Deno.test("diagnostic retrieval performs one GET and zero POST or file upload calls", async () => {
+  const methods: string[] = [];
+  const adapter = adapterWith((input, init) => {
+    equal(String(input).includes("/responses/resp_12345678"), true);
+    methods.push(init?.method ?? "GET");
+    return Promise.resolve(jsonResponse(completedResponse(pageBatch())));
+  });
+  const result = await adapter.diagnoseRetrieved({
+    responseId: "resp_12345678",
+    request: imageRequest(pngBytes()),
+  });
+  equal(result.ok, true);
+  equal(methods, ["GET"]);
+});
+
+for (const status of [404, 429, 500, 503]) {
+  Deno.test(`diagnostic GET ${status} becomes content-free validation_unknown`, async () => {
+    const methods: string[] = [];
+    const adapter = adapterWith((_input, init) => {
+      methods.push(init?.method ?? "GET");
+      return Promise.resolve(jsonResponse({ error: "private body" }, status));
+    });
+    const result = await adapter.diagnoseRetrieved({
+      responseId: "resp_12345678",
+      request: imageRequest(pngBytes()),
+    });
+    equal(result.ok, false);
+    if (!result.ok) {
+      equal(result.code, "validation_unknown");
+      equal(JSON.stringify(result.metadata).includes("private body"), false);
+    }
+    equal(methods, ["GET"]);
+  });
+}
+
+Deno.test("diagnostic GET network failure becomes validation_unknown without fallback", async () => {
+  const methods: string[] = [];
+  const adapter = adapterWith((_input, init) => {
+    methods.push(init?.method ?? "GET");
+    return Promise.reject(new TypeError("private network detail"));
+  });
+  const result = await adapter.diagnoseRetrieved({
+    responseId: "resp_12345678",
+    request: imageRequest(pngBytes()),
+  });
+  equal(result.ok, false);
+  if (!result.ok) equal(result.code, "validation_unknown");
+  equal(methods, ["GET"]);
+});
+
 for (const status of ["queued", "in_progress", "incomplete"]) {
   Deno.test(`C2 response status ${status} is reconciliation evidence, never success`, async () => {
     const adapter = adapterWith(() =>

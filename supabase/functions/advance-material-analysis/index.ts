@@ -1,13 +1,14 @@
 import { serve } from "serve";
 import { createAnalysisDependencies } from "../_shared/material_analysis/edge_runtime.ts";
-import { createAdvanceMaterialAnalysisHandler } from "../_shared/material_analysis/handlers.ts";
+import {
+  createMaterialAnalysisDispatchHandler,
+} from "../_shared/material_analysis/handlers.ts";
 
 serve((request) => {
   const jwt = bearer(request);
   try {
-    return createAdvanceMaterialAnalysisHandler(
-      createAnalysisDependencies(jwt),
-    )(request);
+    const dependencies = createAnalysisDependencies(jwt);
+    return createMaterialAnalysisDispatchHandler(dependencies)(request);
   } catch (_) {
     return unavailable();
   }

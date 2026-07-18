@@ -246,6 +246,24 @@ Deno.test("C2 status strips internal telemetry and logs only allowlisted fields"
   equal(lines[0].includes("document"), false);
 });
 
+Deno.test("diagnostic logs retain only code and bounded non-content facts", () => {
+  const lines: string[] = [];
+  analysisLog("diagnostic", "recorded", {
+    reason: "page_latex_failed",
+    validator_stage: "validatePageLatex",
+    equation_count: 2,
+    response_body: "private provider content",
+    response_id: "resp_private",
+    authorization: "Bearer private",
+  }, (line) => lines.push(line));
+  equal(lines.length, 1);
+  equal(lines[0].includes("page_latex_failed"), true);
+  equal(lines[0].includes("validatePageLatex"), true);
+  equal(lines[0].includes("private"), false);
+  equal(lines[0].includes("response_id"), false);
+  equal(lines[0].includes("authorization"), false);
+});
+
 function pdfMaterial() {
   return {
     id: materialId,
