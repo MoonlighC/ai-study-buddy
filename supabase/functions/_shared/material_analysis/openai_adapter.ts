@@ -350,8 +350,6 @@ function validateProviderRequest(request: ProviderRequest) {
 function validateFinalSummaryRequest(request: ProviderRequest) {
   if (
     request.input.kind !== "text" ||
-    request.expectedPages.length !== request.pageCount ||
-    request.expectedPages.some((page, index) => page !== index + 1) ||
     new TextEncoder().encode(request.input.text).length > 1024 * 1024
   ) throw new Error("invalid_final_summary_request");
   let payload: unknown;
@@ -365,14 +363,10 @@ function validateFinalSummaryRequest(request: ProviderRequest) {
     Object.keys(payload).sort().join() !==
       "manifest,operation,validated_reduction" ||
     payload.operation !== "final_summary" ||
-    !validateReductionResult(
-      payload.validated_reduction,
-      request.expectedPages,
-      request.allowedEquationIds ?? [],
-    ).valid ||
     !Array.isArray(payload.manifest) ||
     payload.manifest.length !== request.pageCount
   ) throw new Error("invalid_final_summary_request");
+  const authoritativePages: number[] = [];
   for (let index = 0; index < payload.manifest.length; index++) {
     const page = payload.manifest[index];
     if (
@@ -384,6 +378,17 @@ function validateFinalSummaryRequest(request: ProviderRequest) {
       !["text", "visual"].includes(String(page.route)) ||
       !Array.isArray(page.warnings)
     ) throw new Error("invalid_final_summary_request");
+    if (page.status !== "missing") authoritativePages.push(index + 1);
+  }
+  if (
+    authoritativePages.join() !== request.expectedPages.join() ||
+    !validateReductionResult(
+      payload.validated_reduction,
+      authoritativePages,
+      request.allowedEquationIds ?? [],
+    ).valid
+  ) {
+    throw new Error("invalid_final_summary_request");
   }
 }
 

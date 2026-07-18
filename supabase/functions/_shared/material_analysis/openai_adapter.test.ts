@@ -156,6 +156,66 @@ Deno.test("final summary rejects malformed manifests before dispatch", async () 
   }
 });
 
+Deno.test("final summary accepts an exact 21-page terminal partition with missing pages", async () => {
+  const allPages = Array.from({ length: 21 }, (_, index) => index + 1);
+  const missingPages = [7, 19];
+  const partialPages = [13];
+  const authoritativePages = allPages.filter((page) =>
+    !missingPages.includes(page)
+  );
+  const analyzedPages = authoritativePages.filter((page) =>
+    !partialPages.includes(page)
+  );
+  const request = finalSummaryRequest(authoritativePages);
+  request.pageCount = allPages.length;
+  const payload = JSON.parse(request.input.text);
+  payload.manifest = allPages.map((page) => ({
+    page_number: page,
+    status: missingPages.includes(page)
+      ? "missing"
+      : partialPages.includes(page)
+      ? "partial"
+      : "completed",
+    route: "text",
+    warnings: missingPages.includes(page) ? [{ code: "page_missing" }] : [],
+  }));
+  request.input.text = JSON.stringify(payload);
+  const summary = summaryForPages(authoritativePages);
+  summary.partial_extraction = {
+    is_partial: true,
+    analyzed_pages: analyzedPages,
+    partial_pages: partialPages,
+    missing_pages: missingPages,
+    page_modes: allPages.map((page) => ({ page, mode: "text" })),
+  };
+  let calls = 0;
+  const adapter = adapterWith(() => {
+    calls++;
+    return Promise.resolve(jsonResponse(completedResponse(summary)));
+  });
+  const result = await adapter.execute(request);
+  equal(result.result, summary);
+  equal(calls, 1);
+});
+
+Deno.test("final summary rejects reduction provenance that includes a missing page", async () => {
+  const allPages = Array.from({ length: 21 }, (_, index) => index + 1);
+  const request = finalSummaryRequest(allPages);
+  const payload = JSON.parse(request.input.text);
+  payload.manifest[6].status = "missing";
+  request.input.text = JSON.stringify(payload);
+  let calls = 0;
+  const adapter = adapterWith(() => {
+    calls++;
+    return Promise.resolve(
+      jsonResponse(completedResponse(summaryForPages(allPages))),
+    );
+  });
+  const error = await caught(() => adapter.execute(request));
+  equal(error.message, "invalid_final_summary_request");
+  equal(calls, 0);
+});
+
 Deno.test("C2 file DELETE treats provider 404 as idempotent cleanup success", async () => {
   let deletes = 0;
   const adapter = adapterWith((_input, init) => {
