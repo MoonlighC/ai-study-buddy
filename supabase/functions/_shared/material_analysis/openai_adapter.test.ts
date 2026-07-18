@@ -76,6 +76,45 @@ Deno.test("C2 adapter uploads named mini PDF then uses only persisted file ID", 
   equal((form.get("file") as File).name, `analysis-${artifactId}.pdf`);
 });
 
+Deno.test("visual STEM page request states the strict Markdown and LaTeX contract", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  let responseCreates = 0;
+  const adapter = adapterWith((input, init) => {
+    const url = String(input);
+    if (url.endsWith("/files")) {
+      return Promise.resolve(jsonResponse({ id: "file_12345678" }));
+    }
+    if (url.includes("/responses")) {
+      responseCreates++;
+      const body = JSON.parse(String(init?.body));
+      const content = body.input[0].content;
+      const prompt = content[0].text as string;
+      equal(body.text.format.name, "phase_c_page_visual_v1");
+      equal(prompt.includes("hardened Markdown"), true);
+      equal(prompt.includes("dollar-delimited math"), true);
+      equal(prompt.includes("control-spacing commands"), true);
+      equal(prompt.includes("exact source_page"), true);
+      equal(content[1], { type: "input_file", file_id: "file_12345678" });
+      equal("detail" in content[1], false);
+      return Promise.resolve(jsonResponse(completedResponse(stemPageBatch())));
+    }
+    throw new Error("unexpected provider endpoint");
+  });
+  const artifactId = "22222222-2222-4222-8222-222222222222";
+  const fileId = await adapter.uploadPdf(pdf, artifactId);
+  const result = await adapter.execute(
+    {
+      ...baseRequest(),
+      operation: "page_visual",
+      input: { kind: "pdf", bytes: pdf, pageNumbers: [1] },
+    },
+    undefined,
+    fileId,
+  );
+  equal(result.result, stemPageBatch());
+  equal(responseCreates, 1);
+});
+
 Deno.test("C2 PDF execution refuses an unpersisted file identity before dispatch", async () => {
   let calls = 0;
   const adapter = adapterWith(() => {
@@ -590,6 +629,37 @@ function pageBatch() {
       key_concepts: ["Concept"],
       equations: [],
       confidence: 0.9,
+      warnings: [],
+      trustworthy: true,
+    }],
+  };
+}
+
+function stemPageBatch() {
+  return {
+    pages: [{
+      page_number: 1,
+      summary_markdown:
+        "The page contains a quadratic formula and an integral.",
+      key_concepts: ["Quadratic formula", "Definite integral"],
+      equations: [{
+        id: "eq_quadratic",
+        latex: String.raw`\frac{-b \pm \sqrt{b^2-4ac}}{2a}`,
+        explanation_markdown: "A standard quadratic solution.",
+        source_page: 1,
+        display: "block",
+        confidence: 0.95,
+        uncertainty: false,
+      }, {
+        id: "eq_integral",
+        latex: String.raw`\int_0^\pi \sin(x) dx = 2`,
+        explanation_markdown: "A definite integral identity.",
+        source_page: 1,
+        display: "block",
+        confidence: 0.95,
+        uncertainty: false,
+      }],
+      confidence: 0.95,
       warnings: [],
       trustworthy: true,
     }],

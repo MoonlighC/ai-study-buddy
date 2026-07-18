@@ -158,6 +158,24 @@ Deno.test("C2 advance performs one bounded operation with exact original image b
   equal(fake.completions, 1);
 });
 
+Deno.test("one-page visual PDF uses one mini-PDF upload and one Responses create", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const fake = fakeDependencies(pdf, "pdf");
+  fake.work = workUnit();
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+  equal(response.status, 200);
+  equal(fake.claims, 1);
+  equal(fake.fileIntents, 1);
+  equal(fake.uploadRequests, 1);
+  equal(fake.submissions, 1);
+  equal(fake.providerRequests, 1);
+  equal(fake.responsePersistenceAttempts, 1);
+  equal(fake.completions, 1);
+  equal(fake.deleteRequests, 0);
+});
+
 Deno.test("C2 another worker lease returns status without provider request", async () => {
   const pdf = await buildSyntheticPdf(["text"]);
   const fake = fakeDependencies(pdf);
