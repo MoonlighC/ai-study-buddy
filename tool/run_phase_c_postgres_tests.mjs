@@ -77,16 +77,16 @@ await runSql(
     root,
     "supabase",
     "migrations",
-    "014_material_analysis_diagnostic_cleanup.sql.pending",
+    "014_material_analysis_diagnostic_cleanup.sql",
   ),
-  "pending cleanup migration 014",
+  "cleanup migration 014",
 );
 await runSql(
   path.join(root, "supabase", "tests", "phase_c_diagnostic_cleanup.sql"),
   "phase_c_diagnostic_cleanup.sql",
 );
 
-console.log("PHASE_C_DATABASE_TESTS_OK migrations=13 sql_suites=7");
+console.log("PHASE_C_DATABASE_TESTS_OK migrations=14 sql_suites=7");
 await database.close();
 
 async function runSql(file, label) {

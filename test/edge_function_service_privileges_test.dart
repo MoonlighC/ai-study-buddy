@@ -20,7 +20,7 @@ void main() {
     );
     diagnosticCleanupMigration = _normalize(
       await File(
-        'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql.pending',
+        'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql',
       ).readAsString(),
     );
   });
@@ -267,7 +267,7 @@ void main() {
     );
   });
 
-  test('pending cleanup migration removes all temporary capabilities', () {
+  test('cleanup migration removes all temporary capabilities', () {
     for (final capability in [
       'attach_material_analysis_diagnostic_final_batch',
       'attach_material_analysis_diagnostic_job',

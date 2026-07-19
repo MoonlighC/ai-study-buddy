@@ -1,4 +1,4 @@
--- Rename this file to .sql only after the staging diagnostic has completed.
+-- Follow-up cleanup after the staging controlled fixture completed.
 -- It removes every capability introduced by temporary migration 013.
 
 drop trigger if exists attach_material_analysis_diagnostic_final_batch

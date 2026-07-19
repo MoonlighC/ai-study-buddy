@@ -293,7 +293,7 @@ void main() {
     }
   });
 
-  test('migration evidence is exactly 001 through 013', () {
+  test('migration evidence is exactly 001 through 014', () {
     final names =
         Directory('supabase/migrations')
             .listSync()
@@ -302,9 +302,9 @@ void main() {
             .map((file) => file.uri.pathSegments.last)
             .toList()
           ..sort();
-    expect(names, hasLength(13));
+    expect(names, hasLength(14));
     expect(names.first, startsWith('001_'));
-    expect(names.last, startsWith('013_'));
+    expect(names.last, startsWith('014_'));
     expect(names.map((name) => name.substring(0, 3)).toList(), [
       '001',
       '002',
@@ -319,19 +319,20 @@ void main() {
       '011',
       '012',
       '013',
+      '014',
     ]);
   });
 
-  test('diagnostic cleanup is reviewed but cannot migrate prematurely', () {
+  test('diagnostic cleanup is the runnable migration 014', () {
     expect(
       File(
-        'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql.pending',
+        'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql',
       ).existsSync(),
       isTrue,
     );
     expect(
       File(
-        'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql',
+        'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql.pending',
       ).existsSync(),
       isFalse,
     );

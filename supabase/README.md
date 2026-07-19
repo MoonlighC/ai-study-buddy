@@ -393,9 +393,9 @@ Staging rollout requires a separately reviewed checkpoint:
 7. Delete the named key and prove the deleted key receives `401` without
    reaching RPC or provider code. Delete the deployed temporary function and
    confirm it is absent.
-8. Use the reviewed file as the follow-up cleanup migration: rename
-   `014_material_analysis_diagnostic_cleanup.sql.pending` to `.sql`, review it
-   once more, and apply it to staging. It drops both correlation triggers. The
+8. Apply the reviewed follow-up cleanup migration
+   `014_material_analysis_diagnostic_cleanup.sql` to staging. It drops both
+   correlation triggers. The
    cleanup migration drops `select_material_analysis_diagnostic_target_internal()`,
    the no-ID diagnostic recorder, their helper functions, the correlation
    table, and all associated grants.
