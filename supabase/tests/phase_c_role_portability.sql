@@ -28,7 +28,8 @@ with phase_c_table(relation) as (
     'public.material_processing_artifacts'::regclass,
     'public.material_processing_attempts'::regclass,
     'public.material_processing_pages'::regclass,
-    'public.material_processing_retry_authorizations'::regclass
+    'public.material_processing_retry_authorizations'::regclass,
+    'public.material_analysis_diagnostic_correlations'::regclass
   ])
 )
 select pg_temp.assert_role_portability(
@@ -48,7 +49,7 @@ select pg_temp.assert_role_portability(
           and privilege.privilege_type in ('SELECT','INSERT','UPDATE','DELETE')
       )
   ),
-  'all six tables keep RLS and FORCE RLS with no direct API-role or PUBLIC DML'
+  'all seven tables keep RLS and FORCE RLS with no direct API-role or PUBLIC DML'
 );
 
 with expected(signature) as (
@@ -81,6 +82,10 @@ with expected(signature) as (
     'public.complete_material_analysis_cleanup_internal(uuid,uuid,text,boolean)'::regprocedure,
     'public.load_material_analysis_diagnostic_target_internal(uuid)'::regprocedure,
     'public.record_material_analysis_diagnostic_internal(uuid,text,jsonb,integer)'::regprocedure,
+    'public.attach_material_analysis_diagnostic_job_internal()'::regprocedure,
+    'public.attach_material_analysis_diagnostic_final_batch_internal()'::regprocedure,
+    'public.select_material_analysis_diagnostic_target_internal()'::regprocedure,
+    'public.record_correlated_material_analysis_diagnostic_internal(text,jsonb,integer)'::regprocedure,
     'public.confirm_material_analysis(uuid)'::regprocedure,
     'public.authorize_material_analysis_retry(uuid)'::regprocedure,
     'public.get_material_analysis_status(uuid)'::regprocedure
@@ -93,10 +98,10 @@ with expected(signature) as (
     and procedure.oid::regprocedure in (select signature from expected)
 )
 select pg_temp.assert_role_portability(
-  (select count(*)=31 from expected) and
+  (select count(*)=35 from expected) and
   not exists(select signature from expected except select signature from actual) and
   not exists(select signature from actual except select signature from expected),
-  'postgres owns exactly the 28 internal and three public Phase C definers'
+  'postgres owns exactly the 32 internal and three public Phase C definers'
 );
 
 with phase_c_helper(signature) as (
@@ -144,7 +149,7 @@ with phase_c_definer as (
       or procedure.proname like '%material_analysis%')
 )
 select pg_temp.assert_role_portability(
-  (select count(*)=31 from phase_c_definer)
+  (select count(*)=35 from phase_c_definer)
   and not exists (
     select 1 from phase_c_definer
     where pg_catalog.pg_get_userbyid(proowner)<>'postgres'
@@ -184,6 +189,8 @@ with internal(signature) as (
     'public.complete_material_analysis_cleanup_internal(uuid,uuid,text,boolean)'::regprocedure,
     'public.load_material_analysis_diagnostic_target_internal(uuid)'::regprocedure,
     'public.record_material_analysis_diagnostic_internal(uuid,text,jsonb,integer)'::regprocedure
+    ,'public.select_material_analysis_diagnostic_target_internal()'::regprocedure
+    ,'public.record_correlated_material_analysis_diagnostic_internal(text,jsonb,integer)'::regprocedure
   ])
 )
 select pg_temp.assert_role_portability(
@@ -194,6 +201,22 @@ select pg_temp.assert_role_portability(
       or pg_catalog.has_function_privilege('anon',signature,'execute')
   ),
   'only service_role can execute every internal Phase C function'
+);
+
+with trigger_helper(signature) as (
+  select unnest(array[
+    'public.attach_material_analysis_diagnostic_job_internal()'::regprocedure,
+    'public.attach_material_analysis_diagnostic_final_batch_internal()'::regprocedure
+  ])
+)
+select pg_temp.assert_role_portability(
+  not exists (
+    select 1 from trigger_helper
+    where pg_catalog.has_function_privilege('service_role',signature,'execute')
+      or pg_catalog.has_function_privilege('authenticated',signature,'execute')
+      or pg_catalog.has_function_privilege('anon',signature,'execute')
+  ),
+  'temporary attachment trigger helpers are not directly executable'
 );
 
 with public_rpc(signature) as (

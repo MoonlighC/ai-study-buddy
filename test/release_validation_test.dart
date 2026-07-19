@@ -293,17 +293,18 @@ void main() {
     }
   });
 
-  test('migration evidence is exactly 001 through 012', () {
+  test('migration evidence is exactly 001 through 013', () {
     final names =
         Directory('supabase/migrations')
             .listSync()
             .whereType<File>()
+            .where((file) => file.path.endsWith('.sql'))
             .map((file) => file.uri.pathSegments.last)
             .toList()
           ..sort();
-    expect(names, hasLength(12));
+    expect(names, hasLength(13));
     expect(names.first, startsWith('001_'));
-    expect(names.last, startsWith('012_'));
+    expect(names.last, startsWith('013_'));
     expect(names.map((name) => name.substring(0, 3)).toList(), [
       '001',
       '002',
@@ -317,7 +318,23 @@ void main() {
       '010',
       '011',
       '012',
+      '013',
     ]);
+  });
+
+  test('diagnostic cleanup is reviewed but cannot migrate prematurely', () {
+    expect(
+      File(
+        'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql.pending',
+      ).existsSync(),
+      isTrue,
+    );
+    expect(
+      File(
+        'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql',
+      ).existsSync(),
+      isFalse,
+    );
   });
 
   test('only the temporary staging diagnostic disables gateway JWT checks', () {

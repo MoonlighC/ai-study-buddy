@@ -4,94 +4,61 @@ import {
   runPreservedFinalResponseDiagnostic,
 } from "./index.ts";
 
-const batchId = crypto.randomUUID();
+const callerSelectedId = crypto.randomUUID();
 const namedKey = `fixture_named_${crypto.randomUUID()}`;
-const legacyHyphenatedKey = `fixture_legacy_named_${crypto.randomUUID()}`;
+const oldNamedKey = `fixture_legacy_named_${crypto.randomUUID()}`;
 const otherNamedKey = `fixture_other_named_${crypto.randomUUID()}`;
 const defaultKey = `fixture_default_${crypto.randomUUID()}`;
 const publishableKey = `fixture_publishable_${crypto.randomUUID()}`;
-const legacyHyphenatedKeyName = "material-analysis-diagnostic-staging";
 const authEnvironment = {
   url: "https://fixture.supabase.co",
   secretKeys: {
     default: defaultKey,
     material_analysis_diagnostic_staging: namedKey,
-    [legacyHyphenatedKeyName]: legacyHyphenatedKey,
+    "material-analysis-diagnostic-staging": oldNamedKey,
     other_named_key: otherNamedKey,
   },
   publishableKeys: { default: publishableKey },
 };
 
-Deno.test("diagnostic authorization matrix rejects every untrusted credential shape", async () => {
-  const executeCalls: string[] = [];
+Deno.test("diagnostic authorization accepts only the exact named apikey", async () => {
+  let executions = 0;
   const handler = createDiagnosticHandler({
     authEnvironment,
-    execute: (_admin, id) => {
-      executeCalls.push(id);
+    execute: () => {
+      executions++;
       return Promise.resolve(recordedExecution());
     },
     logger: () => {},
   });
-  const cases: Array<{ name: string; headers?: HeadersInit }> = [
-    { name: "no apikey" },
-    { name: "wrong named secret", headers: { apikey: "fixture_wrong" } },
-    {
-      name: "old hyphenated named secret",
-      headers: { apikey: legacyHyphenatedKey },
-    },
-    { name: "other named secret", headers: { apikey: otherNamedKey } },
-    { name: "default secret", headers: { apikey: defaultKey } },
-    { name: "publishable key", headers: { apikey: publishableKey } },
-    {
-      name: "legacy service role in Authorization",
-      headers: { Authorization: "Bearer fixture.legacy.jwt" },
-    },
-    {
-      name: "named key in Authorization",
-      headers: { Authorization: `Bearer ${namedKey}` },
-    },
-    {
-      name: "valid apikey plus Authorization",
-      headers: { apikey: namedKey, Authorization: "Bearer fixture" },
-    },
+  const rejected: Array<HeadersInit | undefined> = [
+    undefined,
+    { apikey: "fixture_wrong" },
+    { apikey: oldNamedKey },
+    { apikey: otherNamedKey },
+    { apikey: defaultKey },
+    { apikey: publishableKey },
+    { Authorization: "Bearer fixture.legacy.jwt" },
+    { Authorization: namedKey },
+    { authorization: `Basic ${namedKey}` },
+    { apikey: namedKey, Authorization: "Bearer fixture" },
   ];
-  for (const fixture of cases) {
-    const response = await handler(request({ headers: fixture.headers }));
-    equal(response.status, 401, fixture.name);
-    const body = await response.text();
-    rejectsSensitiveResponse(body);
+  for (const headers of rejected) {
+    const response = await handler(request({ headers }));
+    equal(response.status, 401);
+    rejectsSensitiveResponse(await response.text());
   }
-  equal(executeCalls.length, 0);
+  equal(executions, 0);
+
+  const accepted = await handler(request({ apikey: namedKey }));
+  equal(accepted.status, 200);
+  equal(await accepted.json(), { diagnostic_recorded: true });
+  equal(executions, 1);
+  equal(accepted.headers.get("Access-Control-Allow-Origin"), null);
+  equal(accepted.headers.get("Access-Control-Allow-Headers"), null);
 });
 
-Deno.test("valid named apikey reaches the handler without CORS or diagnostic data", async () => {
-  const executeCalls: string[] = [];
-  const logs: unknown[] = [];
-  const handler = createDiagnosticHandler({
-    authEnvironment,
-    execute: (_admin, id) => {
-      executeCalls.push(id);
-      return Promise.resolve(recordedExecution());
-    },
-    logger: (entry) => logs.push(entry),
-    now: sequentialClock(10, 17),
-  });
-  const response = await handler(request({ apikey: namedKey }));
-  equal(response.status, 200);
-  equal(await response.json(), { diagnostic_recorded: true });
-  equal(response.headers.get("Access-Control-Allow-Origin"), null);
-  equal(response.headers.get("Access-Control-Allow-Headers"), null);
-  equal(executeCalls, [batchId]);
-  equal(logs, [{
-    operation: "final_response_diagnostic",
-    outcome: "recorded",
-    diagnostic_code: "response_status_not_completed",
-    elapsed_milliseconds: 7,
-    get_count: 1,
-  }]);
-});
-
-Deno.test("valid named apikey still requires POST and application/json", async () => {
+Deno.test("diagnostic request contract is POST application/json with exactly empty object", async () => {
   let executions = 0;
   const handler = createDiagnosticHandler({
     authEnvironment,
@@ -108,98 +75,91 @@ Deno.test("valid named apikey still requires POST and application/json", async (
     }),
   );
   equal(get.status, 405);
-  const wrongContentType = await handler(request({
-    apikey: namedKey,
-    contentType: "text/plain",
-  }));
-  equal(wrongContentType.status, 400);
-  equal(executions, 0);
-});
-
-Deno.test("closed request decoder rejects malformed, additional, and oversized bodies", async () => {
-  let executions = 0;
-  const handler = createDiagnosticHandler({
-    authEnvironment,
-    execute: () => {
-      executions++;
-      return Promise.resolve(recordedExecution());
-    },
-    logger: () => {},
-  });
   const invalidBodies: unknown[] = [
-    {},
     [],
-    { batch_id: "not-a-uuid" },
-    { batch_id: batchId, operation: "final_summary" },
-    { user_id: batchId },
+    null,
+    { batch_id: callerSelectedId },
     { response_id: "provider_identifier" },
+    { material_id: callerSelectedId },
+    { user_id: callerSelectedId },
+    { correlation_id: callerSelectedId },
+    { fingerprint: "a".repeat(64) },
+    { fixture: "controlled" },
+    { operation: "diagnose" },
+    { sql: "select 1" },
   ];
   for (const body of invalidBodies) {
     const response = await handler(request({ apikey: namedKey, body }));
     equal(response.status, 400);
   }
+  const wrongContentType = await handler(request({
+    apikey: namedKey,
+    contentType: "text/plain",
+  }));
+  equal(wrongContentType.status, 400);
+  const emptyBody = await handler(
+    new Request("https://fixture.invalid", {
+      method: "POST",
+      headers: { apikey: namedKey, "Content-Type": "application/json" },
+      body: "",
+    }),
+  );
+  equal(emptyBody.status, 400);
   const oversized = await handler(
     new Request("https://fixture.invalid", {
       method: "POST",
-      headers: {
-        apikey: namedKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ batch_id: batchId, padding: "x".repeat(1024) }),
+      headers: { apikey: namedKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ padding: "x".repeat(1024) }),
     }),
   );
   equal(oversized.status, 400);
   equal(executions, 0);
+
+  const accepted = await handler(request({ apikey: namedKey, body: {} }));
+  equal(accepted.status, 200);
+  equal(executions, 1);
 });
 
-Deno.test("runtime performs one persisted-response GET and only two diagnostic RPCs", async () => {
+Deno.test("runtime performs one persisted-response GET and two service-only RPCs", async () => {
   const state = immutableState();
-  const before = structuredClone(state);
+  const before = structuredClone(state.protected);
   const admin = fakeAdmin(state);
   const providerCalls: Array<{ method: string; url: string }> = [];
-  const result = await runPreservedFinalResponseDiagnostic(
-    admin,
-    batchId,
-    {
-      openAiKey: "fixture-provider-key",
-      model: "fixture-model",
-      fetcher: (input, init) => {
-        providerCalls.push({
-          method: (init?.method ?? "GET").toUpperCase(),
-          url: String(input),
-        });
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              status: "failed",
-              error: null,
-              incomplete_details: null,
-              output: [],
-              ignored_private_content: "private provider content",
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          ),
-        );
-      },
+  const result = await runPreservedFinalResponseDiagnostic(admin, {
+    openAiKey: "fixture-provider-key",
+    model: "fixture-model",
+    fetcher: (input, init) => {
+      providerCalls.push({
+        method: (init?.method ?? "GET").toUpperCase(),
+        url: String(input),
+      });
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            status: "failed",
+            error: null,
+            incomplete_details: null,
+            output: [],
+            ignored_private_content: "private provider content",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
     },
-  );
+  });
   equal(providerCalls.length, 1);
   equal(providerCalls[0].method, "GET");
   equal(providerCalls[0].url.includes(state.persistedResponseIdentity), true);
   equal(admin.calls.map((call) => call.name), [
-    "load_material_analysis_diagnostic_target_internal",
-    "record_material_analysis_diagnostic_internal",
+    "select_material_analysis_diagnostic_target_internal",
+    "record_correlated_material_analysis_diagnostic_internal",
   ]);
+  equal(admin.calls[0].args, {});
   equal(result.getCount, 1);
   equal(result.diagnosticCode, "response_status_not_completed");
-  equal(
-    JSON.stringify(result.diagnosticMetadata).includes(
-      "private provider content",
-    ),
-    false,
-  );
-  equal(state.protected, before.protected);
-  equal(state.recorded?.p_batch_id, batchId);
+  equal(JSON.stringify(result).includes("private provider content"), false);
+  equal(state.protected, before);
+  equal(Object.hasOwn(state.recorded ?? {}, "p_batch_id"), false);
   equal(state.recorded?.p_diagnostic_code, "response_status_not_completed");
   equal(state.recorded?.p_diagnostic_version, 1);
   equal(
@@ -208,32 +168,94 @@ Deno.test("runtime performs one persisted-response GET and only two diagnostic R
   );
 });
 
-for (const ineligible of ["completed", "text", "page", "reduction"]) {
-  Deno.test(`RPC-rejected ${ineligible} target causes no provider request or write`, async () => {
+for (const targetCount of [0, 2]) {
+  Deno.test(`${targetCount} authoritative targets fail closed before provider access`, async () => {
     const calls: string[] = [];
     const admin: DiagnosticRpcClient = {
       rpc(name) {
         calls.push(name);
-        return Promise.resolve({ data: null, error: { safe: true } });
+        return Promise.resolve({
+          data: targetCount === 0 ? [] : [eligibleTarget(), eligibleTarget()],
+          error: null,
+        });
       },
     };
     let providerCalls = 0;
     await rejects(() =>
-      runPreservedFinalResponseDiagnostic(admin, batchId, {
+      runPreservedFinalResponseDiagnostic(admin, {
         openAiKey: "fixture-provider-key",
-        model: "fixture-model",
         fetcher: () => {
           providerCalls++;
           return Promise.reject(new Error("must_not_run"));
         },
       })
     );
-    equal(calls, ["load_material_analysis_diagnostic_target_internal"]);
+    equal(calls, ["select_material_analysis_diagnostic_target_internal"]);
     equal(providerCalls, 0);
   });
 }
 
-Deno.test("unknown failures stay generic and content-free", async () => {
+Deno.test("one malformed or weakened target stops before provider access", async () => {
+  const weakened = {
+    ...eligibleTarget(),
+    page_count: 2,
+    page_numbers: [1, 2],
+    cleanup_state: "completed",
+  };
+  let providerCalls = 0;
+  await rejects(() =>
+    runPreservedFinalResponseDiagnostic({
+      rpc: () => Promise.resolve({ data: weakened, error: null }),
+    }, {
+      openAiKey: "fixture-provider-key",
+      fetcher: () => {
+        providerCalls++;
+        return Promise.reject(new Error("must_not_run"));
+      },
+    })
+  );
+  equal(providerCalls, 0);
+});
+
+Deno.test("exactly one authoritative target proceeds and cannot cause a retry", async () => {
+  const state = immutableState();
+  const admin = fakeAdmin(state);
+  let getCount = 0;
+  await runPreservedFinalResponseDiagnostic(admin, {
+    openAiKey: "fixture-provider-key",
+    fetcher: () => {
+      getCount++;
+      return Promise.resolve(new Response("not-json", { status: 503 }));
+    },
+  });
+  equal(getCount, 1);
+  equal(
+    admin.calls.filter((call) =>
+      call.name === "record_correlated_material_analysis_diagnostic_internal"
+    ).length,
+    1,
+  );
+});
+
+Deno.test("selector unavailable is returned without identifiers or content", async () => {
+  const handler = createDiagnosticHandler({
+    authEnvironment,
+    execute: () =>
+      runPreservedFinalResponseDiagnostic({
+        rpc: () =>
+          Promise.resolve({
+            data: null,
+            error: { message: "diagnostic_target_unavailable" },
+          }),
+      }, { openAiKey: "fixture-provider-key" }),
+    logger: () => {},
+  });
+  const response = await handler(request({ apikey: namedKey }));
+  equal(response.status, 409);
+  equal(await response.json(), { error: "diagnostic_target_unavailable" });
+});
+
+Deno.test("unknown failures stay generic and provider content is never returned or logged", async () => {
   const privateDetail = "private provider body";
   const logs: unknown[] = [];
   const handler = createDiagnosticHandler({
@@ -244,8 +266,7 @@ Deno.test("unknown failures stay generic and content-free", async () => {
   });
   const response = await handler(request({ apikey: namedKey }));
   equal(response.status, 500);
-  const body = await response.text();
-  equal(body.includes(privateDetail), false);
+  equal((await response.text()).includes(privateDetail), false);
   equal(JSON.stringify(logs).includes(privateDetail), false);
   equal(logs, [{
     operation: "final_response_diagnostic",
@@ -254,6 +275,29 @@ Deno.test("unknown failures stay generic and content-free", async () => {
     elapsed_milliseconds: 5,
     get_count: 0,
   }]);
+});
+
+Deno.test("diagnostic recording boundary is idempotently compatible", async () => {
+  const state = immutableState();
+  const admin = fakeAdmin(state);
+  const first = {
+    p_diagnostic_code: "response_status_not_completed",
+    p_diagnostic_metadata: { response_status: "failed" },
+    p_diagnostic_version: 1,
+  };
+  await admin.rpc(
+    "record_correlated_material_analysis_diagnostic_internal",
+    first,
+  );
+  const snapshot = structuredClone(state.recorded);
+  await admin.rpc(
+    "record_correlated_material_analysis_diagnostic_internal",
+    first,
+  );
+  equal(state.recorded, snapshot);
+  equal(state.protected.attempt_count, 1);
+  equal(state.protected.budget_state, "released");
+  equal(state.protected.batch_status, "failed");
 });
 
 function request(options: {
@@ -268,7 +312,9 @@ function request(options: {
   return new Request("https://fixture.invalid", {
     method: "POST",
     headers,
-    body: JSON.stringify(options.body ?? { batch_id: batchId }),
+    body: JSON.stringify(
+      Object.hasOwn(options, "body") ? options.body : {},
+    ),
   });
 }
 
@@ -290,15 +336,25 @@ function immutableState() {
       batch_status: "failed",
       failure_code: "non_retryable",
       attempt_count: 1,
-      idempotency_key: "fixture-idempotency",
       budget_state: "released",
-      lease_token: null,
-      job_status: "failed",
+      job_budget_state: "released",
+      public_status: "failed",
       summary_payload: null,
       cleanup_state: "not_required",
       page_status: "completed",
     },
     recorded: null as Record<string, unknown> | null,
+  };
+}
+
+function eligibleTarget(responseId = "resp_fixture_persisted_1234") {
+  return {
+    operation: "final_summary",
+    status: "failed",
+    response_id: responseId,
+    page_numbers: [1],
+    page_count: 1,
+    cleanup_state: "not_required",
   };
 }
 
@@ -308,21 +364,19 @@ function fakeAdmin(state: ReturnType<typeof immutableState>) {
     calls,
     rpc(name: string, args: Record<string, unknown>) {
       calls.push({ name, args: structuredClone(args) });
-      if (name === "load_material_analysis_diagnostic_target_internal") {
+      if (name === "select_material_analysis_diagnostic_target_internal") {
         return Promise.resolve({
-          data: {
-            batch_id: batchId,
-            operation: "final_summary",
-            status: "failed",
-            response_id: state.persistedResponseIdentity,
-            page_numbers: [1],
-            page_count: 1,
-            cleanup_state: state.protected.cleanup_state,
-          },
+          data: eligibleTarget(state.persistedResponseIdentity),
           error: null,
         });
       }
-      if (name === "record_material_analysis_diagnostic_internal") {
+      if (name === "record_correlated_material_analysis_diagnostic_internal") {
+        if (
+          state.recorded &&
+          JSON.stringify(state.recorded) !== JSON.stringify(args)
+        ) {
+          return Promise.resolve({ data: null, error: { safe: true } });
+        }
         state.recorded = structuredClone(args);
         return Promise.resolve({ data: null, error: null });
       }

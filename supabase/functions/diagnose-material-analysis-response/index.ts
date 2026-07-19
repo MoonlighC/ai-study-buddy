@@ -9,9 +9,6 @@ import {
 const diagnosticKeyName = "material_analysis_diagnostic_staging";
 const diagnosticAuthMode = `secret:${diagnosticKeyName}` as const;
 const maximumRequestBytes = 1024;
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 type RpcResult = { data: unknown; error: unknown };
 export type DiagnosticRpcClient = {
   rpc(
@@ -27,7 +24,6 @@ type DiagnosticAuthEnvironment = {
 };
 
 type DiagnosticTarget = {
-  batch_id: string;
   operation: "final_summary";
   status: "failed";
   response_id: string;
@@ -54,7 +50,6 @@ type HandlerOptions = {
   authEnvironment?: DiagnosticAuthEnvironment;
   execute?: (
     admin: DiagnosticRpcClient,
-    batchId: string,
   ) => Promise<DiagnosticExecution>;
   logger?: (entry: SafeLog) => void;
   now?: () => number;
@@ -67,14 +62,14 @@ type RuntimeOptions = {
 };
 
 class DiagnosticExecutionError extends Error {
-  constructor(readonly getCount: number) {
+  constructor(readonly getCount: number, readonly targetUnavailable = false) {
     super("diagnostic_execution_failed");
   }
 }
 
 export function createDiagnosticHandler(options: HandlerOptions = {}) {
   const execute = options.execute ??
-    ((admin, batchId) => runPreservedFinalResponseDiagnostic(admin, batchId));
+    ((admin) => runPreservedFinalResponseDiagnostic(admin));
   const logger = options.logger ?? safeLog;
   const now = options.now ?? performance.now.bind(performance);
 
@@ -100,14 +95,14 @@ export function createDiagnosticHandler(options: HandlerOptions = {}) {
       context.authKeyName !== diagnosticKeyName
     ) return authenticationRequired();
 
-    const batchId = await parseRequest(request);
-    if (!batchId) return safeJson({ error: "Invalid request." }, 400);
+    if (!await parseRequest(request)) {
+      return safeJson({ error: "Invalid request." }, 400);
+    }
 
     const started = now();
     try {
       const result = await execute(
         context.supabaseAdmin as unknown as DiagnosticRpcClient,
-        batchId,
       );
       logger({
         operation: "final_response_diagnostic",
@@ -127,29 +122,29 @@ export function createDiagnosticHandler(options: HandlerOptions = {}) {
           ? error.getCount
           : 0,
       });
-      return safeJson(
-        { error: "Material analysis is temporarily unavailable." },
-        500,
-      );
+      return error instanceof DiagnosticExecutionError &&
+          error.targetUnavailable
+        ? safeJson({ error: "diagnostic_target_unavailable" }, 409)
+        : safeJson(
+          { error: "Material analysis is temporarily unavailable." },
+          500,
+        );
     }
   };
 }
 
 export async function runPreservedFinalResponseDiagnostic(
   admin: DiagnosticRpcClient,
-  batchId: string,
   options: RuntimeOptions = {},
 ): Promise<DiagnosticExecution> {
   let getCount = 0;
   try {
-    if (!uuidPattern.test(batchId)) throw new Error("invalid_batch_id");
     const target = validateTarget(
       await rpcOne(
         admin,
-        "load_material_analysis_diagnostic_target_internal",
-        { p_batch_id: batchId },
+        "select_material_analysis_diagnostic_target_internal",
+        {},
       ),
-      batchId,
     );
     const openAiKey = options.openAiKey ??
       requiredEnvironment("OPENAI_API_KEY");
@@ -185,9 +180,8 @@ export async function runPreservedFinalResponseDiagnostic(
       : { code: result.code, metadata: result.metadata };
     await rpcVoid(
       admin,
-      "record_material_analysis_diagnostic_internal",
+      "record_correlated_material_analysis_diagnostic_internal",
       {
-        p_batch_id: target.batch_id,
         p_diagnostic_code: diagnostic.code,
         p_diagnostic_metadata: diagnostic.metadata,
         p_diagnostic_version: diagnosticVersion,
@@ -198,12 +192,17 @@ export async function runPreservedFinalResponseDiagnostic(
       diagnosticMetadata: diagnostic.metadata,
       getCount: 1,
     };
-  } catch (_) {
-    throw new DiagnosticExecutionError(getCount);
+  } catch (error) {
+    throw new DiagnosticExecutionError(
+      getCount,
+      error instanceof DiagnosticTargetUnavailableError,
+    );
   }
 }
 
-function validateTarget(value: unknown, batchId: string): DiagnosticTarget {
+class DiagnosticTargetUnavailableError extends Error {}
+
+function validateTarget(value: unknown): DiagnosticTarget {
   if (!isRecord(value)) throw new Error("diagnostic_target_unavailable");
   const pageNumbers = Array.isArray(value.page_numbers)
     ? value.page_numbers
@@ -213,74 +212,79 @@ function validateTarget(value: unknown, batchId: string): DiagnosticTarget {
     : -1;
   if (
     Object.keys(value).sort().join() !==
-      "batch_id,cleanup_state,operation,page_count,page_numbers,response_id,status" ||
-    value.batch_id !== batchId || value.operation !== "final_summary" ||
+      "cleanup_state,operation,page_count,page_numbers,response_id,status" ||
+    value.operation !== "final_summary" ||
     value.status !== "failed" ||
     typeof value.response_id !== "string" ||
     !/^[A-Za-z0-9_.-]{8,200}$/.test(value.response_id) ||
-    pageCount < 1 || pageCount > 100 || pageNumbers.length < 1 ||
-    pageNumbers.length > 100 ||
-    pageNumbers.some((page, index) =>
-      !Number.isInteger(page) || page < 1 || page > pageCount ||
-      (index > 0 && page <= pageNumbers[index - 1])
-    ) ||
-    !["not_required", "pending", "completed"].includes(
-      String(value.cleanup_state),
-    )
+    pageCount !== 1 || pageNumbers.length !== 1 || pageNumbers[0] !== 1 ||
+    value.cleanup_state !== "not_required"
   ) throw new Error("diagnostic_target_unavailable");
   return value as DiagnosticTarget;
 }
 
-async function parseRequest(request: Request): Promise<string | null> {
+async function parseRequest(request: Request): Promise<boolean> {
   if (
     request.headers.get("Content-Type")?.split(";", 1)[0].trim()
       .toLowerCase() !==
       "application/json"
-  ) return null;
+  ) return false;
   const contentLength = request.headers.get("Content-Length");
   if (
     contentLength &&
     (!/^\d+$/.test(contentLength) ||
       Number(contentLength) > maximumRequestBytes)
-  ) return null;
+  ) return false;
   try {
     const bytes = new Uint8Array(await request.arrayBuffer());
     if (bytes.byteLength === 0 || bytes.byteLength > maximumRequestBytes) {
-      return null;
+      return false;
     }
     const value = JSON.parse(
       new TextDecoder("utf-8", { fatal: true }).decode(bytes),
     );
     if (
-      !isRecord(value) || Object.keys(value).join() !== "batch_id" ||
-      typeof value.batch_id !== "string" || !uuidPattern.test(value.batch_id)
-    ) return null;
-    return value.batch_id;
+      !isRecord(value) || Object.keys(value).length !== 0
+    ) return false;
+    return true;
   } catch (_) {
-    return null;
+    return false;
   }
 }
 
 async function rpcOne(
   admin: DiagnosticRpcClient,
-  name: "load_material_analysis_diagnostic_target_internal",
+  name: "select_material_analysis_diagnostic_target_internal",
   args: Record<string, unknown>,
 ) {
   const { data, error } = await admin.rpc(name, args);
-  if (error) throw new Error("diagnostic_rpc_failed");
+  if (error) {
+    if (isTargetUnavailableRpcError(error)) {
+      throw new DiagnosticTargetUnavailableError();
+    }
+    throw new Error("diagnostic_rpc_failed");
+  }
   if (Array.isArray(data)) {
-    if (data.length !== 1) throw new Error("diagnostic_rpc_shape");
+    if (data.length !== 1) throw new DiagnosticTargetUnavailableError();
     return data[0];
   }
   if (data === null || data === undefined) {
-    throw new Error("diagnostic_rpc_shape");
+    throw new DiagnosticTargetUnavailableError();
   }
   return data;
 }
 
+function isTargetUnavailableRpcError(value: unknown) {
+  if (!isRecord(value)) return false;
+  return [value.message, value.details, value.hint].some((candidate) =>
+    typeof candidate === "string" &&
+    candidate.includes("diagnostic_target_unavailable")
+  );
+}
+
 async function rpcVoid(
   admin: DiagnosticRpcClient,
-  name: "record_material_analysis_diagnostic_internal",
+  name: "record_correlated_material_analysis_diagnostic_internal",
   args: Record<string, unknown>,
 ) {
   const { error } = await admin.rpc(name, args);

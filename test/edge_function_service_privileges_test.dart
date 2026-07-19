@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late String migration;
+  late String diagnosticSelectorMigration;
+  late String diagnosticCleanupMigration;
 
   setUpAll(() async {
     migration = _normalize(
@@ -11,24 +13,52 @@ void main() {
         'supabase/migrations/009_edge_function_service_privileges.sql',
       ).readAsString(),
     );
+    diagnosticSelectorMigration = _normalize(
+      await File(
+        'supabase/migrations/013_material_analysis_diagnostic_target_selection.sql',
+      ).readAsString(),
+    );
+    diagnosticCleanupMigration = _normalize(
+      await File(
+        'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql.pending',
+      ).readAsString(),
+    );
   });
 
   test('service role receives exact trusted PostgREST writes', () {
     expect(migration, contains('grant usage on schema public to service_role'));
-    expect(migration, contains('grant select on table public.materials to service_role'));
+    expect(
+      migration,
+      contains('grant select on table public.materials to service_role'),
+    );
     expect(
       migration,
       contains(
         'grant update (summary, content_text, processing_status, metadata) on table public.materials to service_role',
       ),
     );
-    expect(migration, contains('grant select on table public.flashcards to service_role'));
+    expect(
+      migration,
+      contains('grant select on table public.flashcards to service_role'),
+    );
     expect(migration, contains('on table public.flashcards to service_role'));
-    expect(migration, contains('grant select on table public.quizzes to service_role'));
+    expect(
+      migration,
+      contains('grant select on table public.quizzes to service_role'),
+    );
     expect(migration, contains('on table public.quizzes to service_role'));
-    expect(migration, contains('grant delete on table public.quizzes to service_role'));
-    expect(migration, contains('grant select on table public.quiz_questions to service_role'));
-    expect(migration, contains('on table public.quiz_questions to service_role'));
+    expect(
+      migration,
+      contains('grant delete on table public.quizzes to service_role'),
+    );
+    expect(
+      migration,
+      contains('grant select on table public.quiz_questions to service_role'),
+    );
+    expect(
+      migration,
+      contains('on table public.quiz_questions to service_role'),
+    );
   });
 
   test('trusted grants are column-scoped and never broad/default grants', () {
@@ -37,8 +67,14 @@ void main() {
     expect(migration, isNot(contains('default privileges')));
     expect(migration, isNot(contains('all sequences')));
     expect(migration, isNot(contains('grant insert on table')));
-    expect(migration, isNot(contains('subject_deletion_operations to service_role')));
-    expect(migration, isNot(contains('account_deletion_operations to service_role')));
+    expect(
+      migration,
+      isNot(contains('subject_deletion_operations to service_role')),
+    );
+    expect(
+      migration,
+      isNot(contains('account_deletion_operations to service_role')),
+    );
   });
 
   test('clients receive no generated write or trusted helper authority', () {
@@ -116,13 +152,23 @@ void main() {
     expect(source, contains('request.headers.has("Authorization")'));
     expect(
       source,
-      contains('load_material_analysis_diagnostic_target_internal'),
+      contains('select_material_analysis_diagnostic_target_internal'),
     );
-    expect(source, contains('record_material_analysis_diagnostic_internal'));
+    expect(
+      source,
+      contains('record_correlated_material_analysis_diagnostic_internal'),
+    );
     expect(source, isNot(contains('SUPABASE_SERVICE_ROLE_KEY')));
     expect(source, isNot(contains('Access-Control-Allow-Origin')));
     expect(source, isNot(contains('.from("material_processing_')));
     expect(source, isNot(contains('/v1/responses')));
+    expect(source, contains('Object.keys(value).length !== 0'));
+    expect(
+      source,
+      contains(
+        '"select_material_analysis_diagnostic_target_internal",\n        {},',
+      ),
+    );
 
     final flutterSources = Directory('lib')
         .listSync(recursive: true)
@@ -136,6 +182,126 @@ void main() {
       );
     }
   });
+
+  test('temporary diagnostic selector is no-argument and fail-closed', () {
+    expect(
+      diagnosticSelectorMigration,
+      contains('select_material_analysis_diagnostic_target_internal()'),
+    );
+    expect(
+      diagnosticSelectorMigration,
+      contains("coalesce(pg_catalog.cardinality(v_targets), 0) <> 1"),
+    );
+    for (final invariant in [
+      "b.operation = 'final_summary'",
+      "b.status = 'failed'",
+      "b.failure_code = 'non_retryable'",
+      "j.page_count = 1",
+      "j.processing_mode = 'recommended'",
+      "page.route = 'visual'",
+      "reduction.operation = 'reduction'",
+      "visual.operation = 'page_visual'",
+      "b.cleanup_state = 'not_required'",
+      'b.diagnostic_code is null',
+      "count(*)",
+      ') = 3',
+    ]) {
+      expect(diagnosticSelectorMigration, contains(invariant));
+    }
+    expect(
+      diagnosticSelectorMigration,
+      contains('grant execute on function %s to service_role'),
+    );
+    expect(
+      diagnosticSelectorMigration,
+      isNot(contains('page.active_batch_id')),
+    );
+    expect(
+      diagnosticSelectorMigration,
+      contains('from public, anon, authenticated, service_role'),
+    );
+    expect(
+      diagnosticSelectorMigration,
+      contains('material_analysis_diagnostic_correlations'),
+    );
+    expect(
+      diagnosticSelectorMigration,
+      contains(
+        "new.source_hash <> '9c4df300f7bff18e8522322f3973b36bdc3186122af01ffdbc5852669b40f46a'",
+      ),
+    );
+    expect(diagnosticSelectorMigration, isNot(contains('m.title')));
+    expect(diagnosticSelectorMigration, isNot(contains('domain_profile')));
+    expect(diagnosticSelectorMigration, isNot(contains('p_batch_id uuid')));
+    for (final relationKey in [
+      'visual_attempt.job_id = b.job_id',
+      'visual_attempt.material_id = b.material_id',
+      'visual_attempt.user_id = b.user_id',
+      'reduction_attempt.job_id = b.job_id',
+      'reduction_attempt.material_id = b.material_id',
+      'reduction_attempt.user_id = b.user_id',
+      'final_attempt.job_id = b.job_id',
+      'final_attempt.material_id = b.material_id',
+      'final_attempt.user_id = b.user_id',
+    ]) {
+      expect(diagnosticSelectorMigration, contains(relationKey));
+    }
+  });
+
+  test('temporary correlation table is inaccessible to user roles', () {
+    expect(
+      diagnosticSelectorMigration,
+      contains(
+        'revoke all on table public.material_analysis_diagnostic_correlations from public, anon, authenticated, service_role',
+      ),
+    );
+    expect(diagnosticSelectorMigration, contains('enable row level security'));
+    expect(diagnosticSelectorMigration, contains('force row level security'));
+    expect(
+      diagnosticSelectorMigration,
+      isNot(contains('grant insert on table')),
+    );
+    expect(
+      diagnosticSelectorMigration,
+      isNot(contains('grant update on table')),
+    );
+  });
+
+  test('pending cleanup migration removes all temporary capabilities', () {
+    for (final capability in [
+      'attach_material_analysis_diagnostic_final_batch',
+      'attach_material_analysis_diagnostic_job',
+      'record_correlated_material_analysis_diagnostic_internal',
+      'select_material_analysis_diagnostic_target_internal',
+      'attach_material_analysis_diagnostic_final_batch_internal',
+      'attach_material_analysis_diagnostic_job_internal',
+      'material_analysis_diagnostic_correlations',
+    ]) {
+      expect(diagnosticCleanupMigration, contains(capability));
+    }
+    expect(diagnosticCleanupMigration, contains('drop trigger if exists'));
+    expect(diagnosticCleanupMigration, contains('drop function if exists'));
+    expect(diagnosticCleanupMigration, contains('drop table if exists'));
+  });
+
+  test(
+    'temporary diagnostic runbook requires post-result capability removal',
+    () async {
+      final runbook = _normalize(
+        await File('supabase/README.md').readAsString(),
+      );
+      for (final requirement in [
+        'deleted key receives `401`',
+        'delete the deployed temporary function',
+        'follow-up cleanup migration',
+        'drops `select_material_analysis_diagnostic_target_internal()`',
+        'production was never touched',
+        'preserve only the allowlisted diagnostic result',
+      ]) {
+        expect(runbook, contains(requirement));
+      }
+    },
+  );
 }
 
 String _normalize(String value) => value
