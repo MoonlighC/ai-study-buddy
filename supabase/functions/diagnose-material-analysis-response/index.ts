@@ -6,7 +6,7 @@ import {
   diagnosticVersion,
 } from "../_shared/material_analysis/response_diagnostics.ts";
 
-const diagnosticKeyName = "material-analysis-diagnostic-staging";
+const diagnosticKeyName = "material_analysis_diagnostic_staging";
 const diagnosticAuthMode = `secret:${diagnosticKeyName}` as const;
 const maximumRequestBytes = 1024;
 const uuidPattern =

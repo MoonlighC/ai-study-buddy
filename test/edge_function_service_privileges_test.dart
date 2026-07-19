@@ -106,6 +106,12 @@ void main() {
       'supabase/functions/diagnose-material-analysis-response/index.ts',
     ).readAsString();
     expect(source, contains('createSupabaseContext'));
+    expect(
+      source,
+      contains(
+        'const diagnosticKeyName = "material_analysis_diagnostic_staging";',
+      ),
+    );
     expect(source, contains(r'secret:${diagnosticKeyName}'));
     expect(source, contains('request.headers.has("Authorization")'));
     expect(

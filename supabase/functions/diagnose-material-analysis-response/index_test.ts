@@ -6,13 +6,18 @@ import {
 
 const batchId = crypto.randomUUID();
 const namedKey = `fixture_named_${crypto.randomUUID()}`;
+const legacyHyphenatedKey = `fixture_legacy_named_${crypto.randomUUID()}`;
+const otherNamedKey = `fixture_other_named_${crypto.randomUUID()}`;
 const defaultKey = `fixture_default_${crypto.randomUUID()}`;
 const publishableKey = `fixture_publishable_${crypto.randomUUID()}`;
+const legacyHyphenatedKeyName = "material-analysis-diagnostic-staging";
 const authEnvironment = {
   url: "https://fixture.supabase.co",
   secretKeys: {
     default: defaultKey,
-    "material-analysis-diagnostic-staging": namedKey,
+    material_analysis_diagnostic_staging: namedKey,
+    [legacyHyphenatedKeyName]: legacyHyphenatedKey,
+    other_named_key: otherNamedKey,
   },
   publishableKeys: { default: publishableKey },
 };
@@ -30,6 +35,11 @@ Deno.test("diagnostic authorization matrix rejects every untrusted credential sh
   const cases: Array<{ name: string; headers?: HeadersInit }> = [
     { name: "no apikey" },
     { name: "wrong named secret", headers: { apikey: "fixture_wrong" } },
+    {
+      name: "old hyphenated named secret",
+      headers: { apikey: legacyHyphenatedKey },
+    },
+    { name: "other named secret", headers: { apikey: otherNamedKey } },
     { name: "default secret", headers: { apikey: defaultKey } },
     { name: "publishable key", headers: { apikey: publishableKey } },
     {
@@ -327,7 +337,7 @@ function sequentialClock(...values: number[]) {
 }
 
 function rejectsSensitiveResponse(value: string) {
-  equal(value.includes("material-analysis-diagnostic-staging"), false);
+  equal(value.includes("material_analysis_diagnostic_staging"), false);
   equal(value.includes("fixture_named"), false);
 }
 

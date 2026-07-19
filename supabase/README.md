@@ -353,7 +353,7 @@ bounded operation design, retry semantics, and disposable verification command.
 function. It must never be deployed to production or called by Flutter. It is
 the only function configured with `verify_jwt = false`; authentication is
 performed inside the handler by `@supabase/server` using the single named mode
-`secret:material-analysis-diagnostic-staging`. The named key is accepted only
+`secret:material_analysis_diagnostic_staging`. The named key is accepted only
 in the `apikey` header. Requests containing `Authorization` are rejected.
 
 The function accepts only a `POST` with an `application/json` body containing
