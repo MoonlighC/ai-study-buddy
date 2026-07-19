@@ -420,6 +420,44 @@ Deno.test("diagnostic retrieval performs one GET and zero POST or file upload ca
   equal(methods, ["GET"]);
 });
 
+Deno.test("final-summary diagnostic performs one GET and zero POST or upload calls", async () => {
+  const calls: Array<{ url: string; method: string }> = [];
+  const adapter = adapterWith((input, init) => {
+    calls.push({ url: String(input), method: init?.method ?? "GET" });
+    return Promise.resolve(
+      jsonResponse(completedResponse(summaryForPages([1]))),
+    );
+  });
+  const result = await adapter.diagnoseFinalSummaryRetrieved({
+    responseId: "resp_12345678",
+    pageCount: 1,
+  });
+  equal(result.ok, true);
+  equal(calls.length, 1);
+  equal(calls[0].method, "GET");
+  equal(calls[0].url.includes("/responses/resp_12345678"), true);
+});
+
+for (const status of [404, 429, 500, 503]) {
+  Deno.test(`final-summary diagnostic GET ${status} has no fallback`, async () => {
+    const methods: string[] = [];
+    const adapter = adapterWith((_input, init) => {
+      methods.push(init?.method ?? "GET");
+      return Promise.resolve(jsonResponse({ error: "private body" }, status));
+    });
+    const result = await adapter.diagnoseFinalSummaryRetrieved({
+      responseId: "resp_12345678",
+      pageCount: 1,
+    });
+    equal(result.ok, false);
+    if (!result.ok) {
+      equal(result.code, "final_validation_unknown");
+      equal(JSON.stringify(result.metadata).includes("private body"), false);
+    }
+    equal(methods, ["GET"]);
+  });
+}
+
 for (const status of [404, 429, 500, 503]) {
   Deno.test(`diagnostic GET ${status} becomes content-free validation_unknown`, async () => {
     const methods: string[] = [];

@@ -136,6 +136,74 @@ Deno.test("diagnostic handler persists a specific code without provider content"
   );
 });
 
+Deno.test("final-summary diagnostic retrieves once and records persistence eligibility without mutations", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const fake = fakeDependencies(pdf, "pdf", "diagnostic_final_success");
+  fake.deps.loadDiagnosticTarget = (requestedBatchId) =>
+    Promise.resolve({
+      batch_id: requestedBatchId,
+      operation: "final_summary",
+      status: "failed",
+      response_id: "resp_12345678",
+      page_numbers: [1],
+      page_count: 1,
+      cleanup_state: "not_required",
+    });
+  const before = {
+    submissions: fake.submissions,
+    completions: fake.completions,
+    failures: fake.failures.length,
+    uploads: fake.uploadRequests,
+  };
+  const response = await createMaterialAnalysisDiagnosticHandler(fake.deps)(
+    diagnosticRequest(batchId),
+  );
+  equal(response.status, 200);
+  equal(fake.providerMethods, ["GET"]);
+  equal(fake.providerRequests, 1);
+  equal(fake.uploadRequests, before.uploads);
+  equal(fake.submissions, before.submissions);
+  equal(fake.completions, before.completions);
+  equal(fake.failures.length, before.failures);
+  equal(fake.diagnostics.length, 1);
+  equal(
+    fake.diagnostics[0].diagnostic_code,
+    "final_summary_persistence_failed",
+  );
+  equal(
+    (fake.diagnostics[0].diagnostic_metadata as Record<string, unknown>)
+      .validator_stage,
+    "persistFinalSummaryEligibility",
+  );
+});
+
+Deno.test("final-summary diagnostic write failure performs no provider fallback", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const fake = fakeDependencies(pdf, "pdf", "diagnostic_final_success");
+  fake.deps.loadDiagnosticTarget = (requestedBatchId) =>
+    Promise.resolve({
+      batch_id: requestedBatchId,
+      operation: "final_summary",
+      status: "failed",
+      response_id: "resp_12345678",
+      page_numbers: [1],
+      page_count: 1,
+      cleanup_state: "not_required",
+    });
+  fake.deps.recordDiagnostic = () =>
+    Promise.reject(new Error("private database detail"));
+  const response = await createMaterialAnalysisDiagnosticHandler(fake.deps)(
+    diagnosticRequest(batchId),
+  );
+  equal(response.status, 500);
+  equal(fake.providerMethods, ["GET"]);
+  equal(fake.providerRequests, 1);
+  equal(fake.uploadRequests, 0);
+  equal(fake.submissions, 0);
+  equal(fake.completions, 0);
+  equal(fake.failures.length, 0);
+});
+
 Deno.test("diagnostic database write failure stays generic and never retries provider", async () => {
   const pdf = await buildSyntheticPdf(["text"]);
   const fake = fakeDependencies(pdf);
@@ -499,6 +567,7 @@ function fakeDependencies(
     | "response_persistence_transient"
     | "completion_failure"
     | "diagnostic_latex_failure"
+    | "diagnostic_final_success"
     | "http_429" = "success",
 ) {
   const state = {
@@ -549,6 +618,12 @@ function fakeDependencies(
       state.providerRequests++;
       state.providerMethods.push(init?.method ?? "GET");
       if ((init?.method ?? "GET") === "GET") {
+        if (providerMode === "diagnostic_final_success") {
+          return new Response(
+            JSON.stringify(completedResponse(finalSummary())),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
         const payload = pageBatch();
         if (providerMode === "diagnostic_latex_failure") {
           (payload.pages[0] as Record<string, unknown>).equations = [{
@@ -709,6 +784,33 @@ function pageBatch() {
       warnings: [],
       trustworthy: true,
     }],
+  };
+}
+
+function finalSummary() {
+  return {
+    language: "en",
+    sections: [{
+      id: "section_1",
+      title: "Summary",
+      blocks: [{
+        kind: "prose",
+        markdown: "Safe summary.",
+        display: "block",
+      }],
+      source_pages: [1],
+      confidence: 0.9,
+    }],
+    key_concepts: [],
+    equations: [],
+    warnings: [],
+    partial_extraction: {
+      is_partial: false,
+      analyzed_pages: [1],
+      partial_pages: [],
+      missing_pages: [],
+      page_modes: [{ page: 1, mode: "visual" }],
+    },
   };
 }
 

@@ -147,15 +147,17 @@ export type AnalysisDependencies = {
   jitter(): number;
 };
 
-export type DiagnosticTarget = {
+type DiagnosticTargetBase = {
   batch_id: string;
-  operation: "page_visual";
   status: "failed";
   response_id: string;
   page_numbers: number[];
   page_count: number;
   cleanup_state: "not_required" | "pending" | "completed";
 };
+export type DiagnosticTarget =
+  & DiagnosticTargetBase
+  & ({ operation: "page_visual" } | { operation: "final_summary" });
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -285,29 +287,41 @@ export function createMaterialAnalysisDiagnosticHandler(
         await deps.loadDiagnosticTarget(batchId),
         batchId,
       );
-      const requestDefinition: ProviderRequest = {
-        operation: "page_visual",
-        input: {
-          kind: "pdf",
-          bytes: new Uint8Array(),
-          pageNumbers: target.page_numbers,
-        },
-        expectedPages: target.page_numbers,
-        pageCount: target.page_count,
-        idempotencyKey: "0".repeat(64),
-      };
-      const result = await deps.provider.diagnoseRetrieved({
-        responseId: target.response_id,
-        request: requestDefinition,
-      });
-      const diagnostic = result.ok
-        ? {
-          code: "page_persistence_failed" as const,
-          metadata: {
-            ...result.metadata,
-            validator_stage: "persistValidatedPage" as const,
+      const result = target.operation === "page_visual"
+        ? await deps.provider.diagnoseRetrieved({
+          responseId: target.response_id,
+          request: {
+            operation: "page_visual",
+            input: {
+              kind: "pdf",
+              bytes: new Uint8Array(),
+              pageNumbers: target.page_numbers,
+            },
+            expectedPages: target.page_numbers,
+            pageCount: target.page_count,
+            idempotencyKey: "0".repeat(64),
           },
-        }
+        })
+        : await deps.provider.diagnoseFinalSummaryRetrieved({
+          responseId: target.response_id,
+          pageCount: target.page_count,
+        });
+      const diagnostic = result.ok
+        ? target.operation === "page_visual"
+          ? {
+            code: "page_persistence_failed" as const,
+            metadata: {
+              ...result.metadata,
+              validator_stage: "persistValidatedPage" as const,
+            },
+          }
+          : {
+            code: "final_summary_persistence_failed" as const,
+            metadata: {
+              ...result.metadata,
+              validator_stage: "persistFinalSummaryEligibility" as const,
+            },
+          }
         : { code: result.code, metadata: result.metadata };
       await deps.recordDiagnostic({
         batch_id: target.batch_id,
@@ -710,17 +724,24 @@ function validateDiagnosticTarget(value: unknown, batchId: string) {
   const pageCount = isRecord(value) && Number.isInteger(value.page_count)
     ? value.page_count as number
     : -1;
+  const pageNumbers = isRecord(value) && Array.isArray(value.page_numbers)
+    ? value.page_numbers
+    : [];
   if (
     !isRecord(value) ||
     Object.keys(value).sort().join() !==
       "batch_id,cleanup_state,operation,page_count,page_numbers,response_id,status" ||
-    value.batch_id !== batchId || value.operation !== "page_visual" ||
+    value.batch_id !== batchId ||
+    !["page_visual", "final_summary"].includes(String(value.operation)) ||
     value.status !== "failed" ||
     typeof value.response_id !== "string" ||
     !/^[A-Za-z0-9_.-]{8,200}$/.test(value.response_id) ||
-    !Array.isArray(value.page_numbers) || value.page_numbers.length !== 1 ||
-    !Number.isInteger(value.page_numbers[0]) || value.page_numbers[0] < 1 ||
-    value.page_numbers[0] > 100 || pageCount < value.page_numbers[0] ||
+    pageNumbers.length < 1 || pageNumbers.length > 100 ||
+    (value.operation === "page_visual" && pageNumbers.length !== 1) ||
+    pageNumbers.some((page, index) =>
+      !Number.isInteger(page) || page < 1 || page > pageCount ||
+      (index > 0 && page <= pageNumbers[index - 1])
+    ) ||
     pageCount > 100 ||
     !["not_required", "pending", "completed"].includes(
       String(value.cleanup_state),

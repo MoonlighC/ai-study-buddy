@@ -1,4 +1,7 @@
-import { validatePageBatchResult } from "./schemas.ts";
+import {
+  validatePageBatchResult,
+  validateSummarySemantics,
+} from "./schemas.ts";
 import { validateLatex, validateSafeMarkdown } from "./validators.ts";
 
 export const diagnosticVersion = 1;
@@ -23,7 +26,14 @@ export type DiagnosticCode =
   | "page_latex_failed"
   | "page_payload_too_large"
   | "page_persistence_failed"
-  | "validation_unknown";
+  | "validation_unknown"
+  | "final_summary_schema_failed"
+  | "final_summary_semantics_failed"
+  | "final_summary_markdown_failed"
+  | "final_summary_latex_failed"
+  | "final_summary_payload_too_large"
+  | "final_summary_persistence_failed"
+  | "final_validation_unknown";
 
 export type ValidatorStage =
   | "validateResponseEnvelope"
@@ -34,7 +44,13 @@ export type ValidatorStage =
   | "validatePageMarkdown"
   | "validatePageLatex"
   | "validatePageProvenance"
-  | "persistValidatedPage";
+  | "persistValidatedPage"
+  | "validateFinalSummarySchema"
+  | "validateFinalSummarySemantics"
+  | "validateFinalSummaryMarkdown"
+  | "validateFinalSummaryLatex"
+  | "validateFinalSummaryProvenance"
+  | "persistFinalSummaryEligibility";
 
 export type DiagnosticMetadata = {
   response_status?:
@@ -57,6 +73,8 @@ export type DiagnosticMetadata = {
   warning_count?: number;
   equation_count?: number;
   source_page_count?: number;
+  section_count?: number;
+  concept_count?: number;
   validator_stage?: ValidatorStage;
 };
 
@@ -127,6 +145,333 @@ export function diagnosePageResponse(
   } catch (_) {
     return failure("validation_unknown", metadata, "validatePageSemantics");
   }
+}
+
+export function diagnoseFinalSummaryResponse(
+  response: Record<string, unknown>,
+  pageCount: number,
+): DiagnosticResult {
+  let metadata: DiagnosticMetadata = {};
+  try {
+    metadata = baseMetadata(response);
+    const envelope = validateResponseEnvelope(response, metadata);
+    if (envelope) return envelope;
+    const candidate = extractSingleStructuredCandidate(response, metadata);
+    if (!candidate.ok) return candidate;
+    const parsed = parseFinalSummaryJson(candidate.text, metadata);
+    if (!parsed.ok) return parsed;
+    const schema = validateFinalSummarySchema(parsed.result, metadata);
+    if (schema) return schema;
+    const semantics = validateFinalSummarySemantics(parsed.result, metadata);
+    if (semantics) return semantics;
+    const markdown = validateFinalSummaryMarkdown(parsed.result, metadata);
+    if (markdown) return markdown;
+    const latex = validateFinalSummaryLatex(parsed.result, metadata);
+    if (latex) return latex;
+    const provenance = validateFinalSummaryProvenance(
+      parsed.result,
+      pageCount,
+      metadata,
+    );
+    if (provenance) return provenance;
+    return { ok: true, result: parsed.result, metadata };
+  } catch (_) {
+    return failure(
+      "final_validation_unknown",
+      metadata,
+      "validateFinalSummarySemantics",
+    );
+  }
+}
+
+function parseFinalSummaryJson(
+  text: string,
+  metadata: DiagnosticMetadata,
+): { ok: true; result: unknown } | DiagnosticFailure {
+  const byteLength = new TextEncoder().encode(text).length;
+  metadata.parsed_json_byte_length = Math.min(byteLength, maximumPayloadBytes);
+  if (byteLength > maximumPayloadBytes) {
+    return failure(
+      "final_summary_payload_too_large",
+      metadata,
+      "parseStructuredJson",
+    );
+  }
+  try {
+    const result: unknown = JSON.parse(text);
+    metadata.top_level_key_count = isRecord(result)
+      ? boundedCount(Object.keys(result).length)
+      : 0;
+    return { ok: true, result };
+  } catch (_) {
+    return failure(
+      "response_json_parse_failed",
+      metadata,
+      "parseStructuredJson",
+    );
+  }
+}
+
+function validateFinalSummarySchema(
+  result: unknown,
+  metadata: DiagnosticMetadata,
+): DiagnosticResult | null {
+  if (
+    !isRecord(result) ||
+    !hasExactKeys(result, [
+      "language",
+      "sections",
+      "key_concepts",
+      "equations",
+      "warnings",
+      "partial_extraction",
+    ]) ||
+    typeof result.language !== "string" || result.language.length < 1 ||
+    result.language.length > 32 || !Array.isArray(result.sections) ||
+    result.sections.length < 1 || result.sections.length > 24 ||
+    !Array.isArray(result.key_concepts) || result.key_concepts.length > 50 ||
+    !Array.isArray(result.equations) || result.equations.length > 100 ||
+    !Array.isArray(result.warnings) || result.warnings.length > 100 ||
+    !isRecord(result.partial_extraction)
+  ) {
+    return failure(
+      "final_summary_schema_failed",
+      metadata,
+      "validateFinalSummarySchema",
+    );
+  }
+  metadata.section_count = boundedCount(result.sections.length);
+  metadata.concept_count = boundedCount(result.key_concepts.length);
+  metadata.equation_count = boundedCount(result.equations.length);
+  metadata.warning_count = boundedCount(result.warnings.length);
+  const extraction = result.partial_extraction;
+  if (
+    !hasExactKeys(extraction, [
+      "is_partial",
+      "analyzed_pages",
+      "partial_pages",
+      "missing_pages",
+      "page_modes",
+    ]) || typeof extraction.is_partial !== "boolean" ||
+    !Array.isArray(extraction.analyzed_pages) ||
+    !Array.isArray(extraction.partial_pages) ||
+    !Array.isArray(extraction.missing_pages) ||
+    !Array.isArray(extraction.page_modes) || extraction.page_modes.length < 1 ||
+    extraction.page_modes.length > 100
+  ) {
+    return failure(
+      "final_summary_schema_failed",
+      metadata,
+      "validateFinalSummarySchema",
+    );
+  }
+  for (const section of result.sections) {
+    if (
+      !isRecord(section) ||
+      !hasExactKeys(section, [
+        "id",
+        "title",
+        "blocks",
+        "source_pages",
+        "confidence",
+      ]) || !Array.isArray(section.blocks) || section.blocks.length < 1 ||
+      section.blocks.length > 50 || !Array.isArray(section.source_pages)
+    ) return finalSchemaFailure(metadata);
+    for (const block of section.blocks) {
+      if (
+        !isRecord(block) ||
+        !["prose", "equation"].includes(String(block.kind)) ||
+        !["inline", "block"].includes(String(block.display)) ||
+        (block.kind === "prose" &&
+          !hasExactKeys(block, ["kind", "markdown", "display"])) ||
+        (block.kind === "equation" &&
+          !hasExactKeys(block, ["kind", "equation_id", "display"]))
+      ) return finalSchemaFailure(metadata);
+    }
+  }
+  for (const concept of result.key_concepts) {
+    if (
+      !isRecord(concept) ||
+      !hasExactKeys(concept, [
+        "title",
+        "explanation_markdown",
+        "source_pages",
+        "confidence",
+      ]) || !Array.isArray(concept.source_pages)
+    ) return finalSchemaFailure(metadata);
+  }
+  for (const equation of result.equations) {
+    if (
+      !isRecord(equation) ||
+      !hasExactKeys(equation, equationKeys) ||
+      typeof equation.latex !== "string"
+    ) return finalSchemaFailure(metadata);
+  }
+  for (const warning of result.warnings) {
+    if (!isRecord(warning) || !hasExactKeys(warning, warningKeys)) {
+      return finalSchemaFailure(metadata);
+    }
+  }
+  return null;
+}
+
+function finalSchemaFailure(metadata: DiagnosticMetadata): DiagnosticFailure {
+  return failure(
+    "final_summary_schema_failed",
+    metadata,
+    "validateFinalSummarySchema",
+  );
+}
+
+function validateFinalSummarySemantics(
+  result: unknown,
+  metadata: DiagnosticMetadata,
+): DiagnosticResult | null {
+  const summary = result as Record<string, unknown>;
+  const equations = summary.equations as Record<string, unknown>[];
+  const ids = equations.map((equation) => equation.id);
+  if (
+    new Set(ids).size !== ids.length ||
+    equations.some((equation) =>
+      typeof equation.id !== "string" ||
+      !/^eq_[a-z0-9_-]{1,60}$/.test(equation.id) ||
+      !Number.isInteger(equation.source_page) ||
+      !["inline", "block"].includes(String(equation.display)) ||
+      !validConfidence(equation.confidence) ||
+      typeof equation.uncertainty !== "boolean"
+    )
+  ) return finalSemanticsFailure(metadata);
+  const references: unknown[] = [];
+  for (const section of summary.sections as Record<string, unknown>[]) {
+    if (
+      typeof section.id !== "string" ||
+      !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(section.id) ||
+      typeof section.title !== "string" || !validConfidence(section.confidence)
+    ) return finalSemanticsFailure(metadata);
+    for (const block of section.blocks as Record<string, unknown>[]) {
+      if (block.kind === "equation") references.push(block.equation_id);
+    }
+  }
+  if (
+    references.some((reference) => !ids.includes(reference)) ||
+    new Set(references).size !== references.length ||
+    ids.some((id) => !references.includes(id))
+  ) return finalSemanticsFailure(metadata);
+  for (const concept of summary.key_concepts as Record<string, unknown>[]) {
+    if (
+      typeof concept.title !== "string" ||
+      !validConfidence(concept.confidence)
+    ) return finalSemanticsFailure(metadata);
+  }
+  return null;
+}
+
+function finalSemanticsFailure(
+  metadata: DiagnosticMetadata,
+): DiagnosticFailure {
+  return failure(
+    "final_summary_semantics_failed",
+    metadata,
+    "validateFinalSummarySemantics",
+  );
+}
+
+function validateFinalSummaryMarkdown(
+  result: unknown,
+  metadata: DiagnosticMetadata,
+): DiagnosticResult | null {
+  const summary = result as Record<string, unknown>;
+  for (const section of summary.sections as Record<string, unknown>[]) {
+    for (const block of section.blocks as Record<string, unknown>[]) {
+      if (
+        block.kind === "prose" &&
+        (typeof block.markdown !== "string" || block.markdown.length < 1 ||
+          block.markdown.length > 6000 ||
+          !validateSafeMarkdown(block.markdown).valid)
+      ) return finalMarkdownFailure(metadata);
+    }
+  }
+  for (const concept of summary.key_concepts as Record<string, unknown>[]) {
+    if (
+      typeof concept.explanation_markdown !== "string" ||
+      concept.explanation_markdown.length < 1 ||
+      concept.explanation_markdown.length > 3000 ||
+      !validateSafeMarkdown(concept.explanation_markdown, 3000).valid
+    ) return finalMarkdownFailure(metadata);
+  }
+  for (const equation of summary.equations as Record<string, unknown>[]) {
+    if (
+      typeof equation.explanation_markdown !== "string" ||
+      equation.explanation_markdown.length > 2000 ||
+      (equation.explanation_markdown.length > 0 &&
+        !validateSafeMarkdown(equation.explanation_markdown, 2000).valid)
+    ) return finalMarkdownFailure(metadata);
+  }
+  return null;
+}
+
+function finalMarkdownFailure(metadata: DiagnosticMetadata): DiagnosticFailure {
+  return failure(
+    "final_summary_markdown_failed",
+    metadata,
+    "validateFinalSummaryMarkdown",
+  );
+}
+
+function validateFinalSummaryLatex(
+  result: unknown,
+  metadata: DiagnosticMetadata,
+): DiagnosticResult | null {
+  const equations = (result as Record<string, unknown>)
+    .equations as Record<string, unknown>[];
+  if (
+    equations.some((equation) =>
+      typeof equation.latex !== "string" || !validateLatex(equation.latex).valid
+    )
+  ) {
+    return failure(
+      "final_summary_latex_failed",
+      metadata,
+      "validateFinalSummaryLatex",
+    );
+  }
+  return null;
+}
+
+function validateFinalSummaryProvenance(
+  result: unknown,
+  pageCount: number,
+  metadata: DiagnosticMetadata,
+): DiagnosticResult | null {
+  const summary = result as Record<string, unknown>;
+  const sourcePages = new Set<number>();
+  const collect = (value: unknown) => {
+    if (!Array.isArray(value)) return;
+    for (const page of value) if (Number.isInteger(page)) sourcePages.add(page);
+  };
+  for (const section of summary.sections as Record<string, unknown>[]) {
+    collect(section.source_pages);
+  }
+  for (const concept of summary.key_concepts as Record<string, unknown>[]) {
+    collect(concept.source_pages);
+  }
+  for (const equation of summary.equations as Record<string, unknown>[]) {
+    if (Number.isInteger(equation.source_page)) {
+      sourcePages.add(equation.source_page as number);
+    }
+  }
+  for (const warning of summary.warnings as Record<string, unknown>[]) {
+    collect(warning.source_pages);
+  }
+  metadata.source_page_count = boundedCount(sourcePages.size);
+  if (!validateSummarySemantics(result, pageCount).valid) {
+    return failure(
+      "final_summary_semantics_failed",
+      metadata,
+      "validateFinalSummaryProvenance",
+    );
+  }
+  return null;
 }
 
 export function validateResponseEnvelope(
@@ -438,15 +783,18 @@ export function validatePageProvenance(
 
 function baseMetadata(
   response: Record<string, unknown>,
-  requestedPage: number,
+  requestedPage?: number,
 ): DiagnosticMetadata {
-  return {
+  const metadata: DiagnosticMetadata = {
     response_status: responseStatus(response.status),
     error_present: response.error !== undefined && response.error !== null,
     incomplete_details_present: response.incomplete_details !== undefined &&
       response.incomplete_details !== null,
-    requested_page_number: requestedPage,
   };
+  if (requestedPage !== undefined) {
+    metadata.requested_page_number = requestedPage;
+  }
+  return metadata;
 }
 
 function responseStatus(value: unknown): DiagnosticMetadata["response_status"] {

@@ -293,7 +293,7 @@ void main() {
     }
   });
 
-  test('migration evidence is exactly 001 through 011', () {
+  test('migration evidence is exactly 001 through 012', () {
     final names =
         Directory('supabase/migrations')
             .listSync()
@@ -301,9 +301,9 @@ void main() {
             .map((file) => file.uri.pathSegments.last)
             .toList()
           ..sort();
-    expect(names, hasLength(11));
+    expect(names, hasLength(12));
     expect(names.first, startsWith('001_'));
-    expect(names.last, startsWith('011_'));
+    expect(names.last, startsWith('012_'));
     expect(names.map((name) => name.substring(0, 3)).toList(), [
       '001',
       '002',
@@ -316,6 +316,7 @@ void main() {
       '009',
       '010',
       '011',
+      '012',
     ]);
   });
 

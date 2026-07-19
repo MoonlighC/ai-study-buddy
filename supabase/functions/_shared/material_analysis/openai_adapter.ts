@@ -8,6 +8,7 @@ import {
   validateSummarySemantics,
 } from "./schemas.ts";
 import {
+  diagnoseFinalSummaryResponse,
   diagnosePageResponse,
   DiagnosticOutcome,
 } from "./response_diagnostics.ts";
@@ -202,6 +203,40 @@ export class TrustedOpenAiAdapter {
           requested_page_number: input.request.expectedPages[0],
           validator_stage: "validateResponseEnvelope",
         },
+      };
+    }
+  }
+
+  async diagnoseFinalSummaryRetrieved(input: {
+    responseId: string;
+    pageCount: number;
+  }): Promise<DiagnosticOutcome> {
+    if (
+      !Number.isInteger(input.pageCount) || input.pageCount < 1 ||
+      input.pageCount > 100
+    ) throw new Error("invalid_diagnostic_request");
+    const responseId = providerId(input.responseId, "invalid_response_id");
+    try {
+      const response = await this.requestJson(
+        `https://api.openai.com/v1/responses/${encodeURIComponent(responseId)}`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${this.options.apiKey}` },
+        },
+        false,
+      );
+      const diagnostic = diagnoseFinalSummaryResponse(
+        response,
+        input.pageCount,
+      );
+      return diagnostic.ok
+        ? { ok: true, metadata: diagnostic.metadata }
+        : diagnostic;
+    } catch (_) {
+      return {
+        ok: false,
+        code: "final_validation_unknown",
+        metadata: { validator_stage: "validateResponseEnvelope" },
       };
     }
   }
