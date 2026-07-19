@@ -100,6 +100,36 @@ void main() {
     expect(quiz, contains('.from("quiz_questions")'));
     expect(quiz, contains('.delete()'));
   });
+
+  test('temporary diagnostic is named-key-only and RPC-only', () async {
+    final source = await File(
+      'supabase/functions/diagnose-material-analysis-response/index.ts',
+    ).readAsString();
+    expect(source, contains('createSupabaseContext'));
+    expect(source, contains(r'secret:${diagnosticKeyName}'));
+    expect(source, contains('request.headers.has("Authorization")'));
+    expect(
+      source,
+      contains('load_material_analysis_diagnostic_target_internal'),
+    );
+    expect(source, contains('record_material_analysis_diagnostic_internal'));
+    expect(source, isNot(contains('SUPABASE_SERVICE_ROLE_KEY')));
+    expect(source, isNot(contains('Access-Control-Allow-Origin')));
+    expect(source, isNot(contains('.from("material_processing_')));
+    expect(source, isNot(contains('/v1/responses')));
+
+    final flutterSources = Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'));
+    for (final file in flutterSources) {
+      expect(
+        await file.readAsString(),
+        isNot(contains('diagnose-material-analysis-response')),
+        reason: file.path,
+      );
+    }
+  });
 }
 
 String _normalize(String value) => value

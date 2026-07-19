@@ -320,6 +320,22 @@ void main() {
     ]);
   });
 
+  test('only the temporary staging diagnostic disables gateway JWT checks', () {
+    final config = File('supabase/config.toml').readAsStringSync().trim();
+    expect(
+      config,
+      '[functions.diagnose-material-analysis-response]\nverify_jwt = false',
+    );
+    for (final userFacingFunction in [
+      'prepare-material-analysis',
+      'advance-material-analysis',
+      'retry-material-analysis',
+      'generate-summary',
+    ]) {
+      expect(config, isNot(contains('[functions.$userFacingFunction]')));
+    }
+  });
+
   test('SHA-256 and combined checksum output match known values', () {
     expect(
       sha256Bytes(utf8.encode('abc')),

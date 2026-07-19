@@ -346,3 +346,33 @@ internal RPCs.
 
 See `docs/phase-c2-persistent-server-processing.md` for the trust boundary,
 bounded operation design, retry semantics, and disposable verification command.
+
+## Temporary staging final-response diagnostic
+
+`diagnose-material-analysis-response` is a temporary staging-only operational
+function. It must never be deployed to production or called by Flutter. It is
+the only function configured with `verify_jwt = false`; authentication is
+performed inside the handler by `@supabase/server` using the single named mode
+`secret:material-analysis-diagnostic-staging`. The named key is accepted only
+in the `apikey` header. Requests containing `Authorization` are rejected.
+
+The function accepts only a `POST` with an `application/json` body containing
+exactly `batch_id`. It calls only the existing service-only diagnostic target
+and record RPCs, retrieves the RPC-provided persisted final-summary Response
+once with `GET`, and returns only whether the bounded diagnostic was recorded.
+It has no response-create, file-upload, retry, processing-state, Flutter, CORS,
+or direct-table path.
+
+Staging rollout requires a separately reviewed checkpoint:
+
+1. Rotate or revoke any previously exposed operator credential; never reuse it.
+2. Create the named staging key without displaying or persisting its value.
+3. Deploy only `diagnose-material-analysis-response` and verify that only this
+   function has `verify_jwt = false`.
+4. Invoke once with the named key in `apikey` and the preserved batch UUID in
+   the closed request body. Never send an `Authorization` header.
+5. Read the bounded result through a service-only query, then delete the named
+   key and prove it is rejected without reaching the handler.
+6. Delete the deployed temporary function before resuming general C4C.
+7. Remove this function directory, its `supabase/config.toml` entry, and this
+   runbook in a separately reviewed cleanup commit.
