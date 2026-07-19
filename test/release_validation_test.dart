@@ -338,19 +338,19 @@ void main() {
     );
   });
 
-  test('only the temporary staging diagnostic disables gateway JWT checks', () {
-    final config = File('supabase/config.toml').readAsStringSync().trim();
-    expect(
-      config,
-      '[functions.diagnose-material-analysis-response]\nverify_jwt = false',
-    );
+  test('all Edge Functions retain gateway JWT verification', () {
+    final config = File('supabase/config.toml').readAsStringSync();
+    expect(config.trim(), isEmpty);
     for (final userFacingFunction in [
       'prepare-material-analysis',
       'advance-material-analysis',
       'retry-material-analysis',
       'generate-summary',
     ]) {
-      expect(config, isNot(contains('[functions.$userFacingFunction]')));
+      expect(
+        Directory('supabase/functions/$userFacingFunction').existsSync(),
+        isTrue,
+      );
     }
   });
 

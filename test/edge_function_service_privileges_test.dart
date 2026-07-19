@@ -137,52 +137,6 @@ void main() {
     expect(quiz, contains('.delete()'));
   });
 
-  test('temporary diagnostic is named-key-only and RPC-only', () async {
-    final source = await File(
-      'supabase/functions/diagnose-material-analysis-response/index.ts',
-    ).readAsString();
-    expect(source, contains('createSupabaseContext'));
-    expect(
-      source,
-      contains(
-        'const diagnosticKeyName = "material_analysis_diagnostic_staging";',
-      ),
-    );
-    expect(source, contains(r'secret:${diagnosticKeyName}'));
-    expect(source, contains('request.headers.has("Authorization")'));
-    expect(
-      source,
-      contains('select_material_analysis_diagnostic_target_internal'),
-    );
-    expect(
-      source,
-      contains('record_correlated_material_analysis_diagnostic_internal'),
-    );
-    expect(source, isNot(contains('SUPABASE_SERVICE_ROLE_KEY')));
-    expect(source, isNot(contains('Access-Control-Allow-Origin')));
-    expect(source, isNot(contains('.from("material_processing_')));
-    expect(source, isNot(contains('/v1/responses')));
-    expect(source, contains('Object.keys(value).length !== 0'));
-    expect(
-      source,
-      contains(
-        '"select_material_analysis_diagnostic_target_internal",\n        {},',
-      ),
-    );
-
-    final flutterSources = Directory('lib')
-        .listSync(recursive: true)
-        .whereType<File>()
-        .where((file) => file.path.endsWith('.dart'));
-    for (final file in flutterSources) {
-      expect(
-        await file.readAsString(),
-        isNot(contains('diagnose-material-analysis-response')),
-        reason: file.path,
-      );
-    }
-  });
-
   test('temporary diagnostic selector is no-argument and fail-closed', () {
     expect(
       diagnosticSelectorMigration,
@@ -284,24 +238,6 @@ void main() {
     expect(diagnosticCleanupMigration, contains('drop table if exists'));
   });
 
-  test(
-    'temporary diagnostic runbook requires post-result capability removal',
-    () async {
-      final runbook = _normalize(
-        await File('supabase/README.md').readAsString(),
-      );
-      for (final requirement in [
-        'deleted key receives `401`',
-        'delete the deployed temporary function',
-        'follow-up cleanup migration',
-        'drops `select_material_analysis_diagnostic_target_internal()`',
-        'production was never touched',
-        'preserve only the allowlisted diagnostic result',
-      ]) {
-        expect(runbook, contains(requirement));
-      }
-    },
-  );
 }
 
 String _normalize(String value) => value

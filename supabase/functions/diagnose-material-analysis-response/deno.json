@@ -1,7 +1,0 @@
-{
-  "imports": {
-    "remark-parse": "npm:remark-parse@11.0.0",
-    "supabase-server": "npm:@supabase/server@1.4.0",
-    "unified": "npm:unified@11.0.5"
-  }
-}
