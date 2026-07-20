@@ -60,6 +60,8 @@ class AppState extends ChangeNotifier {
     WeakTopicRepository? weakTopicRepository,
     SubjectDeletionRepository? subjectDeletionRepository,
     AppPreferencesStore? preferencesStore,
+    Future<void> Function(Duration)? analysisDelay,
+    DateTime Function()? analysisNow,
   }) : config = config ?? AppConfig.fromValues(),
        preferencesStore =
            preferencesStore ?? const SharedPreferencesAppPreferencesStore(),
@@ -153,6 +155,8 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptySubjectDeletionRepository()
                : const MockSubjectDeletionRepository()),
+       _analysisDelay = analysisDelay ?? Future<void>.delayed,
+       _analysisNow = analysisNow ?? DateTime.now,
        _subjects =
            (config ?? AppConfig.fromValues()).effectiveBackendMode ==
                AppBackendMode.supabase
@@ -207,6 +211,8 @@ class AppState extends ChangeNotifier {
   final QuizRepository quizRepository;
   final WeakTopicRepository weakTopicRepository;
   final SubjectDeletionRepository subjectDeletionRepository;
+  final Future<void> Function(Duration) _analysisDelay;
+  final DateTime Function() _analysisNow;
   List<Subject> _subjects;
   List<StudyMaterial> _materials;
   List<Flashcard> _flashcards;
@@ -225,9 +231,15 @@ class AppState extends ChangeNotifier {
   final Map<String, AnalysisErrorCode> _analysisErrors = {};
   final Map<String, int> _analysisGenerations = {};
   final Map<String, int> _analysisLoops = {};
+  final Map<String, Future<MaterialAnalysisStatus>> _analysisAdvanceTasks = {};
   final Set<String> _analysisPending = {};
   final Map<String, Future<void>> _analysisObservations = {};
+  final Map<String, Future<void>> _analysisForcedObservations = {};
+  final Set<String> _analysisReconciling = {};
+  final Set<String> _analysisStopped = {};
+  final Map<String, _AnalysisRetryGuard> _analysisRetryGuards = {};
   final Map<String, _AnalysisActionGuard> _analysisActions = {};
+  Future<void>? _analysisResumeOperation;
   String? _analysisUserId;
   AuthUser? _analysisUser;
   bool _analysisForegrounded = true;
@@ -378,6 +390,12 @@ class AppState extends ChangeNotifier {
             }.contains(_analysisErrors[id]))) {
       return Future.value();
     }
+    if (force) return _forceObserveMaterialAnalysis(user, id);
+    return _startMaterialAnalysisObservation(user, id);
+  }
+
+  Future<void> _startMaterialAnalysisObservation(AuthUser user, String id) {
+    _analysisStopped.remove(id);
     final existing = _analysisObservations[id];
     if (existing != null) return existing;
     final operation = _observeMaterialAnalysis(user, id);
@@ -389,6 +407,75 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  Future<void> _forceObserveMaterialAnalysis(AuthUser user, String id) {
+    final queued = _analysisForcedObservations[id];
+    if (queued != null) return queued;
+    late final Future<void> operation;
+    operation = (() async {
+      _analysisReconciling.add(id);
+      try {
+        final existingObservation = _analysisObservations[id];
+        if (existingObservation != null) await existingObservation;
+        if (_analysisUserId != user.id) return;
+        final inFlightAdvance = _analysisAdvanceTasks[id];
+        if (inFlightAdvance != null) {
+          _nextAnalysis(id);
+          _analysisLoops.remove(id);
+          try {
+            await inFlightAdvance;
+          } catch (_) {
+            // The authoritative fetch below decides whether work remains.
+          }
+        }
+        if (_analysisUserId != user.id) return;
+        if (inFlightAdvance == null && _analysisLoops.containsKey(id)) {
+          await _refreshMaterialAnalysisStatus(user, id);
+        } else {
+          await _startMaterialAnalysisObservation(user, id);
+        }
+      } finally {
+        _analysisReconciling.remove(id);
+        if (_analysisForegrounded && _analysisUserId == user.id) {
+          _scheduleAnalysis(user, id);
+        }
+      }
+    })();
+    _analysisForcedObservations[id] = operation;
+    return operation.whenComplete(() {
+      if (identical(_analysisForcedObservations[id], operation)) {
+        _analysisForcedObservations.remove(id);
+      }
+    });
+  }
+
+  Future<void> _refreshMaterialAnalysisStatus(AuthUser user, String id) async {
+    try {
+      final status = await materialAnalysisRepository.fetchStatus(
+        user: user,
+        materialId: id,
+      );
+      if (_analysisUserId != user.id || _analysisStopped.contains(id)) return;
+      _analysisStatuses[id] = status;
+      if (status.isTerminal || status.confirmationRequired) {
+        _analysisRetryGuards.remove(id);
+        _analysisErrors.remove(id);
+        _nextAnalysis(id);
+        _analysisLoops.remove(id);
+      } else {
+        final retryGuard = _analysisRetryGuards[id];
+        if (retryGuard == null ||
+            !_analysisNow().isBefore(retryGuard.nextAllowedAt)) {
+          _analysisErrors.remove(id);
+        }
+      }
+      notifyListeners();
+    } on MaterialAnalysisException catch (error) {
+      if (_analysisUserId != user.id || _analysisStopped.contains(id)) return;
+      _analysisErrors.putIfAbsent(id, () => error.code);
+      notifyListeners();
+    }
+  }
+
   Future<void> _observeMaterialAnalysis(AuthUser user, String id) async {
     final generation = _nextAnalysis(id);
     try {
@@ -398,7 +485,14 @@ class AppState extends ChangeNotifier {
       );
       if (!_currentAnalysis(user, id, generation)) return;
       _analysisStatuses[id] = status;
-      _analysisErrors.remove(id);
+      final retryGuard = _analysisRetryGuards[id];
+      if (status.isTerminal || status.confirmationRequired) {
+        _analysisRetryGuards.remove(id);
+        _analysisErrors.remove(id);
+      } else if (retryGuard == null ||
+          !_analysisNow().isBefore(retryGuard.nextAllowedAt)) {
+        _analysisErrors.remove(id);
+      }
       notifyListeners();
       _scheduleAnalysis(user, id);
     } on MaterialAnalysisException catch (e) {
@@ -422,7 +516,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void stopObservingMaterialAnalysis(String id) {}
+  void stopObservingMaterialAnalysis(String id) {
+    _analysisStopped.add(id);
+    _nextAnalysis(id);
+    _analysisLoops.remove(id);
+    _analysisPending.remove(id);
+    _analysisForcedObservations.remove(id);
+    _analysisReconciling.remove(id);
+    _analysisRetryGuards.remove(id);
+  }
+
   void setAnalysisLifecycleForegrounded(bool value) {
     if (_analysisForegrounded == value) return;
     _analysisForegrounded = value;
@@ -438,6 +541,54 @@ class AppState extends ChangeNotifier {
         unawaited(observeMaterialAnalysis(user, id, force: true));
       }
     }
+  }
+
+  Future<void> resumeMaterialAnalyses(AuthUser? user) {
+    if (user == null) {
+      setAnalysisLifecycleForegrounded(true);
+      return Future.value();
+    }
+    final existing = _analysisResumeOperation;
+    if (existing != null) return existing;
+    late final Future<void> operation;
+    operation = _resumeMaterialAnalyses(user);
+    _analysisResumeOperation = operation;
+    return operation.whenComplete(() {
+      if (identical(_analysisResumeOperation, operation)) {
+        _analysisResumeOperation = null;
+      }
+    });
+  }
+
+  Future<void> _resumeMaterialAnalyses(AuthUser user) async {
+    _bindAnalysis(user);
+    await loadMaterialsFor(user);
+    if (_analysisUserId != user.id) return;
+    _analysisForegrounded = true;
+    await _reconcilePersistedMaterialAnalyses(user);
+  }
+
+  Future<void> _reconcilePersistedMaterialAnalyses(AuthUser user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase ||
+        materialAnalysisRepository is EmptyMaterialAnalysisRepository ||
+        _analysisUserId != user.id) {
+      return;
+    }
+    final candidates = _materials
+        .where(
+          (material) =>
+              material.sourceKind == MaterialSourceKind.upload &&
+              (material.kind == MaterialKind.pdf ||
+                  material.kind == MaterialKind.image) &&
+              (material.processingStatus == MaterialProcessingStatus.pending ||
+                  material.processingStatus ==
+                      MaterialProcessingStatus.processing),
+        )
+        .map((material) => material.id)
+        .toSet();
+    await Future.wait(
+      candidates.map((id) => observeMaterialAnalysis(user, id, force: true)),
+    );
   }
 
   Future<bool> confirmLargeMaterialAnalysis(AuthUser? user, String id) async {
@@ -538,9 +689,15 @@ class AppState extends ChangeNotifier {
       _nextAnalysis(id);
     }
     _analysisLoops.clear();
+    _analysisAdvanceTasks.clear();
     _analysisPending.clear();
     _analysisObservations.clear();
+    _analysisForcedObservations.clear();
+    _analysisReconciling.clear();
+    _analysisStopped.clear();
+    _analysisRetryGuards.clear();
     _analysisActions.clear();
+    _analysisResumeOperation = null;
   }
 
   int _nextAnalysis(String id) =>
@@ -549,7 +706,14 @@ class AppState extends ChangeNotifier {
       _analysisUserId == user.id && _analysisGenerations[id] == g;
   void _scheduleAnalysis(AuthUser user, String id) {
     final s = _analysisStatuses[id];
+    final retryGuard = _analysisRetryGuards[id];
+    if (retryGuard != null) {
+      if (_analysisNow().isBefore(retryGuard.nextAllowedAt)) return;
+      _analysisRetryGuards.remove(id);
+    }
     if (!_analysisForegrounded ||
+        _analysisReconciling.contains(id) ||
+        _analysisStopped.contains(id) ||
         s == null ||
         s.isTerminal ||
         s.confirmationRequired) {
@@ -577,12 +741,24 @@ class AppState extends ChangeNotifier {
           break;
         }
         try {
-          final s = await materialAnalysisRepository.advance(
+          late final Future<MaterialAnalysisStatus> advance;
+          advance = materialAnalysisRepository.advance(
             user: user,
             materialId: id,
           );
+          _analysisAdvanceTasks[id] = advance;
+          late final MaterialAnalysisStatus s;
+          try {
+            s = await advance;
+          } finally {
+            if (identical(_analysisAdvanceTasks[id], advance)) {
+              _analysisAdvanceTasks.remove(id);
+            }
+          }
           if (!_currentAnalysis(user, id, g)) break;
           _analysisStatuses[id] = s;
+          _analysisRetryGuards.remove(id);
+          _analysisErrors.remove(id);
           notifyListeners();
           if (s.isTerminal || s.confirmationRequired) break;
           delay = Duration(
@@ -590,12 +766,58 @@ class AppState extends ChangeNotifier {
                 ? 700
                 : (s.retryAfterSeconds! * 1000).clamp(700, 30000),
           );
-        } on MaterialAnalysisException {
-          delay = Duration(
-            milliseconds: (delay.inMilliseconds * 2).clamp(1000, 30000),
+        } on MaterialAnalysisException catch (error) {
+          if (!_currentAnalysis(user, id, g)) break;
+          if (error.code == AnalysisErrorCode.requestFailed) {
+            _analysisErrors[id] = error.code;
+            _analysisRetryGuards[id] = _AnalysisRetryGuard(
+              failures: 1,
+              nextAllowedAt: _analysisNow().add(const Duration(seconds: 30)),
+            );
+            notifyListeners();
+            break;
+          }
+          if (!_transientAnalysisErrors.contains(error.code)) {
+            _analysisErrors[id] = error.code;
+            notifyListeners();
+            break;
+          }
+          final failures = (_analysisRetryGuards[id]?.failures ?? 0) + 1;
+          final backoff = Duration(
+            seconds: switch (failures) {
+              1 => 1,
+              2 => 2,
+              _ => 4,
+            },
           );
+          _analysisErrors[id] = error.code;
+          _analysisRetryGuards[id] = _AnalysisRetryGuard(
+            failures: failures,
+            nextAllowedAt: _analysisNow().add(backoff),
+          );
+          notifyListeners();
+          if (failures >= 3) break;
+          await _analysisDelay(backoff);
+          if (!_currentAnalysis(user, id, g)) break;
+          try {
+            final refreshed = await materialAnalysisRepository.fetchStatus(
+              user: user,
+              materialId: id,
+            );
+            if (!_currentAnalysis(user, id, g)) break;
+            _analysisStatuses[id] = refreshed;
+            notifyListeners();
+            if (refreshed.isTerminal || refreshed.confirmationRequired) break;
+          } on MaterialAnalysisException catch (refreshError) {
+            if (_currentAnalysis(user, id, g)) {
+              _analysisErrors[id] = refreshError.code;
+              notifyListeners();
+            }
+            break;
+          }
+          continue;
         }
-        await Future<void>.delayed(delay);
+        await _analysisDelay(delay);
       }
     } finally {
       if (_analysisLoops[id] == g) {
@@ -739,6 +961,10 @@ class AppState extends ChangeNotifier {
     await loadQuizzesFor(user);
     await loadQuizAttemptsFor(user);
     await loadCumulativeWeakTopicsFor(user);
+    if (user != null) {
+      _analysisForegrounded = true;
+      await _reconcilePersistedMaterialAnalyses(user);
+    }
   }
 
   Future<void> loadMaterialsFor(AuthUser? user) async {
@@ -1417,6 +1643,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _removeMaterialLocally(String materialId) {
+    stopObservingMaterialAnalysis(materialId);
     _materials.removeWhere((item) => item.id == materialId);
     _favoriteMaterialIds.remove(materialId);
     _flashcards.removeWhere((item) => item.materialId == materialId);
@@ -1436,7 +1663,6 @@ class AppState extends ChangeNotifier {
     _analysisPending.remove(materialId);
     _analysisObservations.remove(materialId);
     _analysisActions.remove(materialId);
-    _nextAnalysis(materialId);
   }
 
   Future<void> inspectMaterialRecoveryFor(
@@ -1755,9 +1981,15 @@ class AppState extends ChangeNotifier {
       _nextAnalysis(id);
     }
     _analysisLoops.clear();
+    _analysisAdvanceTasks.clear();
     _analysisPending.clear();
     _analysisObservations.clear();
+    _analysisForcedObservations.clear();
+    _analysisReconciling.clear();
+    _analysisStopped.clear();
+    _analysisRetryGuards.clear();
     _analysisActions.clear();
+    _analysisResumeOperation = null;
   }
 
   void clearSyncedWorkspaceForSignOut() {
@@ -2895,6 +3127,22 @@ class _AnalysisActionGuard {
 
   final String id;
   final AnalysisExplicitAction action;
+}
+
+const _transientAnalysisErrors = {
+  AnalysisErrorCode.network,
+  AnalysisErrorCode.rateLimited,
+  AnalysisErrorCode.serviceUnavailable,
+};
+
+class _AnalysisRetryGuard {
+  const _AnalysisRetryGuard({
+    required this.failures,
+    required this.nextAllowedAt,
+  });
+
+  final int failures;
+  final DateTime nextAllowedAt;
 }
 
 enum AppLanguagePreference { system, english, german, russian }

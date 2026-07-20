@@ -127,9 +127,11 @@ class _StudyBuddyAppState extends State<StudyBuddyApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
-    state.setAnalysisLifecycleForegrounded(
-      lifecycle == AppLifecycleState.resumed,
-    );
+    if (lifecycle == AppLifecycleState.resumed) {
+      state.resumeMaterialAnalyses(authController.user).ignore();
+      return;
+    }
+    state.setAnalysisLifecycleForegrounded(false);
   }
 
   @override

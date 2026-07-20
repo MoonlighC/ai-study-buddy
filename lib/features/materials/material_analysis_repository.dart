@@ -35,6 +35,7 @@ enum AnalysisErrorCode {
   statusNotFound,
   rateLimited,
   serviceUnavailable,
+  requestFailed,
   invalidResponse,
   network,
 }
@@ -337,14 +338,17 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
 
 AnalysisErrorCode _functionErrorCode(supabase.FunctionException exception) {
   final status = exception.status;
+  final code = _safePublicErrorCode(exception.details);
   if (status == 401) return AnalysisErrorCode.unauthenticated;
   if (status == 403) return AnalysisErrorCode.unauthorized;
   if (status == 404) return AnalysisErrorCode.unavailable;
   if (status == 429) return AnalysisErrorCode.rateLimited;
+  if (status == 500 && code == 'request_failed') {
+    return AnalysisErrorCode.requestFailed;
+  }
   if (status == 500 || status == 502 || status == 503 || status == 504) {
     return AnalysisErrorCode.serviceUnavailable;
   }
-  final code = _safePublicErrorCode(exception.details);
   if (status == 422) {
     return switch (code) {
       'document_too_large' => AnalysisErrorCode.documentTooLarge,

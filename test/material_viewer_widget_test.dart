@@ -7,6 +7,7 @@ import 'package:ai_study_buddy/core/models/material.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_viewer_screen.dart';
+import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/materials/original_material_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -316,6 +317,54 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(result.handle.isReleased, isTrue);
     expect(find.byType(PdfViewer), findsNothing);
+  });
+
+  testWidgets('PDF return repaints detail and favorite remains interactive', (
+    tester,
+  ) async {
+    const material = StudyMaterial(
+      id: 'pdf',
+      subjectId: 'biology',
+      title: 'Private notes.pdf',
+      kind: MaterialKind.pdf,
+      content: '',
+      createdLabel: 'Today',
+      sourceKind: MaterialSourceKind.upload,
+      storageBucket: 'study-materials',
+      storagePath:
+          '11111111-1111-4111-8111-111111111111/pdf/private-notes.pdf',
+      mimeType: 'application/pdf',
+      fileSizeBytes: 1024,
+      processingStatus: MaterialProcessingStatus.pending,
+    );
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        authRepository: MockAuthRepository(initialUser: _user),
+        materialRepository: MockMaterialRepository(
+          initialMaterials: const [material],
+        ),
+        originalMaterialRepository: MockOriginalMaterialRepository(
+          pdfs: {'pdf': _twoPagePdf()},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.materialDetail, arguments: material);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('view-original-material')));
+    await _pumpUntil(tester, find.byType(PdfViewer));
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byKey(const ValueKey('material-hero')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('material-favorite-action')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Unfavorite material'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   test('opaque preview handle and public route metadata expose no bytes', () {

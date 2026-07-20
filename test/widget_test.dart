@@ -155,6 +155,100 @@ void main() {
     expect(find.text(material.title), findsNothing);
   });
 
+  testWidgets('material deletion falls back to the previous valid route', (
+    tester,
+  ) async {
+    const material = StudyMaterial(
+      id: 'orphan-material',
+      subjectId: 'missing-origin',
+      title: 'Orphan notes',
+      kind: MaterialKind.pastedText,
+      content: 'Disposable content.',
+      createdLabel: 'Today',
+    );
+    final lifecycle = _WidgetMaterialLifecycle();
+    await tester.pumpWidget(
+      StudyBuddyApp(
+        materialRepository: MockMaterialRepository(
+          initialMaterials: const [material],
+        ),
+        materialLifecycleRepository: lifecycle,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    await _pushRoute(tester, AppRoutes.materialDetail, arguments: material);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete material'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete material'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-scroll-view')), findsOneWidget);
+    expect(find.text('Orphan notes'), findsNothing);
+    expect(find.text('Material deleted.'), findsOneWidget);
+    expect(lifecycle.deleteCalls, 1);
+  });
+
+  testWidgets('failed material deletion stays on detail without navigation', (
+    tester,
+  ) async {
+    final lifecycle = _WidgetMaterialLifecycle(fail: true);
+    await tester.pumpWidget(
+      StudyBuddyApp(materialLifecycleRepository: lifecycle),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    final material = MockData.materials.first;
+    await _pushRoute(tester, AppRoutes.materialDetail, arguments: material);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete material'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete material'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('material-detail-scroll-view')), findsOne);
+    expect(find.text(material.title), findsOneWidget);
+    expect(find.text('Could not delete the material. Try again.'), findsOne);
+    expect(lifecycle.deleteCalls, 1);
+  });
+
+  testWidgets('completed deletion does not navigate with a disposed context', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    final lifecycle = _WidgetMaterialLifecycle(gate: gate);
+    await tester.pumpWidget(
+      StudyBuddyApp(materialLifecycleRepository: lifecycle),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with email'));
+    await tester.pumpAndSettle();
+    final material = MockData.materials.first;
+    await _pushRoute(tester, AppRoutes.materialDetail, arguments: material);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete material'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete material'));
+    await tester.pump();
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    gate.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-scroll-view')), findsOneWidget);
+    expect(lifecycle.deleteCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('favorite toggle updates favorites screen', (tester) async {
     await _enterDashboard(tester);
     await _pushRoute(
@@ -3718,6 +3812,47 @@ class _StaticWeakTopicRepository implements WeakTopicRepository {
   Future<List<CumulativeWeakTopic>> loadWeakTopics(AuthUser user) async {
     return List.of(topics);
   }
+}
+
+class _WidgetMaterialLifecycle implements MaterialLifecycleRepository {
+  _WidgetMaterialLifecycle({this.fail = false, this.gate});
+
+  final bool fail;
+  final Completer<void>? gate;
+  int deleteCalls = 0;
+
+  @override
+  Future<void> deleteMaterial({
+    required AuthUser user,
+    required String materialId,
+  }) async {
+    deleteCalls += 1;
+    if (gate != null) await gate!.future;
+    if (fail) {
+      throw const MaterialLifecycleException(
+        'Could not delete the material. Try again.',
+      );
+    }
+  }
+
+  @override
+  Future<bool?> materialExists({
+    required AuthUser user,
+    required String materialId,
+  }) async => fail;
+
+  @override
+  Future<MaterialRecoveryEligibility> inspectRecovery({
+    required AuthUser user,
+    required String materialId,
+  }) async => const MaterialRecoveryEligibility(eligible: false);
+
+  @override
+  Future<void> recover({
+    required AuthUser user,
+    required String materialId,
+    required String processor,
+  }) async {}
 }
 
 class _RecordingSummaryRepository implements SummaryRepository {

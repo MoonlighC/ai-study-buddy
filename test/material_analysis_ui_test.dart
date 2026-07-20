@@ -130,9 +130,78 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('forced reconciliation replaces stale stage without navigation', (
+    tester,
+  ) async {
+    final advance = Completer<MaterialAnalysisStatus>();
+    var fetches = 0;
+    final repo = _UiRepo(
+      status: _status(
+        stage: AnalysisPublicStage.recognizingFormulasAndDiagrams,
+      ),
+      onFetch: () {
+        fetches += 1;
+        return Future.value(
+          fetches == 1
+              ? _status(
+                  stage: AnalysisPublicStage.recognizingFormulasAndDiagrams,
+                )
+              : _status(
+                  stage: AnalysisPublicStage.creatingSummary,
+                  state: AnalysisState.failed,
+                ),
+        );
+      },
+      onAdvance: () => advance.future,
+    );
+    final state = await _pump(tester, repo);
+    expect(find.text('Recognizing formulas and diagrams'), findsWidgets);
+
+    final reconciliation = state.observeMaterialAnalysis(
+      _user,
+      _material.id,
+      force: true,
+    );
+    await tester.pump();
+    expect(fetches, 1, reason: 'the in-flight advance finishes first');
+    advance.complete(
+      _status(stage: AnalysisPublicStage.recognizingFormulasAndDiagrams),
+    );
+    await reconciliation;
+    await tester.pump();
+
+    expect(find.text('Creating summary'), findsWidgets);
+    expect(find.text('Recognizing formulas and diagrams'), findsNothing);
+    expect(repo.advances, 1);
+  });
+
+  testWidgets('request failed publishes a bounded recoverable panel', (
+    tester,
+  ) async {
+    final repo = _UiRepo(
+      status: _status(stage: AnalysisPublicStage.analyzingPages),
+      onAdvance: () => Future.error(
+        const MaterialAnalysisException(AnalysisErrorCode.requestFailed),
+      ),
+    );
+
+    await _pump(tester, repo);
+    await tester.pump();
+
+    expect(repo.advances, 1);
+    expect(
+      find.text(
+        'Document analysis is temporarily unavailable. Try again later.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 2));
+    expect(repo.advances, 1);
+  });
 }
 
-Future<void> _pump(
+Future<AppState> _pump(
   WidgetTester tester,
   _UiRepo repo, {
   bool dark = false,
@@ -175,24 +244,31 @@ Future<void> _pump(
   await tester.pump();
   await tester.pump();
   await tester.pump();
+  return state;
 }
 
 class _UiRepo implements MaterialAnalysisRepository {
-  _UiRepo({required this.status, this.onAdvance, this.onPrepare});
+  _UiRepo({required this.status, this.onFetch, this.onAdvance, this.onPrepare});
 
   final MaterialAnalysisStatus status;
-  final Future<MaterialAnalysisStatus> Function()? onAdvance, onPrepare;
-  int prepares = 0;
+  final Future<MaterialAnalysisStatus> Function()? onFetch,
+      onAdvance,
+      onPrepare;
+  int prepares = 0, advances = 0;
   @override
   Future<MaterialAnalysisStatus> fetchStatus({
     required AuthUser user,
     required String materialId,
-  }) async => status;
+  }) => onFetch?.call() ?? Future.value(status);
   @override
   Future<MaterialAnalysisStatus> advance({
     required AuthUser user,
     required String materialId,
-  }) => onAdvance?.call() ?? Future.value(status);
+  }) {
+    advances += 1;
+    return onAdvance?.call() ?? Future.value(status);
+  }
+
   @override
   Future<MaterialAnalysisStatus> prepare({
     required AuthUser user,

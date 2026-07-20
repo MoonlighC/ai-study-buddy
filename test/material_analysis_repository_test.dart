@@ -195,6 +195,30 @@ void main() {
       );
     }
   });
+  test(
+    'deterministic request_failed 500 is not classified as transient',
+    () async {
+      final repo = SupabaseMaterialAnalysisRepository(
+        _ThrowingSource(
+          supabase.FunctionException(
+            status: 500,
+            details: {'code': 'request_failed'},
+          ),
+        ),
+      );
+
+      await expectLater(
+        repo.advance(user: user, materialId: id),
+        throwsA(
+          isA<MaterialAnalysisException>().having(
+            (error) => error.code,
+            'code',
+            AnalysisErrorCode.requestFailed,
+          ),
+        ),
+      );
+    },
+  );
   test('exact owner/session and UUID are required', () async {
     final repo = SupabaseMaterialAnalysisRepository(_Source(_status()));
     expect(

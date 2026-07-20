@@ -6,6 +6,7 @@ import '../../app/app_state.dart';
 import '../../app/app_config.dart';
 import '../../app/routes.dart';
 import '../../core/models/material.dart';
+import '../../core/models/subject.dart';
 import '../../core/models/study_session.dart';
 import '../../l10n/l10n_extensions.dart';
 import '../../l10n/localized_formatters.dart';
@@ -26,15 +27,23 @@ import 'material_analysis_repository.dart';
 import 'material_viewer_screen.dart';
 import 'original_material_repository.dart';
 
-class MaterialDetailScreen extends StatelessWidget {
+class MaterialDetailScreen extends StatefulWidget {
   const MaterialDetailScreen({required this.material, super.key});
 
   final StudyMaterial material;
 
   @override
+  State<MaterialDetailScreen> createState() => _MaterialDetailScreenState();
+}
+
+class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
+  bool _deletionNavigationCommitted = false;
+
+  @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
-    final freshMaterial = state.materialById(material.id) ?? material;
+    final freshMaterial =
+        state.materialById(widget.material.id) ?? widget.material;
     final subject = state.subjectFor(freshMaterial.subjectId);
     final isFavorite = state.isMaterialFavorite(freshMaterial.id);
     final deleting = state.isDeletingMaterial(freshMaterial.id);
@@ -81,14 +90,7 @@ class MaterialDetailScreen extends StatelessWidget {
                 key: const ValueKey('view-original-material'),
                 label: l10n.materialViewOriginal,
                 icon: Icons.visibility_outlined,
-                onPressed: () => Navigator.pushNamed(
-                  context,
-                  AppRoutes.materialViewer,
-                  arguments: MaterialViewerArgs(
-                    materialId: freshMaterial.id,
-                    kind: freshMaterial.kind,
-                  ),
-                ),
+                onPressed: () => _openOriginalMaterial(context, freshMaterial),
               ),
             ],
             const SizedBox(height: 16),
@@ -407,6 +409,7 @@ class MaterialDetailScreen extends StatelessWidget {
     BuildContext context,
     StudyMaterial material,
   ) async {
+    if (_deletionNavigationCommitted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -451,27 +454,33 @@ class MaterialDetailScreen extends StatelessWidget {
     );
     if (confirmed != true || !context.mounted) return;
     final state = AppStateScope.read(context);
-    final deleted = await state.deleteMaterialFor(
-      AuthScope.read(context).user,
-      material.id,
-    );
-    if (!context.mounted) return;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final deletedMessage = context.l10n.materialDeleted;
+    final user = AuthScope.read(context).user;
+    final deleted = await state.deleteMaterialFor(user, material.id);
+    if (!mounted || !context.mounted) return;
     if (deleted) {
-      final subjects = state.subjects.where(
-        (item) => item.id == material.subjectId,
+      if (_deletionNavigationCommitted || !navigator.mounted) return;
+      _deletionNavigationCommitted = true;
+      final subject = state.subjects.cast<Subject?>().firstWhere(
+        (item) => item?.id == material.subjectId,
+        orElse: () => null,
       );
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.materialDeleted)));
-      if (subjects.isNotEmpty) {
-        Navigator.pushReplacementNamed(
-          context,
+      if (subject != null) {
+        navigator.pushReplacementNamed(
           AppRoutes.subjectDetail,
-          arguments: subjects.first,
+          arguments: subject,
         );
+      } else if (navigator.canPop()) {
+        navigator.pop();
       } else {
-        Navigator.pushReplacementNamed(context, AppRoutes.subjects);
+        navigator.pushReplacementNamed(AppRoutes.subjects);
       }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!messenger.mounted) return;
+        messenger.showSnackBar(SnackBar(content: Text(deletedMessage)));
+      });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -484,6 +493,21 @@ class MaterialDetailScreen extends StatelessWidget {
         ),
       );
     }
+  }
+
+  Future<void> _openOriginalMaterial(
+    BuildContext context,
+    StudyMaterial material,
+  ) async {
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.materialViewer,
+      arguments: MaterialViewerArgs(
+        materialId: material.id,
+        kind: material.kind,
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   Future<void> _toggleMaterialFavorite(
@@ -1093,7 +1117,6 @@ class _MaterialAnalysisSection extends StatefulWidget {
 
 class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
   bool _started = false;
-  AppState? _state;
   Timer? _retryTimer;
   int? _retryRemaining;
   int? _serverRetryValue;
@@ -1102,7 +1125,6 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
     super.didChangeDependencies();
     if (_started) return;
     _started = true;
-    _state = AppStateScope.read(context);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         AppStateScope.read(context).observeMaterialAnalysis(
@@ -1116,7 +1138,6 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
   @override
   void dispose() {
     _retryTimer?.cancel();
-    _state?.stopObservingMaterialAnalysis(widget.material.id);
     super.dispose();
   }
 
@@ -1159,6 +1180,20 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
         message: l.analysisResumeProcessing,
         icon: Icons.hourglass_top_outlined,
         progress: true,
+      );
+    }
+    if (!status.isTerminal &&
+        const {
+          AnalysisErrorCode.requestFailed,
+          AnalysisErrorCode.network,
+          AnalysisErrorCode.rateLimited,
+          AnalysisErrorCode.serviceUnavailable,
+        }.contains(error)) {
+      return MaterialStatusPanel(
+        title: _stage(l, status),
+        message: l.analysisTemporaryFailure,
+        icon: Icons.cloud_off_outlined,
+        warning: true,
       );
     }
     if (status.confirmationRequired) {

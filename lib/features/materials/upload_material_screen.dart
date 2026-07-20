@@ -188,7 +188,8 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     Text(l10n.uploadPartialSuccess),
                     const SizedBox(height: 4),
                   ],
-                  Text(l10n.materialBatchResult(succeeded, failed)),
+                  // gen-l10n orders positional parameters alphabetically.
+                  Text(l10n.materialBatchResult(failed, succeeded)),
                   const SizedBox(height: 12),
                   for (final item in items) ...[
                     _QueueItemCard(item: item, state: state),
