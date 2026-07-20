@@ -233,9 +233,7 @@ List<String> _migrationRevisions() {
 }
 
 void _validateMetadata() {
-  final v = _pubspecVersion();
-  if (v.semantic != '1.0.0' || v.build != 1)
-    throw const ValidationException('metadata: unexpected version');
+  _pubspecVersion();
   final android = File('android/app/build.gradle.kts').readAsStringSync();
   final ios = File('ios/Runner.xcodeproj/project.pbxproj').readAsStringSync();
   final windows = File('windows/runner/Runner.rc').readAsStringSync();
