@@ -107,7 +107,7 @@ void main() {
       multiLine: true,
     ).firstMatch(read('pubspec.yaml'));
     expect(match, isNotNull);
-    expect(match!.group(0), contains('1.0.0+1'));
+    expect(match!.group(0), contains('1.1.0+3'));
     expect(int.parse(match.group(4)!), greaterThan(0));
     expect(
       read('android/app/build.gradle.kts'),
@@ -116,6 +116,10 @@ void main() {
     expect(
       read('android/app/build.gradle.kts'),
       contains('versionName = flutter.versionName'),
+    );
+    expect(
+      read('android/app/build.gradle.kts'),
+      contains('versionCodeOverride = flutter.versionCode'),
     );
     expect(read('ios/Runner/Info.plist'), contains(r'$(FLUTTER_BUILD_NAME)'));
     expect(read('ios/Runner/Info.plist'), contains(r'$(FLUTTER_BUILD_NUMBER)'));

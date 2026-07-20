@@ -77,6 +77,15 @@ android {
     }
 }
 
+// Tester split APKs keep the app's declared build number. Flutter otherwise
+// prefixes ABI-specific offsets (for example, arm64 build 3 becomes 2003).
+android.applicationVariants.all {
+    outputs.all {
+        @Suppress("DEPRECATION")
+        (this as com.android.build.gradle.api.ApkVariantOutput).versionCodeOverride = flutter.versionCode
+    }
+}
+
 gradle.taskGraph.whenReady {
     if (allTasks.any { it.name.contains("release", ignoreCase = true) } && releaseSigning == null) {
         throw GradleException("Release signing configuration is incomplete. Missing fields: ${missingReleaseSigningFields().joinToString(", ")}.")
