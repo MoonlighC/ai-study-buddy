@@ -7,6 +7,7 @@ void main() {
   late String diagnosticSelectorMigration;
   late String diagnosticCleanupMigration;
   late String recoveryFingerprintMigration;
+  late String noWorkTerminalizationMigration;
 
   setUpAll(() async {
     migration = _normalize(
@@ -29,6 +30,11 @@ void main() {
         'supabase/migrations/015_material_analysis_recovery_fingerprints.sql',
       ).readAsString(),
     );
+    noWorkTerminalizationMigration = _normalize(
+      await File(
+        'supabase/migrations/016_material_analysis_no_work_terminalization.sql',
+      ).readAsString(),
+    );
   });
 
   test('recovery fingerprint claim remains service-role-only', () {
@@ -46,6 +52,29 @@ void main() {
     );
     expect(
       recoveryFingerprintMigration,
+      isNot(
+        contains(
+          'grant execute on function public.claim_next_material_analysis_operation_internal(uuid) to authenticated',
+        ),
+      ),
+    );
+  });
+
+  test('no-work terminalization claim remains service-role-only', () {
+    expect(
+      noWorkTerminalizationMigration,
+      contains(
+        'revoke all on function public.claim_next_material_analysis_operation_internal(uuid) from public,anon,authenticated',
+      ),
+    );
+    expect(
+      noWorkTerminalizationMigration,
+      contains(
+        'grant execute on function public.claim_next_material_analysis_operation_internal(uuid) to service_role',
+      ),
+    );
+    expect(
+      noWorkTerminalizationMigration,
       isNot(
         contains(
           'grant execute on function public.claim_next_material_analysis_operation_internal(uuid) to authenticated',
