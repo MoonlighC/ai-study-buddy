@@ -85,8 +85,21 @@ await runSql(
   path.join(root, "supabase", "tests", "phase_c_diagnostic_cleanup.sql"),
   "phase_c_diagnostic_cleanup.sql",
 );
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "015_material_analysis_recovery_fingerprints.sql",
+  ),
+  "migration 015_",
+);
+await runSql(
+  path.join(root, "supabase", "tests", "phase_c_recovery_fingerprints.sql"),
+  "phase_c_recovery_fingerprints.sql",
+);
 
-console.log("PHASE_C_DATABASE_TESTS_OK migrations=14 sql_suites=7");
+console.log("PHASE_C_DATABASE_TESTS_OK migrations=15 sql_suites=8");
 await database.close();
 
 async function runSql(file, label) {

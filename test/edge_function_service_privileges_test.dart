@@ -6,6 +6,7 @@ void main() {
   late String migration;
   late String diagnosticSelectorMigration;
   late String diagnosticCleanupMigration;
+  late String recoveryFingerprintMigration;
 
   setUpAll(() async {
     migration = _normalize(
@@ -22,6 +23,34 @@ void main() {
       await File(
         'supabase/migrations/014_material_analysis_diagnostic_cleanup.sql',
       ).readAsString(),
+    );
+    recoveryFingerprintMigration = _normalize(
+      await File(
+        'supabase/migrations/015_material_analysis_recovery_fingerprints.sql',
+      ).readAsString(),
+    );
+  });
+
+  test('recovery fingerprint claim remains service-role-only', () {
+    expect(
+      recoveryFingerprintMigration,
+      contains(
+        'revoke all on function public.claim_next_material_analysis_operation_internal(uuid) from public,anon,authenticated',
+      ),
+    );
+    expect(
+      recoveryFingerprintMigration,
+      contains(
+        'grant execute on function public.claim_next_material_analysis_operation_internal(uuid) to service_role',
+      ),
+    );
+    expect(
+      recoveryFingerprintMigration,
+      isNot(
+        contains(
+          'grant execute on function public.claim_next_material_analysis_operation_internal(uuid) to authenticated',
+        ),
+      ),
     );
   });
 
@@ -237,7 +266,6 @@ void main() {
     expect(diagnosticCleanupMigration, contains('drop function if exists'));
     expect(diagnosticCleanupMigration, contains('drop table if exists'));
   });
-
 }
 
 String _normalize(String value) => value
