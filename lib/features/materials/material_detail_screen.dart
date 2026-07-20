@@ -1211,8 +1211,24 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
               ),
       );
     }
-    if (status.state == AnalysisState.userRetryRequired ||
-        status.state == AnalysisState.failed) {
+    if (status.state == AnalysisState.failed) {
+      return MaterialStatusPanel(
+        title: l.materialFailedStatus,
+        message: status.canRetry
+            ? l.analysisRetryProcessing
+            : l.analysisInvalidDocumentTitle,
+        icon: Icons.error_outline,
+        warning: true,
+        actionLabel: status.canRetry ? l.analysisRetryProcessing : null,
+        onAction: status.canRetry && !actionInFlight
+            ? () => state.retryMaterialAnalysis(
+                AuthScope.read(context).user,
+                widget.material.id,
+              )
+            : null,
+      );
+    }
+    if (status.state == AnalysisState.userRetryRequired) {
       return MaterialStatusPanel(
         title: _stage(l, status),
         message: status.canRetry
@@ -1239,9 +1255,13 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
         MaterialStatusPanel(
           title: status.state == AnalysisState.completedWithWarnings
               ? l.analysisCompletedWithWarnings
+              : status.state == AnalysisState.completed
+              ? l.uploadReady
               : _stage(l, status),
           message: _retryRemaining != null && _retryRemaining! > 0
               ? l.analysisRetryAvailableIn(_retryRemaining!)
+              : status.state == AnalysisState.completed
+              ? l.materialTextExtracted
               : status.publicStage == AnalysisPublicStage.analyzingPages
               ? l.analysisPageProgress(status.completedPages, status.pageCount)
               : _stage(l, status),

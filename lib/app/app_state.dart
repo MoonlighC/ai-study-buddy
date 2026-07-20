@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
@@ -240,6 +241,8 @@ class AppState extends ChangeNotifier {
   final Map<String, _AnalysisRetryGuard> _analysisRetryGuards = {};
   final Map<String, _AnalysisActionGuard> _analysisActions = {};
   Future<void>? _analysisResumeOperation;
+  Future<void> _studySessionPersistence = Future.value();
+  Future<void> _studySessionRestoration = Future.value();
   String? _analysisUserId;
   AuthUser? _analysisUser;
   bool _analysisForegrounded = true;
@@ -455,7 +458,7 @@ class AppState extends ChangeNotifier {
         materialId: id,
       );
       if (_analysisUserId != user.id || _analysisStopped.contains(id)) return;
-      _analysisStatuses[id] = status;
+      _publishAnalysisStatus(id, status);
       if (status.isTerminal || status.confirmationRequired) {
         _analysisRetryGuards.remove(id);
         _analysisErrors.remove(id);
@@ -484,7 +487,7 @@ class AppState extends ChangeNotifier {
         materialId: id,
       );
       if (!_currentAnalysis(user, id, generation)) return;
-      _analysisStatuses[id] = status;
+      _publishAnalysisStatus(id, status);
       final retryGuard = _analysisRetryGuards[id];
       if (status.isTerminal || status.confirmationRequired) {
         _analysisRetryGuards.remove(id);
@@ -642,7 +645,7 @@ class AppState extends ChangeNotifier {
     try {
       final s = await call();
       if (!_currentAnalysis(user, id, g)) return false;
-      _analysisStatuses[id] = s;
+      _publishAnalysisStatus(id, s, allowRestart: true);
       _analysisErrors.remove(id);
       notifyListeners();
       _scheduleAnalysis(user, id);
@@ -704,6 +707,37 @@ class AppState extends ChangeNotifier {
       _analysisGenerations.update(id, (v) => v + 1, ifAbsent: () => 1);
   bool _currentAnalysis(AuthUser user, String id, int g) =>
       _analysisUserId == user.id && _analysisGenerations[id] == g;
+
+  void _publishAnalysisStatus(
+    String id,
+    MaterialAnalysisStatus next, {
+    bool allowRestart = false,
+  }) {
+    final current = _analysisStatuses[id];
+    final currentIsFinal =
+        current != null &&
+        (current.state == AnalysisState.completed ||
+            current.state == AnalysisState.completedWithWarnings ||
+            (current.state == AnalysisState.failed && !current.canRetry));
+    if (!allowRestart && currentIsFinal && !next.isTerminal) return;
+    _analysisStatuses[id] = next;
+    if (!next.isTerminal) return;
+    final processingStatus = switch (next.state) {
+      AnalysisState.completed ||
+      AnalysisState.completedWithWarnings => MaterialProcessingStatus.ready,
+      AnalysisState.failed => MaterialProcessingStatus.failed,
+      _ => null,
+    };
+    if (processingStatus == null) return;
+    _materials = [
+      for (final material in _materials)
+        if (material.id == id)
+          material.copyWith(processingStatus: processingStatus)
+        else
+          material,
+    ];
+  }
+
   void _scheduleAnalysis(AuthUser user, String id) {
     final s = _analysisStatuses[id];
     final retryGuard = _analysisRetryGuards[id];
@@ -756,7 +790,7 @@ class AppState extends ChangeNotifier {
             }
           }
           if (!_currentAnalysis(user, id, g)) break;
-          _analysisStatuses[id] = s;
+          _publishAnalysisStatus(id, s);
           _analysisRetryGuards.remove(id);
           _analysisErrors.remove(id);
           notifyListeners();
@@ -805,7 +839,7 @@ class AppState extends ChangeNotifier {
               materialId: id,
             );
             if (!_currentAnalysis(user, id, g)) break;
-            _analysisStatuses[id] = refreshed;
+            _publishAnalysisStatus(id, refreshed);
             notifyListeners();
             if (refreshed.isTerminal || refreshed.confirmationRequired) break;
           } on MaterialAnalysisException catch (refreshError) {
@@ -951,6 +985,8 @@ class AppState extends ChangeNotifier {
     if (_materialWorkSessionUserId != user?.id) {
       _materialWorkSessionUserId = user?.id;
       _clearMaterialWorkState();
+      _studySessions.clear();
+      _sessionCounter = 0;
     }
     materialUploadQueue.bindSession(user?.id);
     if (user != null) _bindAnalysis(user);
@@ -961,6 +997,10 @@ class AppState extends ChangeNotifier {
     await loadQuizzesFor(user);
     await loadQuizAttemptsFor(user);
     await loadCumulativeWeakTopicsFor(user);
+    if (user != null) {
+      _studySessionRestoration = _restoreActiveStudySession(user);
+      unawaited(_studySessionRestoration);
+    }
     if (user != null) {
       _analysisForegrounded = true;
       await _reconcilePersistedMaterialAnalyses(user);
@@ -1500,7 +1540,7 @@ class AppState extends ChangeNotifier {
           succeeded: false,
         );
       }
-      _analysisStatuses[material.id] = status;
+      _publishAnalysisStatus(material.id, status, allowRestart: true);
       _analysisErrors.remove(material.id);
       notifyListeners();
       _scheduleAnalysis(user, material.id);
@@ -1553,6 +1593,9 @@ class AppState extends ChangeNotifier {
           .where((item) => item.subjectId == subjectId)
           .map((item) => item.id)
           .toSet();
+      final activeSessionRemoved = _studySessions.any(
+        (item) => item.subjectId == subjectId,
+      );
       _subjects.removeWhere((item) => item.id == subjectId);
       _materials.removeWhere((item) => item.subjectId == subjectId);
       _flashcards.removeWhere(
@@ -1571,6 +1614,12 @@ class AppState extends ChangeNotifier {
             item.subjectId == subjectId ||
             materialIds.contains(item.materialId),
       );
+      final userId = _materialWorkSessionUserId;
+      if (activeSessionRemoved && userId != null) {
+        _queueStudySessionPersistence(
+          () => preferencesStore.clearActiveStudySession(userId),
+        );
+      }
       _cumulativeWeakTopics.removeWhere((item) => item.subjectId == subjectId);
       _favoriteMaterialIds.removeAll(materialIds);
       if (_latestQuizCompletion?.subjectId == subjectId) {
@@ -1644,14 +1693,32 @@ class AppState extends ChangeNotifier {
 
   void _removeMaterialLocally(String materialId) {
     stopObservingMaterialAnalysis(materialId);
-    _materials.removeWhere((item) => item.id == materialId);
+    _materials = [
+      for (final item in _materials)
+        if (item.id != materialId) item,
+    ];
     _favoriteMaterialIds.remove(materialId);
-    _flashcards.removeWhere((item) => item.materialId == materialId);
-    _quizzes.removeWhere((item) => item.materialId == materialId);
+    _flashcards = [
+      for (final item in _flashcards)
+        if (item.materialId != materialId) item,
+    ];
+    _quizzes = [
+      for (final item in _quizzes)
+        if (item.materialId != materialId) item,
+    ];
+    final activeSessionRemoved = _studySessions.any(
+      (session) => session.materialId == materialId,
+    );
     for (var index = 0; index < _studySessions.length; index++) {
       if (_studySessions[index].materialId == materialId) {
         _studySessions[index] = _studySessions[index].detachMaterial();
       }
+    }
+    final userId = _materialWorkSessionUserId;
+    if (activeSessionRemoved && userId != null) {
+      _queueStudySessionPersistence(
+        () => preferencesStore.clearActiveStudySession(userId),
+      );
     }
     _pdfExtractionErrors.remove(materialId);
     _scannedPdfOcrErrors.remove(materialId);
@@ -1906,7 +1973,15 @@ class AppState extends ChangeNotifier {
   }
 
   void clearSyncedSubjectsForSignOut() {
+    final signedOutUserId = _materialWorkSessionUserId;
+    if (signedOutUserId != null) {
+      _queueStudySessionPersistence(
+        () => preferencesStore.clearActiveStudySession(signedOutUserId),
+      );
+    }
     _materialWorkSessionUserId = null;
+    _studySessions.clear();
+    _sessionCounter = 0;
     materialUploadQueue.clearForSessionChange();
     _clearMaterialWorkState();
     if (config.effectiveBackendMode != AppBackendMode.supabase) {
@@ -2777,6 +2852,7 @@ class AppState extends ChangeNotifier {
       weakTopics: _initialWeakTopicsFor(subject, confidence),
     );
     _studySessions.add(session);
+    _persistActiveStudySession(session);
     notifyListeners();
     return session;
   }
@@ -2790,11 +2866,46 @@ class AppState extends ChangeNotifier {
     }
 
     final session = _studySessions[index];
-    final isCorrect = answer == session.quizQuestion.correctAnswer;
     final subject = _subjectForOrNull(session.subjectId);
     if (subject == null) {
       return;
     }
+    if (!session.quizQuestion.options.contains(answer)) return;
+    _studySessions[index] = _answerStudySession(session, subject, answer);
+    _persistActiveStudySession(_studySessions[index]);
+    notifyListeners();
+  }
+
+  void completeStudySession(String sessionId) {
+    _endStudySession(sessionId);
+  }
+
+  void exitStudySession(String sessionId) {
+    _endStudySession(sessionId);
+  }
+
+  void _endStudySession(String sessionId) {
+    final index = _studySessions.indexWhere((item) => item.id == sessionId);
+    if (index == -1) return;
+    _studySessions.removeAt(index);
+    final userId = _materialWorkSessionUserId;
+    if (userId != null) {
+      _queueStudySessionPersistence(
+        () => preferencesStore.clearActiveStudySession(userId),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> get studySessionPersistenceIdle => _studySessionPersistence;
+  Future<void> get studySessionRestorationIdle => _studySessionRestoration;
+
+  StudySession _answerStudySession(
+    StudySession session,
+    Subject subject,
+    String answer,
+  ) {
+    final isCorrect = answer == session.quizQuestion.correctAnswer;
     final updatedWeakTopics = isCorrect
         ? _ai.weakTopicsFor(subject).take(1).toList()
         : [
@@ -2806,16 +2917,160 @@ class AppState extends ChangeNotifier {
             ),
             ..._ai.weakTopicsFor(subject).take(2),
           ];
-
-    _studySessions[index] = session.copyWith(
+    return session.copyWith(
       selectedAnswer: answer,
       quizScorePercent: isCorrect ? 100 : 0,
       weakTopics: updatedWeakTopics,
       feedback: isCorrect
           ? 'Correct. This topic is ready for a lighter review.'
           : 'Incorrect. Review the explanation, then retry the flashcards.',
+      currentItemIndex: 1,
+      completedItemIds: const ['quick_quiz'],
     );
-    notifyListeners();
+  }
+
+  void _persistActiveStudySession(StudySession session) {
+    final userId = _materialWorkSessionUserId;
+    if (userId == null) return;
+    final snapshot = jsonEncode({
+      'version': 1,
+      'session_type': 'material_review',
+      'session_id': session.id,
+      'subject_id': session.subjectId,
+      'material_id': session.materialId,
+      'confidence': session.confidence.name,
+      'current_item_index': session.currentItemIndex,
+      'completed_item_ids': session.completedItemIds,
+      'selected_answer': session.selectedAnswer,
+      'quiz_score_percent': session.quizScorePercent,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    _queueStudySessionPersistence(
+      () => preferencesStore.saveActiveStudySession(userId, snapshot),
+    );
+  }
+
+  void _queueStudySessionPersistence(Future<void> Function() operation) {
+    _studySessionPersistence = _studySessionPersistence
+        .then((_) => operation())
+        .catchError((_) {});
+  }
+
+  Future<void> _restoreActiveStudySession(AuthUser user) async {
+    String? raw;
+    try {
+      raw = await preferencesStore.loadActiveStudySession(user.id);
+    } catch (_) {
+      return;
+    }
+    if (raw == null) return;
+    if (_materialWorkSessionUserId != user.id) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) throw const FormatException();
+      final snapshot = Map<String, Object?>.from(decoded);
+      const expectedKeys = {
+        'version',
+        'session_type',
+        'session_id',
+        'subject_id',
+        'material_id',
+        'confidence',
+        'current_item_index',
+        'completed_item_ids',
+        'selected_answer',
+        'quiz_score_percent',
+        'updated_at',
+      };
+      if (snapshot.length != expectedKeys.length ||
+          !expectedKeys.every(snapshot.containsKey) ||
+          snapshot['version'] != 1 ||
+          snapshot['session_type'] != 'material_review') {
+        throw const FormatException();
+      }
+      final sessionId = snapshot['session_id'];
+      final subjectId = snapshot['subject_id'];
+      final materialId = snapshot['material_id'];
+      final confidenceName = snapshot['confidence'];
+      final currentItemIndex = snapshot['current_item_index'];
+      final completedRaw = snapshot['completed_item_ids'];
+      final selectedAnswer = snapshot['selected_answer'];
+      final score = snapshot['quiz_score_percent'];
+      final updatedAt = snapshot['updated_at'];
+      if (sessionId is! String ||
+          subjectId is! String ||
+          materialId is! String ||
+          confidenceName is! String ||
+          currentItemIndex is! int ||
+          completedRaw is! List ||
+          (selectedAnswer != null && selectedAnswer is! String) ||
+          (score != null && score is! int) ||
+          updatedAt is! String ||
+          DateTime.tryParse(updatedAt) == null) {
+        throw const FormatException();
+      }
+      final sessionMatch = RegExp(
+        r'^local-session-([1-9][0-9]*)$',
+      ).firstMatch(sessionId);
+      final sessionNumber = sessionMatch == null
+          ? null
+          : int.tryParse(sessionMatch.group(1)!);
+      final confidence = LectureConfidence.values
+          .where((item) => item.name == confidenceName)
+          .firstOrNull;
+      final subject = _subjectForOrNull(subjectId);
+      final material = materialById(materialId);
+      if (sessionNumber == null ||
+          confidence == null ||
+          subject == null ||
+          material == null ||
+          material.subjectId != subject.id ||
+          !canGenerateSummaryForMaterial(material)) {
+        throw const FormatException();
+      }
+      var restored = StudySession(
+        id: sessionId,
+        subjectId: subject.id,
+        materialId: material.id,
+        confidence: confidence,
+        summary: _summaryFor(subject, confidence, material),
+        studyTimeBlocks: _timeBlocksFor(confidence),
+        flashcards: _cardsFor(subject, confidence, material, sessionNumber),
+        quizQuestion: _quizFor(subject, material, sessionNumber),
+        weakTopics: _initialWeakTopicsFor(subject, confidence),
+      );
+      final completedItemIds = completedRaw.cast<String>();
+      if (selectedAnswer == null) {
+        if (score != null ||
+            currentItemIndex != 0 ||
+            completedItemIds.isNotEmpty) {
+          throw const FormatException();
+        }
+      } else {
+        final selected = selectedAnswer as String;
+        if (!restored.quizQuestion.options.contains(selected) ||
+            currentItemIndex != 1 ||
+            completedItemIds.length != 1 ||
+            completedItemIds.single != 'quick_quiz') {
+          throw const FormatException();
+        }
+        restored = _answerStudySession(restored, subject, selected);
+        if (restored.quizScorePercent != score) throw const FormatException();
+      }
+      if (_materialWorkSessionUserId != user.id) return;
+      _studySessions
+        ..clear()
+        ..add(restored);
+      _sessionCounter = sessionNumber;
+      notifyListeners();
+    } catch (_) {
+      if (_materialWorkSessionUserId != user.id) return;
+      _studySessions.clear();
+      _sessionCounter = 0;
+      _queueStudySessionPersistence(
+        () => preferencesStore.clearActiveStudySession(user.id),
+      );
+    }
   }
 
   Subject _subjectFor(String subjectId) {

@@ -8,6 +8,7 @@ import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_analysis_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_detail_screen.dart';
+import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/materials/structured_summary.dart';
 import 'package:ai_study_buddy/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -171,9 +172,54 @@ void main() {
     await reconciliation;
     await tester.pump();
 
-    expect(find.text('Creating summary'), findsWidgets);
+    expect(find.text('Failed'), findsWidgets);
+    expect(find.text('Document could not be analyzed'), findsOneWidget);
     expect(find.text('Recognizing formulas and diagrams'), findsNothing);
+    expect(find.text('Creating summary'), findsNothing);
     expect(repo.advances, 1);
+  });
+
+  testWidgets('terminal failure updates header and progress card together', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _UiRepo(
+        status: _status(
+          stage: AnalysisPublicStage.recognizingFormulasAndDiagrams,
+          state: AnalysisState.failed,
+        ),
+      ),
+    );
+
+    expect(find.text('Failed'), findsWidgets);
+    expect(find.text('Document could not be analyzed'), findsOneWidget);
+    expect(find.text('Recognizing formulas and diagrams'), findsNothing);
+    expect(
+      find.text('Processing can resume when you reopen the app.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('completed reconciliation renders terminal card and summary', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _UiRepo(
+        status: _status(
+          stage: AnalysisPublicStage.creatingSummary,
+          state: AnalysisState.completed,
+          completedPages: 4,
+          summary: _summary(),
+        ),
+      ),
+    );
+
+    expect(find.text('Ready'), findsWidgets);
+    expect(find.text('Section'), findsOneWidget);
+    expect(find.text('Creating summary'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
   testWidgets('request failed publishes a bounded recoverable panel', (
@@ -218,8 +264,12 @@ Future<AppState> _pump(
       supabaseUrl: 'https://example.supabase.co',
       supabaseAnonKey: 'sb_publishable_test-client-key',
     ),
+    materialRepository: MockMaterialRepository(
+      initialMaterials: const [_material],
+    ),
     materialAnalysisRepository: repo,
   );
+  await state.loadMaterialsFor(_user);
   addTearDown(auth.dispose);
   addTearDown(state.dispose);
   await tester.pumpWidget(

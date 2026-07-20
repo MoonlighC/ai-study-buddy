@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:ai_study_buddy/app/app.dart';
 import 'package:ai_study_buddy/app/app_config.dart';
+import 'package:ai_study_buddy/app/app_preferences.dart';
 import 'package:ai_study_buddy/app/app_state.dart';
 import 'package:ai_study_buddy/app/routes.dart';
 import 'package:ai_study_buddy/core/models/flashcard.dart';
@@ -3306,6 +3307,7 @@ Future<void> _pumpSubjectDetailWithMaterials(
           materialRepository ??
           _RecordingMaterialRepository(loadedMaterials: materials),
       materialLifecycleRepository: lifecycleRepository,
+      preferencesStore: MemoryAppPreferencesStore(),
     ),
   );
   await tester.pumpAndSettle();

@@ -37,6 +37,22 @@ void main() {
     expect(lifecycle.deleteCalls, 1);
   });
 
+  test(
+    'successful deletion rebuilds an unmodifiable repository list',
+    () async {
+      final lifecycle = _Lifecycle();
+      final state = AppState(
+        materialRepository: _UnmodifiableMaterials(const [material]),
+        materialLifecycleRepository: lifecycle,
+      );
+      await state.loadMaterialsFor(user);
+
+      expect(await state.deleteMaterialFor(user, material.id), isTrue);
+      expect(state.materialById(material.id), isNull);
+      expect(lifecycle.deleteCalls, 1);
+    },
+  );
+
   test('duplicate deletion is prevented while request is active', () async {
     final gate = Completer<void>();
     final lifecycle = _Lifecycle(gate: gate);
@@ -88,32 +104,35 @@ void main() {
     expect(state.materialLifecycleErrorFor(material.id), isNull);
   });
 
-  test('deletion stops polling and remains absent after repository reload', () async {
-    final repository = _MutableMaterials([material]);
-    final analysis = _BlockingAnalysis();
-    final lifecycle = _Lifecycle(onDelete: repository.clear);
-    final state = AppState(
-      materialRepository: repository,
-      materialLifecycleRepository: lifecycle,
-      materialAnalysisRepository: analysis,
-      analysisDelay: (_) async {},
-    );
-    addTearDown(state.dispose);
-    await state.loadMaterialsFor(user);
-    await state.observeMaterialAnalysis(user, material.id);
-    await Future<void>.delayed(Duration.zero);
-    expect(state.activeAnalysisLoopCount, 1);
+  test(
+    'deletion stops polling and remains absent after repository reload',
+    () async {
+      final repository = _MutableMaterials([material]);
+      final analysis = _BlockingAnalysis();
+      final lifecycle = _Lifecycle(onDelete: repository.clear);
+      final state = AppState(
+        materialRepository: repository,
+        materialLifecycleRepository: lifecycle,
+        materialAnalysisRepository: analysis,
+        analysisDelay: (_) async {},
+      );
+      addTearDown(state.dispose);
+      await state.loadMaterialsFor(user);
+      await state.observeMaterialAnalysis(user, material.id);
+      await Future<void>.delayed(Duration.zero);
+      expect(state.activeAnalysisLoopCount, 1);
 
-    expect(await state.deleteMaterialFor(user, material.id), isTrue);
-    expect(state.activeAnalysisLoopCount, 0);
-    expect(state.analysisStatusFor(material.id), isNull);
-    await state.loadMaterialsFor(user);
-    expect(state.materialById(material.id), isNull);
+      expect(await state.deleteMaterialFor(user, material.id), isTrue);
+      expect(state.activeAnalysisLoopCount, 0);
+      expect(state.analysisStatusFor(material.id), isNull);
+      await state.loadMaterialsFor(user);
+      expect(state.materialById(material.id), isNull);
 
-    analysis.finish();
-    await Future<void>.delayed(Duration.zero);
-    expect(state.analysisStatusFor(material.id), isNull);
-  });
+      analysis.finish();
+      await Future<void>.delayed(Duration.zero);
+      expect(state.analysisStatusFor(material.id), isNull);
+    },
+  );
 }
 
 class _Lifecycle implements MaterialLifecycleRepository {
@@ -175,6 +194,24 @@ class _MutableMaterials implements MaterialRepository {
   @override
   Future<List<StudyMaterial>> loadMaterials(AuthUser user) async =>
       List.of(materials);
+
+  @override
+  Future<StudyMaterial> createMaterial({
+    required AuthUser user,
+    required String subjectId,
+    required String title,
+    required String content,
+  }) => throw UnimplementedError();
+}
+
+class _UnmodifiableMaterials implements MaterialRepository {
+  const _UnmodifiableMaterials(this.materials);
+
+  final List<StudyMaterial> materials;
+
+  @override
+  Future<List<StudyMaterial>> loadMaterials(AuthUser user) async =>
+      List.unmodifiable(materials);
 
   @override
   Future<StudyMaterial> createMaterial({

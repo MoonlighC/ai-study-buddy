@@ -35,6 +35,8 @@ class StudySession {
     this.selectedAnswer,
     this.quizScorePercent,
     this.feedback,
+    this.currentItemIndex = 0,
+    this.completedItemIds = const [],
   });
 
   final String id;
@@ -49,6 +51,8 @@ class StudySession {
   final String? selectedAnswer;
   final int? quizScorePercent;
   final String? feedback;
+  final int currentItemIndex;
+  final List<String> completedItemIds;
 
   int get totalMinutes {
     return studyTimeBlocks.fold<int>(
@@ -71,6 +75,8 @@ class StudySession {
     int? quizScorePercent,
     List<WeakTopic>? weakTopics,
     String? feedback,
+    int? currentItemIndex,
+    List<String>? completedItemIds,
   }) {
     return StudySession(
       id: id,
@@ -85,6 +91,8 @@ class StudySession {
       selectedAnswer: selectedAnswer ?? this.selectedAnswer,
       quizScorePercent: quizScorePercent ?? this.quizScorePercent,
       feedback: feedback ?? this.feedback,
+      currentItemIndex: currentItemIndex ?? this.currentItemIndex,
+      completedItemIds: completedItemIds ?? this.completedItemIds,
     );
   }
 
@@ -101,5 +109,7 @@ class StudySession {
     selectedAnswer: selectedAnswer,
     quizScorePercent: quizScorePercent,
     feedback: feedback,
+    currentItemIndex: currentItemIndex,
+    completedItemIds: completedItemIds,
   );
 }

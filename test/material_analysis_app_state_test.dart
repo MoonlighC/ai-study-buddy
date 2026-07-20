@@ -725,6 +725,36 @@ void main() {
   });
 
   test(
+    'a stale nonterminal fetch cannot replace a final terminal status',
+    () async {
+      var fetches = 0;
+      final repo = _Repo(
+        onFetch: (id) async {
+          fetches += 1;
+          return _status(id);
+        },
+        onAdvance: (id) async => _status(id, state: AnalysisState.failed),
+      );
+      final state = _restoredState(repo);
+
+      await state.loadSyncedWorkspaceFor(_user);
+      await _waitFor(() => state.activeAnalysisLoopCount == 0);
+      expect(state.analysisStatusFor(_ids.first)?.state, AnalysisState.failed);
+
+      await state.observeMaterialAnalysis(_user, _ids.first, force: true);
+
+      expect(fetches, 2);
+      expect(state.analysisStatusFor(_ids.first)?.state, AnalysisState.failed);
+      expect(
+        state.materialById(_ids.first)?.processingStatus,
+        MaterialProcessingStatus.failed,
+      );
+      expect(repo.advances, 1);
+      expect(state.activeAnalysisLoopCount, 0);
+    },
+  );
+
+  test(
     'foreground resume refreshes and reconciles with an empty status cache',
     () async {
       final repo = _Repo(
