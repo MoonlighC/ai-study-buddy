@@ -130,7 +130,26 @@ await runSql(
   "phase_c_terminal_reconciliation.sql",
 );
 
-console.log("PHASE_C_DATABASE_TESTS_OK migrations=18 sql_suites=10");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "019_account_deletion_processing_cascade.sql",
+  ),
+  "migration 019_",
+);
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "account_deletion_processing_cascade.sql",
+  ),
+  "account_deletion_processing_cascade.sql",
+);
+
+console.log("PHASE_C_DATABASE_TESTS_OK migrations=19 sql_suites=11");
 await database.close();
 
 async function runSql(file, label) {
