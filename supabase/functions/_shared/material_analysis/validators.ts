@@ -192,7 +192,10 @@ interface EnvironmentFrame {
  */
 export function validateLatex(value: string): ValidationResult {
   const errors: string[] = [];
-  if (typeof value !== "string" || !value || value.length > 512) {
+  if (
+    typeof value !== "string" || value.trim().length === 0 ||
+    value.length > 512
+  ) {
     errors.push("latex_length");
   }
   if (typeof value !== "string") return result(errors);

@@ -189,6 +189,50 @@ Deno.test("OpenAI schemas use only the documented strict Structured Outputs subs
   }
 });
 
+Deno.test("final-summary schema requires non-blank LaTeX without changing page or reduction contracts", () => {
+  const finalLatex = schemaNode(
+    structuredSummarySchema,
+    "properties",
+    "equations",
+    "items",
+    "properties",
+    "latex",
+  );
+  equal(finalLatex, { type: "string", pattern: "\\S" });
+  const pattern = new RegExp(String(finalLatex.pattern));
+  equal(pattern.test(""), false);
+  equal(pattern.test(" \t\r\n"), false);
+  equal(pattern.test("x"), true);
+  equal(
+    schemaNode(
+      pageAnalysisResultSchema,
+      "properties",
+      "equations",
+      "items",
+      "properties",
+      "latex",
+    ),
+    { type: "string" },
+  );
+  equal(JSON.stringify(reductionResultSchema).includes('"latex"'), false);
+});
+
+Deno.test("summary permits no equations and rejects blank equation LaTeX", () => {
+  const withoutEquations = validSummary();
+  withoutEquations.sections[0].blocks = [{
+    kind: "prose",
+    markdown: "Safe summary.",
+    display: "block",
+  }];
+  withoutEquations.equations = [];
+  equal(validateSummarySemantics(withoutEquations, 2).valid, true);
+  for (const latex of ["", " \t\r\n"]) {
+    const invalid = validSummary();
+    invalid.equations[0].latex = latex;
+    equal(validateSummarySemantics(invalid, 2).valid, false);
+  }
+});
+
 Deno.test("summary semantics enforce manifest and equation integrity", () => {
   const summary = validSummary();
   equal(validateSummarySemantics(summary, 2).valid, true);
@@ -279,6 +323,8 @@ Deno.test("LaTeX allowlist accepts study math and rejects dangerous primitives",
   ) equal(validateLatex(safe).valid, true);
   for (
     const unsafe of [
+      "",
+      " \t\r\n",
       "\\newcommand{\\x}{bad}",
       "\\href{https://x}{x}",
       "\\input{secret}",
@@ -532,6 +578,19 @@ function equal(actual: unknown, expected: unknown) {
       `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
     );
   }
+}
+function schemaNode(value: unknown, ...path: string[]) {
+  let current = value;
+  for (const key of path) {
+    if (
+      typeof current !== "object" || current === null || Array.isArray(current)
+    ) throw new Error(`Missing schema node ${path.join(".")}`);
+    current = (current as Record<string, unknown>)[key];
+  }
+  if (
+    typeof current !== "object" || current === null || Array.isArray(current)
+  ) throw new Error(`Invalid schema node ${path.join(".")}`);
+  return current as Record<string, unknown>;
 }
 function throws(action: () => unknown, message: string) {
   try {

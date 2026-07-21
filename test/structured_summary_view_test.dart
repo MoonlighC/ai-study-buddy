@@ -81,12 +81,27 @@ void main() {
       expect(find.bySemanticsLabel(RegExp(r'^Equation:')), findsOneWidget);
     },
   );
+
+  testWidgets('valid summary with no equations renders without formula UI', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      material: _material(MaterialKind.pdf),
+      opened: [],
+      summary: _summaryWithoutEquations(),
+    );
+    expect(find.text('Section'), findsOneWidget);
+    expect(find.byTooltip('Copy formula'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pump(
   WidgetTester tester, {
   required StudyMaterial material,
   required List<MaterialViewerArgs> opened,
+  StructuredSummary? summary,
 }) async {
   final auth = AuthController(
     authRepository: MockAuthRepository(initialUser: _user),
@@ -117,7 +132,7 @@ Future<void> _pump(
           home: Scaffold(
             body: SingleChildScrollView(
               child: StructuredSummaryView(
-                summary: _summary(),
+                summary: summary ?? _summary(),
                 material: material,
               ),
             ),
@@ -188,5 +203,31 @@ StructuredSummary _summary() => StructuredSummary(
       PageMode(page: 2, mode: PageModeKind.visual),
       PageMode(page: 3, mode: PageModeKind.text),
     ],
+  ),
+);
+
+StructuredSummary _summaryWithoutEquations() => StructuredSummary(
+  schemaVersion: 1,
+  language: 'en',
+  sections: const [
+    StructuredSection(
+      id: 'section',
+      title: 'Section',
+      blocks: [
+        ProseBlock(markdown: 'Safe summary.', display: SummaryDisplay.block),
+      ],
+      sourcePages: [1],
+      confidence: 0.9,
+    ),
+  ],
+  keyConcepts: const [],
+  equations: const [],
+  warnings: const [],
+  partialExtraction: const PartialExtraction(
+    isPartial: false,
+    analyzedPages: [1],
+    partialPages: [],
+    missingPages: [],
+    pageModes: [PageMode(page: 1, mode: PageModeKind.text)],
   ),
 );

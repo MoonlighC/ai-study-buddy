@@ -26,6 +26,8 @@ void main() {
   test('rejects every audited C1 parity bypass', () {
     final oversizedRow = List.filled(13, '1').join('&');
     for (final value in [
+      '',
+      ' \t\r\n',
       r'$x$',
       r'$$x$$',
       r'x\\y',

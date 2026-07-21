@@ -398,6 +398,32 @@ Deno.test("C2 transient DB failure after response retries without another paid c
   equal(fake.completions, 1);
 });
 
+Deno.test("valid final summary persists exactly once with one provider POST", async () => {
+  const fake = fakeDependencies(pngBytes(), "image");
+  fake.work = finalSummaryWorkUnit();
+  const handler = createAdvanceMaterialAnalysisHandler(fake.deps);
+  equal((await handler(request({ material_id: materialId }))).status, 200);
+  equal((await handler(request({ material_id: materialId }))).status, 200);
+  equal(fake.providerMethods, ["POST"]);
+  equal(fake.submissions, 1);
+  equal(fake.completions, 1);
+});
+
+Deno.test("repeated final-summary reconciliation persists once with zero POSTs", async () => {
+  const fake = fakeDependencies(
+    pngBytes(),
+    "image",
+    "retrieval_final_success",
+  );
+  fake.work = finalSummaryReconciliationWorkUnit();
+  const handler = createAdvanceMaterialAnalysisHandler(fake.deps);
+  equal((await handler(request({ material_id: materialId }))).status, 200);
+  equal((await handler(request({ material_id: materialId }))).status, 200);
+  equal(fake.providerMethods, ["GET"]);
+  equal(fake.submissions, 0);
+  equal(fake.completions, 1);
+});
+
 Deno.test("C2 DB failure after known PDF response retains file for reconciliation", async () => {
   const pdf = await buildSyntheticPdf(["text"]);
   const fake = fakeDependencies(pdf, "pdf", "completion_failure");
@@ -412,11 +438,13 @@ Deno.test("C2 DB failure after known PDF response retains file for reconciliatio
   equal(fake.completions, 1);
 });
 
-for (const [providerMode, expectedFailure] of [
-  ["retrieval_incomplete", "terminal_provider_incomplete"],
-  ["retrieval_failed", "terminal_provider_failed"],
-  ["retrieval_invalid", "terminal_structured_output_invalid"],
-] as const) {
+for (
+  const [providerMode, expectedFailure] of [
+    ["retrieval_incomplete", "terminal_provider_incomplete"],
+    ["retrieval_failed", "terminal_provider_failed"],
+    ["retrieval_invalid", "terminal_structured_output_invalid"],
+  ] as const
+) {
   Deno.test(`C2 ${providerMode} terminalizes reconciliation without POST`, async () => {
     const fake = fakeDependencies(pngBytes(), "image", providerMode);
     fake.work = reconciliationWorkUnit();
@@ -591,6 +619,7 @@ function fakeDependencies(
     | "retrieval_incomplete"
     | "retrieval_failed"
     | "retrieval_invalid"
+    | "retrieval_final_success"
     | "http_429" = "success",
 ) {
   const state = {
@@ -642,19 +671,25 @@ function fakeDependencies(
       state.providerMethods.push(init?.method ?? "GET");
       if ((init?.method ?? "GET") === "GET") {
         if (providerMode === "retrieval_incomplete") {
-          return new Response(JSON.stringify({
-            id: "resp_12345678",
-            object: "response",
-            status: "incomplete",
-            incomplete_details: { reason: "max_output_tokens" },
-          }), { status: 200, headers: { "Content-Type": "application/json" } });
+          return new Response(
+            JSON.stringify({
+              id: "resp_12345678",
+              object: "response",
+              status: "incomplete",
+              incomplete_details: { reason: "max_output_tokens" },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
         }
         if (providerMode === "retrieval_failed") {
-          return new Response(JSON.stringify({
-            id: "resp_12345678",
-            object: "response",
-            status: "failed",
-          }), { status: 200, headers: { "Content-Type": "application/json" } });
+          return new Response(
+            JSON.stringify({
+              id: "resp_12345678",
+              object: "response",
+              status: "failed",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
         }
         if (providerMode === "retrieval_invalid") {
           return new Response(
@@ -666,6 +701,12 @@ function fakeDependencies(
           );
         }
         if (providerMode === "diagnostic_final_success") {
+          return new Response(
+            JSON.stringify(completedResponse(finalSummary())),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (providerMode === "retrieval_final_success") {
           return new Response(
             JSON.stringify(completedResponse(finalSummary())),
             { status: 200, headers: { "Content-Type": "application/json" } },
@@ -703,7 +744,11 @@ function fakeDependencies(
         });
       }
       return new Response(
-        JSON.stringify(completedResponse(pageBatch())),
+        JSON.stringify(completedResponse(
+          body.text?.format?.name === "phase_c_final_summary_v1"
+            ? finalSummary()
+            : pageBatch(),
+        )),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     },
@@ -751,9 +796,11 @@ function fakeDependencies(
     markDispatchUnknown: () => Promise.resolve(),
     completeOperation: () => {
       state.completions++;
-      return providerMode === "completion_failure"
-        ? Promise.reject(new Error("trusted_rpc_failed"))
-        : Promise.resolve();
+      if (providerMode === "completion_failure") {
+        return Promise.reject(new Error("trusted_rpc_failed"));
+      }
+      state.work = { kind: "none", material_id: materialId };
+      return Promise.resolve();
     },
     failOperation: (input) => {
       state.failures.push(structuredClone(input));
@@ -827,6 +874,48 @@ function reconciliationWorkUnit(): InternalWorkUnit {
     response_id: "resp_12345678",
     idempotency_key: "a".repeat(64),
     input_payload: { operation: "page_visual" },
+  };
+}
+
+function finalSummaryWorkUnit(): InternalWorkUnit {
+  return {
+    kind: "final_summary",
+    material_id: materialId,
+    job_id: jobId,
+    batch_id: batchId,
+    lease_token: leaseId,
+    page_count: 1,
+    page_numbers: [1],
+    input_payload: finalSummaryInputPayload(),
+  };
+}
+
+function finalSummaryReconciliationWorkUnit(): InternalWorkUnit {
+  return {
+    ...finalSummaryWorkUnit(),
+    kind: "reconciliation",
+    response_id: "resp_12345678",
+    idempotency_key: "a".repeat(64),
+  };
+}
+
+function finalSummaryInputPayload() {
+  return {
+    operation: "final_summary",
+    validated_reduction: {
+      source_pages: [1],
+      summary_markdown: "Validated reduction.",
+      key_concepts: [],
+      equation_ids: [],
+      warnings: [],
+      confidence: 0.9,
+    },
+    manifest: [{
+      page_number: 1,
+      status: "completed",
+      route: "visual",
+      warnings: [],
+    }],
   };
 }
 

@@ -19,21 +19,34 @@ const warningSchema = closed({
   detail: { type: "string" },
   source_pages: pageArray,
 });
-const equationSchema = closed({
-  id: { type: "string", pattern: "^eq_[a-z0-9_-]{1,60}$" },
-  latex: { type: "string" },
-  explanation_markdown: { type: "string" },
-  source_page: page,
-  display: { type: "string", enum: ["inline", "block"] },
-  confidence,
-  uncertainty: { type: "boolean" },
-});
+const unrestrictedLatexSchema = { type: "string" } as const;
+const nonBlankLatexSchema = {
+  type: "string",
+  pattern: "\\S",
+} as const;
+
+function equationSchema(
+  latex: typeof unrestrictedLatexSchema | typeof nonBlankLatexSchema,
+) {
+  return closed({
+    id: { type: "string", pattern: "^eq_[a-z0-9_-]{1,60}$" },
+    latex,
+    explanation_markdown: { type: "string" },
+    source_page: page,
+    display: { type: "string", enum: ["inline", "block"] },
+    confidence,
+    uncertainty: { type: "boolean" },
+  });
+}
+
+const pageEquationSchema = equationSchema(unrestrictedLatexSchema);
+const finalSummaryEquationSchema = equationSchema(nonBlankLatexSchema);
 
 export const pageAnalysisResultSchema = closed({
   page_number: page,
   summary_markdown: { type: "string" },
   key_concepts: { type: "array", items: { type: "string" }, maxItems: 50 },
-  equations: { type: "array", items: equationSchema, maxItems: 100 },
+  equations: { type: "array", items: pageEquationSchema, maxItems: 100 },
   confidence,
   warnings: { type: "array", items: warningSchema, maxItems: 100 },
   trustworthy: { type: "boolean" },
@@ -100,7 +113,11 @@ export const structuredSummarySchema = closed({
       confidence,
     }),
   },
-  equations: { type: "array", maxItems: 100, items: equationSchema },
+  equations: {
+    type: "array",
+    maxItems: 100,
+    items: finalSummaryEquationSchema,
+  },
   warnings: { type: "array", maxItems: 100, items: warningSchema },
   partial_extraction: closed({
     is_partial: { type: "boolean" },

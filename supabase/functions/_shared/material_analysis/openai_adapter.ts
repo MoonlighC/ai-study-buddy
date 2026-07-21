@@ -522,7 +522,7 @@ function promptFor(request: ProviderRequest) {
   if (request.operation === "reduction") {
     return `Reduce only the validated inputs for source pages ${pages}. Preserve every source page and use only supplied equation IDs. Do not invent provenance.`;
   }
-  return "Create the final structured study summary only from the validated reductions and page manifest. Preserve page and equation provenance and all partial or missing page warnings.";
+  return "Create the final structured study summary only from the validated reductions and page manifest. Preserve page and equation provenance and all partial or missing page warnings. Include an equation object and its equation block only when a valid, non-empty LaTeX expression with at least one non-whitespace character exists. Otherwise omit both the equation object and its block. Never return empty, whitespace-only, placeholder, prose, or null LaTeX, and never invent a formula.";
 }
 
 function parseOutputJson(response: Record<string, unknown>): unknown {

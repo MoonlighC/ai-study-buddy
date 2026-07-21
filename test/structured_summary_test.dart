@@ -10,6 +10,28 @@ void main() {
     expect(value.equationById('eq_one')?.sourcePage, 1);
     expect(value.partialExtraction.missingPages, [2]);
   });
+  test('equation LaTeX must be non-blank and equations may be omitted', () {
+    for (final latex in ['', ' \t\r\n']) {
+      final invalid = _summary();
+      ((invalid['equations'] as List).single as Map)['latex'] = latex;
+      expect(
+        () => decoder.decode(invalid, schemaVersion: 1, pageCount: 2),
+        throwsA(isA<StructuredSummaryFormatException>()),
+      );
+    }
+    final withoutEquations = _summary();
+    withoutEquations['equations'] = <Object?>[];
+    final blocks =
+        ((withoutEquations['sections'] as List).single as Map)['blocks']
+            as List;
+    blocks.removeLast();
+    final decoded = decoder.decode(
+      withoutEquations,
+      schemaVersion: 1,
+      pageCount: 2,
+    );
+    expect(decoded.equations, isEmpty);
+  });
   test('unsupported schema and unknown block are rejected', () {
     expect(
       () => decoder.decode(_summary(), schemaVersion: 2, pageCount: 2),

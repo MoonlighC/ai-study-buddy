@@ -159,6 +159,28 @@ Deno.test("final summary accepts bounded 20 21 22 and 100 page hierarchies", asy
       calls++;
       const body = JSON.parse(String(init?.body));
       equal(body.text.format.name, "phase_c_final_summary_v1");
+      equal(
+        body.text.format.schema.properties.equations.items.properties.latex,
+        { type: "string", pattern: "\\S" },
+      );
+      const prompt = body.input[0].content[0].text as string;
+      equal(
+        prompt.includes("only when a valid, non-empty LaTeX expression"),
+        true,
+      );
+      equal(
+        prompt.includes(
+          "Otherwise omit both the equation object and its block",
+        ),
+        true,
+      );
+      equal(
+        prompt.includes(
+          "Never return empty, whitespace-only, placeholder, prose, or null LaTeX",
+        ),
+        true,
+      );
+      equal(prompt.includes("never invent a formula"), true);
       return Promise.resolve(jsonResponse(completedResponse(summary)));
     });
     const result = await adapter.execute(finalSummaryRequest(pages));

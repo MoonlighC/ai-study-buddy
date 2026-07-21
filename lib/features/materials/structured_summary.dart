@@ -253,9 +253,11 @@ class StructuredSummaryDecoder {
       'confidence',
       'uncertainty',
     });
+    final latex = _string(m['latex'], 512);
+    if (latex.trim().isEmpty) _bad();
     return Equation(
       id: _id(m['id'], equation: true),
-      latex: _string(m['latex'], 512),
+      latex: latex,
       explanationMarkdown: _possiblyEmptyString(
         m['explanation_markdown'],
         2000,

@@ -117,7 +117,7 @@ class SafeLatexValidator {
 
   LatexValidationResult validate(String value) {
     final description = _plainDescription(value);
-    if (value.isEmpty ||
+    if (value.trim().isEmpty ||
         value.length > 512 ||
         value.contains(r'$') ||
         value.contains('%') ||
