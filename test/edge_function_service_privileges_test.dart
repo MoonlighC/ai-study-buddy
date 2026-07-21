@@ -9,6 +9,8 @@ void main() {
   late String recoveryFingerprintMigration;
   late String noWorkTerminalizationMigration;
   late String terminalReconciliationMigration;
+  late String reproductionDiagnosticMigration;
+  late String reproductionDiagnosticCleanupMigration;
 
   setUpAll(() async {
     migration = _normalize(
@@ -40,6 +42,78 @@ void main() {
       await File(
         'supabase/migrations/018_material_analysis_terminal_reconciliation.sql',
       ).readAsString(),
+    );
+    reproductionDiagnosticMigration = _normalize(
+      await File(
+        'supabase/migrations/020_material_analysis_reproduction_diagnostics.sql',
+      ).readAsString(),
+    );
+    reproductionDiagnosticCleanupMigration = _normalize(
+      await File(
+        'supabase/migrations/021_material_analysis_reproduction_diagnostic_cleanup.sql.pending',
+      ).readAsString(),
+    );
+  });
+
+  test('one-shot reproduction diagnostics are service-only and fail closed', () {
+    expect(
+      reproductionDiagnosticMigration,
+      contains(
+        'revoke all on table public.material_analysis_reproduction_diagnostics from public, anon, authenticated, service_role',
+      ),
+    );
+    expect(
+      reproductionDiagnosticMigration,
+      contains(
+        'grant select on table public.material_analysis_reproduction_diagnostics to service_role',
+      ),
+    );
+    expect(
+      reproductionDiagnosticMigration,
+      contains('force row level security'),
+    );
+    expect(
+      reproductionDiagnosticMigration,
+      contains(
+        'record_material_analysis_reproduction_diagnostic_internal(uuid,uuid,jsonb)',
+      ),
+    );
+    expect(
+      reproductionDiagnosticMigration,
+      contains('from public,anon,authenticated,service_role'),
+    );
+    expect(
+      reproductionDiagnosticMigration,
+      isNot(contains('to authenticated')),
+    );
+    expect(reproductionDiagnosticMigration, isNot(contains('to anon')));
+    expect(reproductionDiagnosticMigration, isNot(contains('title')));
+    expect(reproductionDiagnosticMigration, isNot(contains('response_id')));
+    expect(reproductionDiagnosticMigration, isNot(contains('user_id')));
+    expect(reproductionDiagnosticMigration, isNot(contains('material_id')));
+  });
+
+  test('pre-reviewed cleanup removes every diagnostic-only capability', () {
+    for (final capability in [
+      'attach_material_analysis_reproduction_job',
+      'material_analysis_reproduction_diagnostics',
+      'record_material_analysis_reproduction_diagnostic_internal',
+      'attach_material_analysis_reproduction_job_internal',
+      'material_analysis_reproduction_metadata_valid',
+    ]) {
+      expect(reproductionDiagnosticCleanupMigration, contains(capability));
+    }
+    expect(
+      reproductionDiagnosticCleanupMigration,
+      contains('drop trigger if exists'),
+    );
+    expect(
+      reproductionDiagnosticCleanupMigration,
+      contains('drop table if exists'),
+    );
+    expect(
+      reproductionDiagnosticCleanupMigration,
+      contains('drop function if exists'),
     );
   });
 

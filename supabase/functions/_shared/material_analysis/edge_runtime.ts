@@ -190,6 +190,17 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
         },
       );
     },
+    async recordReproductionDiagnostic(input) {
+      await rpcVoid(
+        trusted,
+        "record_material_analysis_reproduction_diagnostic_internal",
+        {
+          p_job_id: input.job_id,
+          p_batch_id: input.batch_id,
+          p_metadata: input.diagnostic,
+        },
+      );
+    },
     async reconcileOperation(input) {
       await rpcVoid(trusted, "complete_material_analysis_operation_internal", {
         p_batch_id: input.batch_id,

@@ -30,6 +30,7 @@ import {
   DiagnosticMetadata,
   diagnosticVersion,
 } from "./response_diagnostics.ts";
+import { StructuralFailureDiagnostic } from "./structural_diagnostics.ts";
 
 export type InternalWorkUnit = {
   kind:
@@ -142,6 +143,11 @@ export type AnalysisDependencies = {
     diagnostic_code: DiagnosticCode;
     diagnostic_metadata: DiagnosticMetadata;
     diagnostic_version: number;
+  }): Promise<void>;
+  recordReproductionDiagnostic?(input: {
+    job_id: string;
+    batch_id: string;
+    diagnostic: StructuralFailureDiagnostic;
   }): Promise<void>;
   provider: TrustedOpenAiAdapter;
   jitter(): number;
@@ -417,6 +423,12 @@ async function executeOneWorkUnit(
       return;
     }
     if (retrieved.status === "invalid" || retrieved.result === undefined) {
+      await recordReproductionDiagnostic(
+        deps,
+        work,
+        required.batchId,
+        retrieved.diagnostic,
+      );
       await deps.failOperation({
         batch_id: required.batchId,
         lease_token: required.leaseToken,
@@ -515,6 +527,12 @@ async function executeOneWorkUnit(
         temporary_file_id: temporaryFileId,
       });
     }
+    await recordReproductionDiagnostic(
+      deps,
+      work,
+      required.batchId,
+      error.diagnostic,
+    );
     const classified = classifyFailure({
       dispatched: error.dispatched,
       responseId: error.responseId,
@@ -551,6 +569,24 @@ async function executeOneWorkUnit(
       temporary_file_id: temporaryFileId,
       cleanup_complete: !temporaryFileId,
     });
+  }
+}
+
+async function recordReproductionDiagnostic(
+  deps: AnalysisDependencies,
+  work: InternalWorkUnit,
+  batchId: string,
+  diagnostic?: StructuralFailureDiagnostic,
+) {
+  if (!diagnostic || !work.job_id || !deps.recordReproductionDiagnostic) return;
+  try {
+    await deps.recordReproductionDiagnostic({
+      job_id: work.job_id,
+      batch_id: batchId,
+      diagnostic,
+    });
+  } catch (_) {
+    // Diagnostic persistence must never alter analysis state or retry behavior.
   }
 }
 

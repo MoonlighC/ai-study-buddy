@@ -9,6 +9,7 @@ import {
 } from "./handlers.ts";
 import { SafeAnalysisError } from "./engine.ts";
 import { TrustedOpenAiAdapter } from "./openai_adapter.ts";
+import { StructuralFailureDiagnostic } from "./structural_diagnostics.ts";
 import { buildSyntheticPdf } from "./synthetic_pdf_fixtures.ts";
 
 const owner = crypto.randomUUID();
@@ -412,11 +413,30 @@ Deno.test("C2 DB failure after known PDF response retains file for reconciliatio
   equal(fake.completions, 1);
 });
 
-for (const [providerMode, expectedFailure] of [
-  ["retrieval_incomplete", "terminal_provider_incomplete"],
-  ["retrieval_failed", "terminal_provider_failed"],
-  ["retrieval_invalid", "terminal_structured_output_invalid"],
-] as const) {
+Deno.test("C2 terminal validation failure records one safe diagnostic after one POST", async () => {
+  const fake = fakeDependencies(pngBytes(), "image", "post_invalid");
+  fake.work = workUnit();
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+  equal(response.status, 200);
+  equal(fake.providerMethods, ["POST"]);
+  equal(fake.submissions, 1);
+  equal(fake.reproductionDiagnostics.length, 1);
+  equal(
+    fake.reproductionDiagnostics[0].diagnostic.safe_failure_code,
+    "page_schema_failed",
+  );
+  equal(fake.failures[0].failure_class, "reconcile_only");
+});
+
+for (
+  const [providerMode, expectedFailure] of [
+    ["retrieval_incomplete", "terminal_provider_incomplete"],
+    ["retrieval_failed", "terminal_provider_failed"],
+    ["retrieval_invalid", "terminal_structured_output_invalid"],
+  ] as const
+) {
   Deno.test(`C2 ${providerMode} terminalizes reconciliation without POST`, async () => {
     const fake = fakeDependencies(pngBytes(), "image", providerMode);
     fake.work = reconciliationWorkUnit();
@@ -429,6 +449,18 @@ for (const [providerMode, expectedFailure] of [
     equal(fake.completions, 0);
     equal(fake.failures.length, 1);
     equal(fake.failures[0].failure_class, expectedFailure);
+    equal(
+      fake.reproductionDiagnostics.length,
+      providerMode === "retrieval_invalid" ? 1 : 0,
+    );
+    if (providerMode === "retrieval_invalid") {
+      equal(fake.reproductionDiagnostics[0].job_id, jobId);
+      equal(fake.reproductionDiagnostics[0].batch_id, batchId);
+      equal(
+        fake.reproductionDiagnostics[0].diagnostic.safe_failure_code,
+        "page_schema_failed",
+      );
+    }
   });
 }
 
@@ -591,6 +623,7 @@ function fakeDependencies(
     | "retrieval_incomplete"
     | "retrieval_failed"
     | "retrieval_invalid"
+    | "post_invalid"
     | "http_429" = "success",
 ) {
   const state = {
@@ -616,6 +649,11 @@ function fakeDependencies(
     fileRecoveries: 0,
     responsePersistenceAttempts: 0,
     diagnostics: [] as Array<Record<string, unknown>>,
+    reproductionDiagnostics: [] as Array<{
+      job_id: string;
+      batch_id: string;
+      diagnostic: StructuralFailureDiagnostic;
+    }>,
     observedImageBytes: new Uint8Array(),
   };
   const provider = new TrustedOpenAiAdapter({
@@ -702,8 +740,11 @@ function fakeDependencies(
           headers: { "Content-Type": "application/json", "Retry-After": "17" },
         });
       }
+      const postPayload = providerMode === "post_invalid"
+        ? { ...pageBatch(), unexpected: true }
+        : pageBatch();
       return new Response(
-        JSON.stringify(completedResponse(pageBatch())),
+        JSON.stringify(completedResponse(postPayload)),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     },
@@ -782,6 +823,10 @@ function fakeDependencies(
       }),
     recordDiagnostic: (input) => {
       state.diagnostics.push(structuredClone(input));
+      return Promise.resolve();
+    },
+    recordReproductionDiagnostic: (input) => {
+      state.reproductionDiagnostics.push(structuredClone(input));
       return Promise.resolve();
     },
     provider,

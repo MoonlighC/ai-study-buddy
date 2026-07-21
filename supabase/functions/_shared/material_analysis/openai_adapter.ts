@@ -12,6 +12,10 @@ import {
   diagnosePageResponse,
   DiagnosticOutcome,
 } from "./response_diagnostics.ts";
+import {
+  diagnoseStructuralFailure,
+  StructuralFailureDiagnostic,
+} from "./structural_diagnostics.ts";
 
 export type AnalysisOperation =
   | "page_text"
@@ -130,7 +134,11 @@ export class TrustedOpenAiAdapter {
       parsed = parseOutputJson(response);
       validateProviderOutput(request, parsed);
     } catch (error) {
-      throw boundaryWithResponseId(error, responseId);
+      throw boundaryWithResponseId(
+        error,
+        responseId,
+        diagnoseStructuralFailure(response, request),
+      );
     }
     return { responseId, result: parsed };
   }
@@ -147,6 +155,7 @@ export class TrustedOpenAiAdapter {
         | "incomplete"
         | "invalid";
       result?: unknown;
+      diagnostic?: StructuralFailureDiagnostic;
     }
   > {
     const responseId = providerId(input.responseId, "invalid_response_id");
@@ -169,7 +178,10 @@ export class TrustedOpenAiAdapter {
       validateProviderOutput(input.request, parsed);
       return { status: "completed", result: parsed };
     } catch (_) {
-      return { status: "invalid" };
+      return {
+        status: "invalid",
+        diagnostic: diagnoseStructuralFailure(response, input.request),
+      };
     }
   }
 
@@ -339,12 +351,14 @@ export class ProviderBoundaryError extends Error {
   readonly status?: number;
   readonly responseId?: string;
   readonly retryAfterSeconds?: number;
+  readonly diagnostic?: StructuralFailureDiagnostic;
   readonly dispatched: boolean;
   constructor(input: {
     kind: ProviderBoundaryError["kind"];
     status?: number;
     responseId?: string;
     retryAfterSeconds?: number;
+    diagnostic?: StructuralFailureDiagnostic;
     dispatched: boolean;
   }) {
     super("provider_boundary_failure");
@@ -606,19 +620,25 @@ function containsRefusal(value: unknown): boolean {
   return Object.values(value).some(containsRefusal);
 }
 
-function boundaryWithResponseId(error: unknown, responseId: string) {
+function boundaryWithResponseId(
+  error: unknown,
+  responseId: string,
+  diagnostic: StructuralFailureDiagnostic,
+) {
   if (error instanceof ProviderBoundaryError) {
     return new ProviderBoundaryError({
       kind: error.kind,
       status: error.status,
       responseId,
       retryAfterSeconds: error.retryAfterSeconds,
+      diagnostic,
       dispatched: true,
     });
   }
   return new ProviderBoundaryError({
     kind: "invalid_response",
     responseId,
+    diagnostic,
     dispatched: true,
   });
 }

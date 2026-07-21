@@ -149,7 +149,26 @@ await runSql(
   "account_deletion_processing_cascade.sql",
 );
 
-console.log("PHASE_C_DATABASE_TESTS_OK migrations=19 sql_suites=11");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "020_material_analysis_reproduction_diagnostics.sql",
+  ),
+  "migration 020_",
+);
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "material_analysis_reproduction_diagnostics.sql",
+  ),
+  "material_analysis_reproduction_diagnostics.sql",
+);
+
+console.log("PHASE_C_DATABASE_TESTS_OK migrations=20 sql_suites=12");
 await database.close();
 
 async function runSql(file, label) {
