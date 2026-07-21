@@ -1,6 +1,6 @@
--- Prepared before the one-shot reproduction. Rename to .sql and apply only
--- after the sanitized diagnostic has been reviewed and the permanent fix is
--- ready.
+-- Remove only the one-shot staging reproduction diagnostics introduced by
+-- migration 020. Normal analysis state, response identities, summaries, and
+-- reconciliation functions remain untouched.
 
 drop trigger if exists attach_material_analysis_reproduction_job
   on public.material_processing_jobs;

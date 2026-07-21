@@ -168,7 +168,26 @@ await runSql(
   "material_analysis_reproduction_diagnostics.sql",
 );
 
-console.log("PHASE_C_DATABASE_TESTS_OK migrations=20 sql_suites=12");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "021_material_analysis_reproduction_diagnostic_cleanup.sql",
+  ),
+  "migration 021_",
+);
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "material_analysis_reproduction_diagnostic_cleanup.sql",
+  ),
+  "material_analysis_reproduction_diagnostic_cleanup.sql",
+);
+
+console.log("PHASE_C_DATABASE_TESTS_OK migrations=21 sql_suites=13");
 await database.close();
 
 async function runSql(file, label) {
