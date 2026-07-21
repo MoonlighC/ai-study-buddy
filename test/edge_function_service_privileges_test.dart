@@ -8,6 +8,7 @@ void main() {
   late String diagnosticCleanupMigration;
   late String recoveryFingerprintMigration;
   late String noWorkTerminalizationMigration;
+  late String terminalReconciliationMigration;
 
   setUpAll(() async {
     migration = _normalize(
@@ -34,6 +35,34 @@ void main() {
       await File(
         'supabase/migrations/016_material_analysis_no_work_terminalization.sql',
       ).readAsString(),
+    );
+    terminalReconciliationMigration = _normalize(
+      await File(
+        'supabase/migrations/018_material_analysis_terminal_reconciliation.sql',
+      ).readAsString(),
+    );
+  });
+
+  test('terminal reconciliation remains service-role-only', () {
+    expect(
+      terminalReconciliationMigration,
+      contains(
+        'revoke all on function public.terminalize_material_analysis_operation_internal(uuid,uuid,text) from public,anon,authenticated',
+      ),
+    );
+    expect(
+      terminalReconciliationMigration,
+      contains(
+        'grant execute on function public.terminalize_material_analysis_operation_internal(uuid,uuid,text) to service_role',
+      ),
+    );
+    expect(
+      terminalReconciliationMigration,
+      isNot(
+        contains(
+          'grant execute on function public.terminalize_material_analysis_operation_internal(uuid,uuid,text) to authenticated',
+        ),
+      ),
     );
   });
 

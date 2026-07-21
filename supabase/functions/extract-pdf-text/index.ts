@@ -44,7 +44,7 @@ serve(async (request) => {
         .eq("user_id", userId)
         .is("deleted_at", null)
         .maybeSingle();
-      return error || !data ? null : data as MaterialRow;
+      return error || !data ? null : data as unknown as MaterialRow;
     },
     async claim(material, token) {
       const claim = { token, claimed_at: new Date().toISOString() };
@@ -58,7 +58,7 @@ serve(async (request) => {
         .or("content_text.is.null,content_text.eq.")
         .select(materialColumns)
         .maybeSingle();
-      return error || !data ? null : data as MaterialRow;
+      return error || !data ? null : data as unknown as MaterialRow;
     },
     async restoreReady(material) {
       const { data, error } = await trustedClient.from("materials")
@@ -69,7 +69,7 @@ serve(async (request) => {
         .in("processing_status", ["pending", "failed"])
         .select(materialColumns)
         .maybeSingle();
-      return error || !data ? null : data as MaterialRow;
+      return error || !data ? null : data as unknown as MaterialRow;
     },
     async download(material) {
       if (!authenticatedClient || !material.storage_bucket || !material.storage_path) {
@@ -98,7 +98,7 @@ serve(async (request) => {
         .contains("metadata", { pdf_extraction_claim: { token } })
         .select(materialColumns)
         .maybeSingle();
-      return error || !data ? null : data as MaterialRow;
+      return error || !data ? null : data as unknown as MaterialRow;
     },
     async fail({ material, token, code, message, metadata: extraction }) {
       const metadata = withoutKeys(material.metadata, ["pdf_extraction_claim"]);
@@ -113,7 +113,7 @@ serve(async (request) => {
         .contains("metadata", { pdf_extraction_claim: { token } })
         .select(materialColumns)
         .maybeSingle();
-      return error || !data ? null : data as MaterialRow;
+      return error || !data ? null : data as unknown as MaterialRow;
     },
     token: () => crypto.randomUUID(),
     now: () => new Date().toISOString(),

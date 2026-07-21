@@ -400,11 +400,27 @@ async function executeOneWorkUnit(
       });
       return;
     }
-    if (retrieved.status === "failed" || retrieved.result === undefined) {
+    if (retrieved.status === "incomplete") {
       await deps.failOperation({
         batch_id: required.batchId,
         lease_token: required.leaseToken,
-        failure_class: "non_retryable",
+        failure_class: "terminal_provider_incomplete",
+      });
+      return;
+    }
+    if (retrieved.status === "failed") {
+      await deps.failOperation({
+        batch_id: required.batchId,
+        lease_token: required.leaseToken,
+        failure_class: "terminal_provider_failed",
+      });
+      return;
+    }
+    if (retrieved.status === "invalid" || retrieved.result === undefined) {
+      await deps.failOperation({
+        batch_id: required.batchId,
+        lease_token: required.leaseToken,
+        failure_class: "terminal_structured_output_invalid",
       });
       return;
     }

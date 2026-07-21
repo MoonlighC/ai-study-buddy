@@ -97,6 +97,33 @@ void main() {
       expect(reads, 0);
     });
 
+    test('accepts exactly 40 MiB and rejects 40 MiB plus one byte', () {
+      final exact = SelectedMaterialFile(
+        name: 'exact.pdf',
+        reportedSizeBytes: 40 * 1024 * 1024,
+        readBytes: () async => Uint8List(0),
+      );
+      expect(
+        () => validateMaterialUploadSelection(exact, MaterialKind.pdf),
+        returnsNormally,
+      );
+      final oversized = SelectedMaterialFile(
+        name: 'oversized.pdf',
+        reportedSizeBytes: 40 * 1024 * 1024 + 1,
+        readBytes: () async => Uint8List(0),
+      );
+      expect(
+        () => validateMaterialUploadSelection(oversized, MaterialKind.pdf),
+        throwsA(
+          isA<MaterialUploadValidationException>().having(
+            (error) => error.code,
+            'code',
+            MaterialFileValidationCode.fileTooLarge,
+          ),
+        ),
+      );
+    });
+
     test('rejects actual oversize and mismatched signature', () async {
       await expectLater(
         prepareMaterialUpload(

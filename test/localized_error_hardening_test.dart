@@ -4,11 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  Future<String> map(
-    WidgetTester tester,
-    Locale locale,
-    String message,
-  ) async {
+  Future<String> map(WidgetTester tester, Locale locale, String message) async {
     late String result;
     await tester.pumpWidget(
       MaterialApp(
@@ -45,9 +41,9 @@ void main() {
       await map(
         tester,
         const Locale('de'),
-        'The selected file exceeds 10 MiB.',
+        'The selected file exceeds 40 MiB.',
       ),
-      contains('10 MiB'),
+      contains('40 MiB'),
     );
     final unknown = await map(
       tester,

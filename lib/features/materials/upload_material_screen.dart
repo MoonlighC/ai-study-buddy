@@ -61,6 +61,11 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
             final succeeded = items
                 .where((item) => item.status == MaterialUploadQueueStatus.ready)
                 .length;
+            final skipped = items
+                .where(
+                  (item) => item.status == MaterialUploadQueueStatus.skipped,
+                )
+                .length;
             final failed = items
                 .where(
                   (item) => item.status == MaterialUploadQueueStatus.failed,
@@ -184,12 +189,11 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  if (succeeded > 0 && failed > 0) ...[
+                  if (succeeded > 0 && (skipped > 0 || failed > 0)) ...[
                     Text(l10n.uploadPartialSuccess),
                     const SizedBox(height: 4),
                   ],
-                  // gen-l10n orders positional parameters alphabetically.
-                  Text(l10n.materialBatchResult(failed, succeeded)),
+                  Text(l10n.materialBatchResult(failed, skipped, succeeded)),
                   const SizedBox(height: 12),
                   for (final item in items) ...[
                     _QueueItemCard(item: item, state: state),
@@ -270,7 +274,7 @@ class _SelectionCard extends StatelessWidget {
                         context.l10n,
                         result.file.reportedSizeBytes,
                       )
-                    : _validationMessage(context, result.errorCode!),
+                    : '${LocalizedFormatters.fileSize(context.l10n, result.file.reportedSizeBytes)} · ${_validationMessage(context, result.errorCode!)}',
               ),
               showDivider: result != selection.results.last,
             ),
@@ -290,6 +294,7 @@ class _QueueItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final failed = item.status == MaterialUploadQueueStatus.failed;
     final ready = item.status == MaterialUploadQueueStatus.ready;
+    final skipped = item.status == MaterialUploadQueueStatus.skipped;
     return GlassCard(
       key: ValueKey('upload-queue-${item.queueId}'),
       child: Column(
@@ -299,6 +304,8 @@ class _QueueItemCard extends StatelessWidget {
             leading: Icon(
               ready
                   ? Icons.check_circle_outline
+                  : skipped
+                  ? Icons.block_outlined
                   : failed
                   ? Icons.error_outline
                   : Icons.cloud_upload_outlined,
@@ -355,6 +362,8 @@ String _queueStatus(BuildContext context, MaterialUploadQueueItem item) {
     MaterialUploadQueueStatus.uploading => context.l10n.uploadUploading,
     MaterialUploadQueueStatus.processing => context.l10n.uploadProcessing,
     MaterialUploadQueueStatus.ready => context.l10n.uploadReady,
+    MaterialUploadQueueStatus.skipped =>
+      context.materialUploadQueueErrorMessage(item.errorCode),
     MaterialUploadQueueStatus.failed => context.l10n.uploadFailed,
   };
 }
@@ -364,12 +373,10 @@ String _validationMessage(
   MaterialFileValidationCode code,
 ) => switch (code) {
   MaterialFileValidationCode.unsupportedFile =>
-    context.l10n.materialUnsupportedFile,
+    context.l10n.materialUnsupportedFileType,
   MaterialFileValidationCode.invalidFile => context.l10n.materialInvalidFile,
   MaterialFileValidationCode.emptyFile => context.localizedSafeMessage(
     'The selected file is empty.',
   ),
-  MaterialFileValidationCode.fileTooLarge => context.localizedSafeMessage(
-    'The selected file is too large.',
-  ),
+  MaterialFileValidationCode.fileTooLarge => context.l10n.materialFileTooLarge,
 };

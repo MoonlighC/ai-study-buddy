@@ -139,7 +139,15 @@ export class TrustedOpenAiAdapter {
     responseId: string;
     request: ProviderRequest;
   }): Promise<
-    { status: "pending" | "completed" | "failed"; result?: unknown }
+    {
+      status:
+        | "pending"
+        | "completed"
+        | "failed"
+        | "incomplete"
+        | "invalid";
+      result?: unknown;
+    }
   > {
     const responseId = providerId(input.responseId, "invalid_response_id");
     const response = await this.requestJson(
@@ -150,13 +158,10 @@ export class TrustedOpenAiAdapter {
       },
       false,
     );
-    if (
-      ["queued", "in_progress", "incomplete"].includes(
-        response.status as string,
-      )
-    ) {
+    if (["queued", "in_progress"].includes(response.status as string)) {
       return { status: "pending" };
     }
+    if (response.status === "incomplete") return { status: "incomplete" };
     if (response.status !== "completed") return { status: "failed" };
     try {
       requireCompletedResponse(response);
@@ -164,7 +169,7 @@ export class TrustedOpenAiAdapter {
       validateProviderOutput(input.request, parsed);
       return { status: "completed", result: parsed };
     } catch (_) {
-      return { status: "failed" };
+      return { status: "invalid" };
     }
   }
 

@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import '../../core/models/material.dart';
 
-const int maxPdfUploadBytes = 10 * 1024 * 1024;
+const int maxPdfUploadBytes = 40 * 1024 * 1024;
 const int maxImageUploadBytes = 8 * 1024 * 1024;
 const int maxMaterialFilesPerBatch = 20;
 

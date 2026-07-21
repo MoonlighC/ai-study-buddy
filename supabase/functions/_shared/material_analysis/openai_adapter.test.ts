@@ -561,7 +561,7 @@ for (
   });
 }
 
-Deno.test("C2 reconciliation may observe incomplete before completed without POST", async () => {
+Deno.test("C2 reconciliation treats incomplete as terminal without POST", async () => {
   let reads = 0;
   const adapter = adapterWith(() => {
     reads++;
@@ -586,9 +586,26 @@ Deno.test("C2 reconciliation may observe incomplete before completed without POS
     responseId: "resp_12345678",
     request: imageRequest(pngBytes()),
   });
-  equal(first.status, "pending");
+  equal(first.status, "incomplete");
   equal(second.status, "completed");
   equal(reads, 2);
+});
+
+Deno.test("C2 reconciliation classifies completed invalid output without POST", async () => {
+  const methods: string[] = [];
+  const adapter = adapterWith((_input, init) => {
+    methods.push(init?.method ?? "GET");
+    return Promise.resolve(jsonResponse(completedResponse({
+      ...pageBatch(),
+      unexpected: true,
+    })));
+  });
+  const result = await adapter.retrieve({
+    responseId: "resp_12345678",
+    request: imageRequest(pngBytes()),
+  });
+  equal(result.status, "invalid");
+  equal(methods, ["GET"]);
 });
 
 Deno.test("C2 Retry-After supports seconds and HTTP dates with clamping", () => {

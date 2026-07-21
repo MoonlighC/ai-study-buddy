@@ -622,7 +622,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get uploadImageTitle => 'Bild hochladen';
 
   @override
-  String get uploadPdfGuidance => 'PDF-Dateien bis 10,49 MB.';
+  String get uploadPdfGuidance => 'PDF-Dateien bis 40 MiB.';
 
   @override
   String get uploadImageGuidance =>
@@ -2292,6 +2292,17 @@ class AppLocalizationsDe extends AppLocalizations {
   String get materialUnsupportedFile => 'Nicht unterstützte Datei.';
 
   @override
+  String get materialUnsupportedFileType => 'Nicht unterstützter Dateityp';
+
+  @override
+  String get materialFileTooLarge =>
+      'Die Datei überschreitet das Limit von 40 MiB';
+
+  @override
+  String get materialPdfPageLimitExceeded =>
+      'Die PDF-Datei enthält mehr als die unterstützte Seitenzahl';
+
+  @override
   String get materialInvalidFile => 'Ungültige Datei.';
 
   @override
@@ -2309,8 +2320,8 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String materialBatchResult(Object failed, Object succeeded) {
-    return '$succeeded erfolgreich / $failed fehlgeschlagen';
+  String materialBatchResult(Object failed, Object skipped, Object succeeded) {
+    return '$succeeded hochgeladen / $skipped übersprungen / $failed fehlgeschlagen';
   }
 
   @override
@@ -2370,8 +2381,12 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get analysisRecognizingFormulas =>
-      'Formeln und Diagramme werden erkannt';
+  String analysisFormulaProgress(Object completed, Object pageCount) {
+    return 'Formeln und Diagramme werden auf $completed von $pageCount Seiten erkannt';
+  }
+
+  @override
+  String get analysisCombiningResults => 'Ergebnisse werden zusammengeführt';
 
   @override
   String get analysisCreatingSummary => 'Zusammenfassung wird erstellt';
@@ -2391,7 +2406,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get analysisDocumentTooLargeMessage =>
-      'Dokumente mit mehr als 100 Seiten können nicht analysiert werden.';
+      'Die PDF-Datei enthält mehr als die unterstützte Seitenzahl';
 
   @override
   String get analysisResumeProcessing =>
@@ -2430,6 +2445,18 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get analysisMalformedFallback =>
       'Die strukturierte Zusammenfassung konnte nicht angezeigt werden. Die verfügbare Zusammenfassung wird stattdessen gezeigt.';
+
+  @override
+  String get analysisUnableToExtractContent =>
+      'Das Dokument konnte nicht gelesen werden. Versuche es mit einer klareren PDF-Datei oder einem klareren Bild.';
+
+  @override
+  String get analysisProviderUnavailable =>
+      'Der Analysedienst ist vorübergehend nicht verfügbar. Versuche es später erneut.';
+
+  @override
+  String get analysisStructuredOutputInvalid =>
+      'Die Analyse ist abgeschlossen, aber das Ergebnis konnte nicht verarbeitet werden. Du kannst es erneut versuchen.';
 
   @override
   String analysisEquationSemantics(String description, int page) {

@@ -8,7 +8,14 @@ import 'material_upload.dart';
 import 'material_upload_repository.dart';
 import 'material_analysis_repository.dart';
 
-enum MaterialUploadQueueStatus { queued, uploading, processing, ready, failed }
+enum MaterialUploadQueueStatus {
+  queued,
+  uploading,
+  processing,
+  ready,
+  skipped,
+  failed,
+}
 
 enum MaterialUploadRetryStage { upload, materialCreation, extraction }
 
@@ -167,6 +174,15 @@ class MaterialUploadQueueController extends ChangeNotifier {
 
   List<MaterialUploadQueueItem> get items => List.unmodifiable(_items);
   int get activeWorkers => _activeWorkers;
+  int get uploadedCount => _items
+      .where((item) => item.status == MaterialUploadQueueStatus.ready)
+      .length;
+  int get skippedCount => _items
+      .where((item) => item.status == MaterialUploadQueueStatus.skipped)
+      .length;
+  int get failedCount => _items
+      .where((item) => item.status == MaterialUploadQueueStatus.failed)
+      .length;
 
   bool enqueueBatch({
     required AuthUser user,
@@ -182,9 +198,24 @@ class MaterialUploadQueueController extends ChangeNotifier {
     }
     var added = false;
     for (final result in batch.results) {
-      if (!result.isValid) continue;
       final queueId = _queueIdGenerator();
       final file = result.file;
+      if (!result.isValid) {
+        _items.add(
+          MaterialUploadQueueItem(
+            queueId: queueId,
+            fileName: file.name,
+            fileSizeBytes: file.reportedSizeBytes,
+            subjectId: subjectId,
+            kind: kind,
+            status: MaterialUploadQueueStatus.skipped,
+            errorCode: _queueCodeForValidation(result.errorCode!),
+            attemptCount: 0,
+          ),
+        );
+        added = true;
+        continue;
+      }
       _items.add(
         MaterialUploadQueueItem(
           queueId: queueId,

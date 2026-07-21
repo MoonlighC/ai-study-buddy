@@ -1214,9 +1214,7 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
     if (status.state == AnalysisState.failed) {
       return MaterialStatusPanel(
         title: l.materialFailedStatus,
-        message: status.canRetry
-            ? l.analysisRetryProcessing
-            : l.analysisInvalidDocumentTitle,
+        message: _safeFailureMessage(l, status.safeErrorCode),
         icon: Icons.error_outline,
         warning: true,
         actionLabel: status.canRetry ? l.analysisRetryProcessing : null,
@@ -1231,7 +1229,9 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
     if (status.state == AnalysisState.userRetryRequired) {
       return MaterialStatusPanel(
         title: _stage(l, status),
-        message: status.canRetry
+        message: status.safeErrorCode != null
+            ? _safeFailureMessage(l, status.safeErrorCode)
+            : status.canRetry
             ? l.analysisRetryProcessing
             : (_retryRemaining != null && _retryRemaining! > 0
                   ? l.analysisRetryAvailableIn(_retryRemaining!)
@@ -1270,12 +1270,12 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
               : status.state == AnalysisState.completedWithWarnings
               ? Icons.warning_amber_rounded
               : Icons.auto_awesome_outlined,
-          progress: !status.isTerminal,
+          progress: false,
           warning: status.state == AnalysisState.completedWithWarnings,
         ),
         if (status.pageCount > 0 && !status.isTerminal)
           LinearProgressIndicator(
-            value: status.completedPages / status.pageCount,
+            value: _authoritativeProgress(status),
             semanticsLabel: l.analysisPageProgress(
               status.completedPages,
               status.pageCount,
@@ -1307,8 +1307,29 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
       s.pageCount,
     ),
     AnalysisPublicStage.recognizingFormulasAndDiagrams =>
-      l.analysisRecognizingFormulas,
+      l.analysisFormulaProgress(s.completedPages, s.pageCount),
+    AnalysisPublicStage.combiningResults => l.analysisCombiningResults,
     AnalysisPublicStage.creatingSummary => l.analysisCreatingSummary,
+  };
+
+  double _authoritativeProgress(MaterialAnalysisStatus status) {
+    final pages = status.pageCount == 0
+        ? 0.0
+        : status.completedPages / status.pageCount;
+    return switch (status.publicStage) {
+      AnalysisPublicStage.preparingDocument => 0.05,
+      AnalysisPublicStage.analyzingPages => 0.1 + (0.4 * pages),
+      AnalysisPublicStage.recognizingFormulasAndDiagrams => 0.5 + (0.3 * pages),
+      AnalysisPublicStage.combiningResults => 0.9,
+      AnalysisPublicStage.creatingSummary => 0.95,
+    };
+  }
+
+  String _safeFailureMessage(dynamic l, String? code) => switch (code) {
+    'unable_to_extract_content' => l.analysisUnableToExtractContent,
+    'provider_temporarily_unavailable' => l.analysisProviderUnavailable,
+    'structured_output_invalid' => l.analysisStructuredOutputInvalid,
+    _ => l.analysisInvalidDocumentMessage,
   };
 
   void _syncRetryCountdown(int? seconds) {

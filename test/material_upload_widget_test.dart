@@ -144,7 +144,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text(scenario.filename), findsOneWidget);
       expect(find.text('Ready'), findsOneWidget);
-      expect(find.text('1 succeeded / 0 failed'), findsOneWidget);
+      expect(find.text('1 uploaded / 0 skipped / 0 failed'), findsOneWidget);
       expect(find.byIcon(Icons.open_in_new), findsOneWidget);
     });
   }

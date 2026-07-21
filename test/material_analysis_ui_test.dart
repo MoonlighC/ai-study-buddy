@@ -40,8 +40,9 @@ void main() {
     (AnalysisPublicStage.analyzingPages, 'Analyzing pages 2 of 4'),
     (
       AnalysisPublicStage.recognizingFormulasAndDiagrams,
-      'Recognizing formulas and diagrams',
+      'Recognizing formulas and diagrams 2 of 4',
     ),
+    (AnalysisPublicStage.combiningResults, 'Combining results'),
     (AnalysisPublicStage.creatingSummary, 'Creating summary'),
   ]) {
     testWidgets('renders exact public stage ${stage.name}', (tester) async {
@@ -58,9 +59,17 @@ void main() {
         final progress = tester.widget<LinearProgressIndicator>(
           find.byType(LinearProgressIndicator).last,
         );
-        expect(progress.value, 0.5);
+        expect(progress.value, closeTo(0.3, 0.000001));
         expect(progress.semanticsLabel, 'Analyzing pages 2 of 4');
       }
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byType(LinearProgressIndicator).last,
+            )
+            .value,
+        lessThan(1),
+      );
       advance.complete(
         _status(
           stage: AnalysisPublicStage.creatingSummary,
@@ -157,7 +166,7 @@ void main() {
       onAdvance: () => advance.future,
     );
     final state = await _pump(tester, repo);
-    expect(find.text('Recognizing formulas and diagrams'), findsWidgets);
+    expect(find.text('Recognizing formulas and diagrams 2 of 4'), findsWidgets);
 
     final reconciliation = state.observeMaterialAnalysis(
       _user,
@@ -173,8 +182,11 @@ void main() {
     await tester.pump();
 
     expect(find.text('Failed'), findsWidgets);
-    expect(find.text('Document could not be analyzed'), findsOneWidget);
-    expect(find.text('Recognizing formulas and diagrams'), findsNothing);
+    expect(
+      find.text('The document is invalid, damaged, or unsupported.'),
+      findsOneWidget,
+    );
+    expect(find.text('Recognizing formulas and diagrams 2 of 4'), findsNothing);
     expect(find.text('Creating summary'), findsNothing);
     expect(repo.advances, 1);
   });
@@ -193,13 +205,41 @@ void main() {
     );
 
     expect(find.text('Failed'), findsWidgets);
-    expect(find.text('Document could not be analyzed'), findsOneWidget);
+    expect(
+      find.text('The document is invalid, damaged, or unsupported.'),
+      findsOneWidget,
+    );
     expect(find.text('Recognizing formulas and diagrams'), findsNothing);
     expect(
       find.text('Processing can resume when you reopen the app.'),
       findsNothing,
     );
   });
+
+  testWidgets(
+    'terminal structured-output failure is specific and stops progress',
+    (tester) async {
+      await _pump(
+        tester,
+        _UiRepo(
+          status: _status(
+            stage: AnalysisPublicStage.creatingSummary,
+            state: AnalysisState.failed,
+            safeErrorCode: 'structured_output_invalid',
+          ),
+        ),
+      );
+
+      expect(
+        find.text(
+          'The analysis finished, but the result could not be processed. You can retry.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    },
+  );
 
   testWidgets('completed reconciliation renders terminal card and summary', (
     tester,
@@ -344,6 +384,7 @@ MaterialAnalysisStatus _status({
   int completedPages = 2,
   bool confirmationRequired = false,
   StructuredSummary? summary,
+  String? safeErrorCode,
 }) => MaterialAnalysisStatus(
   materialId: _material.id,
   processingMode: AnalysisProcessingMode.recommended,
@@ -358,6 +399,7 @@ MaterialAnalysisStatus _status({
   summarySchemaVersion: summary == null ? null : 1,
   summary: summary,
   structuredSummaryMalformed: false,
+  safeErrorCode: safeErrorCode,
 );
 
 StructuredSummary _summary() => const StructuredSummary(

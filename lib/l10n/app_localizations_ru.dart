@@ -631,7 +631,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get uploadImageTitle => 'Загрузить изображение';
 
   @override
-  String get uploadPdfGuidance => 'PDF-файлы до 10,49 MB.';
+  String get uploadPdfGuidance => 'PDF-файлы до 40 MiB.';
 
   @override
   String get uploadImageGuidance =>
@@ -2331,6 +2331,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get materialUnsupportedFile => 'Неподдерживаемый файл.';
 
   @override
+  String get materialUnsupportedFileType => 'Неподдерживаемый тип файла';
+
+  @override
+  String get materialFileTooLarge => 'Файл превышает лимит 40 MiB';
+
+  @override
+  String get materialPdfPageLimitExceeded =>
+      'PDF содержит больше страниц, чем поддерживается';
+
+  @override
   String get materialInvalidFile => 'Недопустимый файл.';
 
   @override
@@ -2347,8 +2357,8 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String materialBatchResult(Object failed, Object succeeded) {
-    return 'Успешно: $succeeded / ошибок: $failed';
+  String materialBatchResult(Object failed, Object skipped, Object succeeded) {
+    return 'Загружено: $succeeded / пропущено: $skipped / ошибок: $failed';
   }
 
   @override
@@ -2407,7 +2417,12 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get analysisRecognizingFormulas => 'Распознавание формул и диаграмм';
+  String analysisFormulaProgress(Object completed, Object pageCount) {
+    return 'Распознавание формул и диаграмм: $completed из $pageCount';
+  }
+
+  @override
+  String get analysisCombiningResults => 'Объединение результатов';
 
   @override
   String get analysisCreatingSummary => 'Создание конспекта';
@@ -2427,7 +2442,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get analysisDocumentTooLargeMessage =>
-      'Документы объёмом более 100 страниц нельзя анализировать.';
+      'PDF содержит больше страниц, чем поддерживается';
 
   @override
   String get analysisResumeProcessing =>
@@ -2466,6 +2481,18 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get analysisMalformedFallback =>
       'Структурированный конспект не удалось показать. Вместо него отображается доступный конспект.';
+
+  @override
+  String get analysisUnableToExtractContent =>
+      'Документ не удалось прочитать. Попробуйте более чёткий PDF-файл или изображение.';
+
+  @override
+  String get analysisProviderUnavailable =>
+      'Сервис анализа временно недоступен. Повторите попытку позже.';
+
+  @override
+  String get analysisStructuredOutputInvalid =>
+      'Анализ завершён, но результат не удалось обработать. Можно повторить попытку.';
 
   @override
   String analysisEquationSemantics(String description, int page) {

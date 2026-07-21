@@ -108,6 +108,24 @@ Deno.test("C2 image size gate accepts exactly 8 MiB and rejects one byte more", 
   );
 });
 
+Deno.test("C2 PDF size gate accepts exactly 40 MiB and rejects one byte more", () => {
+  equal(
+    validateSourceMaterial(
+      { ...pdfMaterial(), file_size_bytes: 40 * 1024 * 1024 },
+      owner,
+      materialId,
+    ).file_size_bytes,
+    40 * 1024 * 1024,
+  );
+  throws(() =>
+    validateSourceMaterial(
+      { ...pdfMaterial(), file_size_bytes: 40 * 1024 * 1024 + 1 },
+      owner,
+      materialId,
+    )
+  );
+});
+
 Deno.test("C2 version contract fingerprints every output-affecting component", async () => {
   const base = await buildProcessingVersionContract({
     material: pdfMaterial(),

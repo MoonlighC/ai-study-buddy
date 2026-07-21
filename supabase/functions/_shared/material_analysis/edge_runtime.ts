@@ -150,6 +150,18 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
       });
     },
     async failOperation(input) {
+      if (input.failure_class.startsWith("terminal_")) {
+        await rpcVoid(
+          trusted,
+          "terminalize_material_analysis_operation_internal",
+          {
+            p_batch_id: input.batch_id,
+            p_lease_token: input.lease_token,
+            p_failure_class: input.failure_class,
+          },
+        );
+        return;
+      }
       await rpcVoid(trusted, "fail_material_analysis_operation_internal", {
         p_batch_id: input.batch_id,
         p_lease_token: input.lease_token,

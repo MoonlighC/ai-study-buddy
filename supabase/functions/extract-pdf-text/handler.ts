@@ -1,4 +1,4 @@
-export const maxPdfBytes = 10 * 1024 * 1024;
+export const maxPdfBytes = 40 * 1024 * 1024;
 export const maxStoredCharacters = 100_000;
 export const extractionVersion = "pdf-text-v2";
 export const noSelectableTextMessage =

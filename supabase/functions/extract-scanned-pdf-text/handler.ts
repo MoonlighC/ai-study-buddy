@@ -1,6 +1,6 @@
 import { PdfOcrResult, sanitizeWarnings } from "./pdf_ocr_adapter.ts";
 
-export const maxPdfBytes = 10 * 1024 * 1024;
+export const maxPdfBytes = 40 * 1024 * 1024;
 export const maxPdfPages = 10;
 export const maxStoredCharacters = 100_000;
 export const extractionVersion = "scanned-pdf-ocr-v1";

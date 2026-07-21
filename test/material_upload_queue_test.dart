@@ -20,6 +20,83 @@ const _user = AuthUser(
 
 void main() {
   test(
+    'mixed selection uploads valid file and records two skipped files',
+    () async {
+      var queueCounter = 0;
+      var materialCounter = 0;
+      var rejectedReads = 0;
+      final repository = MockMaterialUploadRepository();
+      final queue = MaterialUploadQueueController(
+        repository: repository,
+        queueIdGenerator: () => 'queue-${++queueCounter}',
+        materialIdGenerator: () => 'material-${++materialCounter}',
+        processMaterial: (user, material, guard) async =>
+            MaterialQueueProcessingResult(
+              material: material.copyWith(
+                content: 'Extracted',
+                processingStatus: MaterialProcessingStatus.ready,
+              ),
+              succeeded: true,
+            ),
+        onMaterialChanged: (_) {},
+      );
+      final oversized = [
+        for (final name in ['large-a.pdf', 'large-b.pdf'])
+          SelectedMaterialFile(
+            name: name,
+            reportedSizeBytes: maxPdfUploadBytes + 1,
+            readBytes: () async {
+              rejectedReads += 1;
+              return Uint8List(0);
+            },
+          ),
+      ];
+      final batch = validateMaterialFileBatch(
+        batchToken: 'mixed',
+        files: [
+          SelectedMaterialFile(
+            name: 'valid.pdf',
+            reportedSizeBytes: 8,
+            readBytes: () async => Uint8List.fromList('%PDF-1.7'.codeUnits),
+          ),
+          ...oversized,
+        ],
+        expectedKind: MaterialKind.pdf,
+      );
+
+      expect(
+        queue.enqueueBatch(
+          user: _user,
+          subjectId: 'biology',
+          kind: MaterialKind.pdf,
+          batch: batch,
+        ),
+        isTrue,
+      );
+      await _waitFor(() => queue.uploadedCount == 1);
+
+      expect(repository.uploadedMaterials, hasLength(1));
+      expect(repository.uploadedMaterials.single.title, 'valid.pdf');
+      expect(rejectedReads, 0);
+      expect(queue.uploadedCount, 1);
+      expect(queue.skippedCount, 2);
+      expect(queue.failedCount, 0);
+      expect(
+        queue.items.where(
+          (item) => item.status == MaterialUploadQueueStatus.skipped,
+        ),
+        hasLength(2),
+      );
+      expect(
+        queue.items
+            .where((item) => item.status == MaterialUploadQueueStatus.skipped)
+            .every((item) => item.authoritativeMaterialId == null),
+        isTrue,
+      );
+    },
+  );
+
+  test(
     'queue uses at most two workers and preserves FIFO completion',
     () async {
       final repository = _ControlledRepository();

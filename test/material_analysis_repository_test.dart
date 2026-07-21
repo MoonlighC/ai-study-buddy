@@ -139,6 +139,34 @@ void main() {
       throwsA(isA<MaterialAnalysisException>()),
     );
   });
+  test(
+    'safe failure and active reduction are decoded without internal data',
+    () {
+      final failed = _status()
+        ..['state'] = 'failed'
+        ..['safe_error_code'] = 'structured_output_invalid'
+        ..['active_operation'] = null;
+      expect(
+        decodeMaterialAnalysisStatus(
+          failed,
+          expectedMaterialId: id,
+        ).safeErrorCode,
+        'structured_output_invalid',
+      );
+
+      final reducing = _status()
+        ..['public_stage'] = 'creating_summary'
+        ..['safe_error_code'] = null
+        ..['active_operation'] = 'reduction';
+      expect(
+        decodeMaterialAnalysisStatus(
+          reducing,
+          expectedMaterialId: id,
+        ).publicStage,
+        AnalysisPublicStage.combiningResults,
+      );
+    },
+  );
   test('typed 422 mapping uses only a bounded safe public code', () async {
     final cases = {
       'document_too_large': AnalysisErrorCode.documentTooLarge,

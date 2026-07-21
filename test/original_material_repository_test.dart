@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:ai_study_buddy/core/models/material.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/materials/original_material_repository.dart';
+import 'package:ai_study_buddy/features/materials/material_upload.dart';
 import 'package:ai_study_buddy/features/materials/supabase_original_material_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
@@ -98,7 +99,7 @@ void main() {
   test('metadata and actual byte ceilings are both enforced', () async {
     final metadataLarge =
         await SupabaseOriginalMaterialRepository(
-          _FakeSource(fileSize: 10 * 1024 * 1024 + 1),
+          _FakeSource(fileSize: maxPdfUploadBytes + 1),
         ).load(
           expectedUser: _user,
           materialId: _materialId,
@@ -112,7 +113,7 @@ void main() {
     final actualLarge =
         await SupabaseOriginalMaterialRepository(
           _FakeSource(
-            bytes: Uint8List(10 * 1024 * 1024 + 1)
+            bytes: Uint8List(maxPdfUploadBytes + 1)
               ..setRange(0, 5, '%PDF-'.codeUnits),
             fileSize: 8,
             objectSize: 8,

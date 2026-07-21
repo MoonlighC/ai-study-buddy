@@ -615,7 +615,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadImageTitle => 'Upload image';
 
   @override
-  String get uploadPdfGuidance => 'PDF files up to 10.49 MB.';
+  String get uploadPdfGuidance => 'PDF files up to 40 MiB.';
 
   @override
   String get uploadImageGuidance =>
@@ -2251,6 +2251,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialUnsupportedFile => 'Unsupported file.';
 
   @override
+  String get materialUnsupportedFileType => 'Unsupported file type';
+
+  @override
+  String get materialFileTooLarge => 'File exceeds the 40 MiB limit';
+
+  @override
+  String get materialPdfPageLimitExceeded =>
+      'The PDF contains more than the supported page limit';
+
+  @override
   String get materialInvalidFile => 'Invalid file.';
 
   @override
@@ -2267,8 +2277,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String materialBatchResult(Object failed, Object succeeded) {
-    return '$succeeded succeeded / $failed failed';
+  String materialBatchResult(Object failed, Object skipped, Object succeeded) {
+    return '$succeeded uploaded / $skipped skipped / $failed failed';
   }
 
   @override
@@ -2328,7 +2338,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get analysisRecognizingFormulas => 'Recognizing formulas and diagrams';
+  String analysisFormulaProgress(Object completed, Object pageCount) {
+    return 'Recognizing formulas and diagrams $completed of $pageCount';
+  }
+
+  @override
+  String get analysisCombiningResults => 'Combining results';
 
   @override
   String get analysisCreatingSummary => 'Creating summary';
@@ -2348,7 +2363,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get analysisDocumentTooLargeMessage =>
-      'Documents over 100 pages cannot be analyzed.';
+      'The PDF contains more than the supported page limit';
 
   @override
   String get analysisResumeProcessing =>
@@ -2387,6 +2402,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get analysisMalformedFallback =>
       'The structured summary could not be displayed. Showing the available summary instead.';
+
+  @override
+  String get analysisUnableToExtractContent =>
+      'The document could not be read. Try a clearer PDF or image.';
+
+  @override
+  String get analysisProviderUnavailable =>
+      'The analysis service is temporarily unavailable. Try again later.';
+
+  @override
+  String get analysisStructuredOutputInvalid =>
+      'The analysis finished, but the result could not be processed. You can retry.';
 
   @override
   String analysisEquationSemantics(String description, int page) {

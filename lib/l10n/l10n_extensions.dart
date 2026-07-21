@@ -22,14 +22,12 @@ extension AppLocalizationsX on BuildContext {
   String materialUploadQueueErrorMessage(MaterialUploadQueueErrorCode? code) =>
       switch (code) {
         MaterialUploadQueueErrorCode.unsupportedFile =>
-          l10n.materialUnsupportedFile,
+          l10n.materialUnsupportedFileType,
         MaterialUploadQueueErrorCode.invalidFile => l10n.materialInvalidFile,
         MaterialUploadQueueErrorCode.emptyFile => localizedSafeMessage(
           'The selected file is empty.',
         ),
-        MaterialUploadQueueErrorCode.fileTooLarge => localizedSafeMessage(
-          'The selected file is too large.',
-        ),
+        MaterialUploadQueueErrorCode.fileTooLarge => l10n.materialFileTooLarge,
         MaterialUploadQueueErrorCode.sessionExpired ||
         MaterialUploadQueueErrorCode.sessionChanged =>
           l10n.materialPreviewSessionExpired,

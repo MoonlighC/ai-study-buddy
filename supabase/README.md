@@ -126,7 +126,7 @@ phase is approved; neither action is performed by Codex here.
 ## Phase 9A: Private PDF and Image Uploads
 
 The Flutter app uses `file_picker` for PDF, PNG, JPEG, and WEBP selection. PDFs
-are limited to 10 MiB and images to 8 MiB. The client checks the extension,
+are limited to 40 MiB and images to 8 MiB. The client checks the extension,
 reported and actual byte sizes, canonical MIME type, and a basic file signature
 before uploading. These client checks are UX and basic filtering, not a complete
 trust boundary.
@@ -239,7 +239,7 @@ recovery remain deferred.
 
 Selectable extraction remains the first step. Scanned or mixed PDFs require explicit
 confirmation before `extract-scanned-pdf-text` makes one paid, high-detail OpenAI PDF
-request. The synchronous MVP accepts private uploaded PDFs from 1 through 10 MiB and
+request. The synchronous MVP accepts private uploaded PDFs from 1 through 40 MiB and
 1 through 10 total pages; larger documents must be split. Cost varies with page content.
 
 Configure `OPENAI_API_KEY` and optionally server-only `SCANNED_PDF_OCR_MODEL`, then:

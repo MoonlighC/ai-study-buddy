@@ -412,6 +412,26 @@ Deno.test("C2 DB failure after known PDF response retains file for reconciliatio
   equal(fake.completions, 1);
 });
 
+for (const [providerMode, expectedFailure] of [
+  ["retrieval_incomplete", "terminal_provider_incomplete"],
+  ["retrieval_failed", "terminal_provider_failed"],
+  ["retrieval_invalid", "terminal_structured_output_invalid"],
+] as const) {
+  Deno.test(`C2 ${providerMode} terminalizes reconciliation without POST`, async () => {
+    const fake = fakeDependencies(pngBytes(), "image", providerMode);
+    fake.work = reconciliationWorkUnit();
+    const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+      request({ material_id: materialId }),
+    );
+    equal(response.status, 200);
+    equal(fake.providerMethods, ["GET"]);
+    equal(fake.submissions, 0);
+    equal(fake.completions, 0);
+    equal(fake.failures.length, 1);
+    equal(fake.failures[0].failure_class, expectedFailure);
+  });
+}
+
 Deno.test("C2 explicit 429 uses persisted retry policy", async () => {
   const bytes = pngBytes();
   const fake = fakeDependencies(bytes, "image", "http_429");
@@ -568,6 +588,9 @@ function fakeDependencies(
     | "completion_failure"
     | "diagnostic_latex_failure"
     | "diagnostic_final_success"
+    | "retrieval_incomplete"
+    | "retrieval_failed"
+    | "retrieval_invalid"
     | "http_429" = "success",
 ) {
   const state = {
@@ -618,6 +641,30 @@ function fakeDependencies(
       state.providerRequests++;
       state.providerMethods.push(init?.method ?? "GET");
       if ((init?.method ?? "GET") === "GET") {
+        if (providerMode === "retrieval_incomplete") {
+          return new Response(JSON.stringify({
+            id: "resp_12345678",
+            object: "response",
+            status: "incomplete",
+            incomplete_details: { reason: "max_output_tokens" },
+          }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        if (providerMode === "retrieval_failed") {
+          return new Response(JSON.stringify({
+            id: "resp_12345678",
+            object: "response",
+            status: "failed",
+          }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        if (providerMode === "retrieval_invalid") {
+          return new Response(
+            JSON.stringify(completedResponse({
+              ...pageBatch(),
+              unexpected: true,
+            })),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
         if (providerMode === "diagnostic_final_success") {
           return new Response(
             JSON.stringify(completedResponse(finalSummary())),
@@ -770,6 +817,16 @@ function workUnit(): InternalWorkUnit {
     lease_token: leaseId,
     page_count: 1,
     page_numbers: [1],
+  };
+}
+
+function reconciliationWorkUnit(): InternalWorkUnit {
+  return {
+    ...workUnit(),
+    kind: "reconciliation",
+    response_id: "resp_12345678",
+    idempotency_key: "a".repeat(64),
+    input_payload: { operation: "page_visual" },
   };
 }
 

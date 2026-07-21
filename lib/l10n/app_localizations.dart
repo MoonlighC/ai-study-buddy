@@ -1165,7 +1165,7 @@ abstract class AppLocalizations {
   /// PDF upload guidance.
   ///
   /// In en, this message translates to:
-  /// **'PDF files up to 10.49 MB.'**
+  /// **'PDF files up to 40 MiB.'**
   String get uploadPdfGuidance;
 
   /// Image upload guidance.
@@ -3778,6 +3778,24 @@ abstract class AppLocalizations {
   /// **'Unsupported file.'**
   String get materialUnsupportedFile;
 
+  /// No description provided for @materialUnsupportedFileType.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsupported file type'**
+  String get materialUnsupportedFileType;
+
+  /// No description provided for @materialFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'File exceeds the 40 MiB limit'**
+  String get materialFileTooLarge;
+
+  /// No description provided for @materialPdfPageLimitExceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'The PDF contains more than the supported page limit'**
+  String get materialPdfPageLimitExceeded;
+
   /// No description provided for @materialInvalidFile.
   ///
   /// In en, this message translates to:
@@ -3805,8 +3823,8 @@ abstract class AppLocalizations {
   /// No description provided for @materialBatchResult.
   ///
   /// In en, this message translates to:
-  /// **'{succeeded} succeeded / {failed} failed'**
-  String materialBatchResult(Object failed, Object succeeded);
+  /// **'{succeeded} uploaded / {skipped} skipped / {failed} failed'**
+  String materialBatchResult(Object failed, Object skipped, Object succeeded);
 
   /// No description provided for @materialPdfPreviewSemantics.
   ///
@@ -3898,11 +3916,17 @@ abstract class AppLocalizations {
   /// **'Analyzing pages {completed} of {pageCount}'**
   String analysisPageProgress(Object completed, Object pageCount);
 
-  /// No description provided for @analysisRecognizingFormulas.
+  /// No description provided for @analysisFormulaProgress.
   ///
   /// In en, this message translates to:
-  /// **'Recognizing formulas and diagrams'**
-  String get analysisRecognizingFormulas;
+  /// **'Recognizing formulas and diagrams {completed} of {pageCount}'**
+  String analysisFormulaProgress(Object completed, Object pageCount);
+
+  /// No description provided for @analysisCombiningResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Combining results'**
+  String get analysisCombiningResults;
 
   /// No description provided for @analysisCreatingSummary.
   ///
@@ -3937,7 +3961,7 @@ abstract class AppLocalizations {
   /// No description provided for @analysisDocumentTooLargeMessage.
   ///
   /// In en, this message translates to:
-  /// **'Documents over 100 pages cannot be analyzed.'**
+  /// **'The PDF contains more than the supported page limit'**
   String get analysisDocumentTooLargeMessage;
 
   /// No description provided for @analysisResumeProcessing.
@@ -4011,6 +4035,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The structured summary could not be displayed. Showing the available summary instead.'**
   String get analysisMalformedFallback;
+
+  /// No description provided for @analysisUnableToExtractContent.
+  ///
+  /// In en, this message translates to:
+  /// **'The document could not be read. Try a clearer PDF or image.'**
+  String get analysisUnableToExtractContent;
+
+  /// No description provided for @analysisProviderUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The analysis service is temporarily unavailable. Try again later.'**
+  String get analysisProviderUnavailable;
+
+  /// No description provided for @analysisStructuredOutputInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The analysis finished, but the result could not be processed. You can retry.'**
+  String get analysisStructuredOutputInvalid;
 
   /// No description provided for @analysisEquationSemantics.
   ///

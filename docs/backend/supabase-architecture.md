@@ -207,7 +207,7 @@ metadata. It then performs an authenticated direct byte download from the
 existing private bucket. It never creates a public URL or persists a signed URL,
 object location, access token, or original byte buffer.
 
-PDF previews are capped at 10 MiB and image previews at 8 MiB. The repository
+PDF previews are capped at 40 MiB and image previews at 8 MiB. The repository
 checks authoritative row/object metadata before download where available and
 always rechecks actual downloaded byte length and signature. Successful empty
 queries, explicit authorization failures, expired sessions, missing objects,

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../auth/auth_models.dart';
 import 'structured_summary.dart';
@@ -19,6 +18,7 @@ enum AnalysisPublicStage {
   preparingDocument,
   analyzingPages,
   recognizingFormulasAndDiagrams,
+  combiningResults,
   creatingSummary,
 }
 
@@ -63,6 +63,7 @@ class MaterialAnalysisStatus {
     required this.summarySchemaVersion,
     required this.summary,
     required this.structuredSummaryMalformed,
+    this.safeErrorCode,
   });
   final String materialId;
   final AnalysisProcessingMode processingMode;
@@ -74,6 +75,7 @@ class MaterialAnalysisStatus {
   final List<AnalysisWarning> warnings;
   final StructuredSummary? summary;
   final bool structuredSummaryMalformed;
+  final String? safeErrorCode;
   bool get isTerminal => {
     AnalysisState.awaitingConfirmation,
     AnalysisState.userRetryRequired,
@@ -241,7 +243,7 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
   } catch (_) {
     throw const MaterialAnalysisException(AnalysisErrorCode.invalidResponse);
   }
-  final keys = {
+  final requiredKeys = {
     'material_id',
     'processing_mode',
     'state',
@@ -255,7 +257,9 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
     'summary_schema_version',
     'summary_payload',
   };
-  if (!setEquals(m.keys.toSet(), keys) ||
+  final allowedKeys = {...requiredKeys, 'safe_error_code', 'active_operation'};
+  if (!m.keys.toSet().containsAll(requiredKeys) ||
+      !allowedKeys.containsAll(m.keys) ||
       m['material_id'] != expectedMaterialId ||
       !_uuid.hasMatch(expectedMaterialId)) {
     throw const MaterialAnalysisException(AnalysisErrorCode.invalidResponse);
@@ -276,7 +280,7 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
           'failed' => AnalysisState.failed,
           _ => throw const FormatException(),
         },
-        stage = switch (m['public_stage']) {
+        rawStage = switch (m['public_stage']) {
           'preparing_document' => AnalysisPublicStage.preparingDocument,
           'analyzing_pages' => AnalysisPublicStage.analyzingPages,
           'recognizing_formulas_and_diagrams' =>
@@ -284,6 +288,30 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
           'creating_summary' => AnalysisPublicStage.creatingSummary,
           _ => throw const FormatException(),
         };
+    final activeOperation = m['active_operation'];
+    if (activeOperation != null &&
+        (activeOperation is! String ||
+            !const {
+              'page_text',
+              'page_visual',
+              'page_recovery',
+              'reduction',
+              'final_summary',
+            }.contains(activeOperation))) {
+      throw const FormatException();
+    }
+    final stage =
+        rawStage == AnalysisPublicStage.creatingSummary &&
+            activeOperation == 'reduction'
+        ? AnalysisPublicStage.combiningResults
+        : rawStage;
+    final safeErrorCode = m['safe_error_code'];
+    if (safeErrorCode != null &&
+        (safeErrorCode is! String ||
+            safeErrorCode.length > 64 ||
+            !RegExp(r'^[a-z0-9_]+$').hasMatch(safeErrorCode))) {
+      throw const FormatException();
+    }
     final p = m['page_count'],
         c = m['completed_pages'],
         r = m['retry_after_seconds'],
@@ -330,6 +358,7 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
       summarySchemaVersion: s as int?,
       summary: summary,
       structuredSummaryMalformed: false,
+      safeErrorCode: safeErrorCode as String?,
     );
   } catch (_) {
     throw const MaterialAnalysisException(AnalysisErrorCode.invalidResponse);

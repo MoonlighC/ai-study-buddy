@@ -543,6 +543,14 @@ void main() {
       expect(normalized, contains('set public = false'));
       expect(normalized, contains('file_size_limit = 10485760'));
       expect(normalized, contains('file_size_limit = 8388608'));
+      final limitMigration = File(
+        'supabase/migrations/017_material_pdf_upload_limit.sql',
+      ).readAsStringSync().toLowerCase();
+      expect(limitMigration, contains('file_size_limit = 41943040'));
+      expect(
+        limitMigration,
+        contains('file_size_bytes between 1 and 41943040'),
+      );
       expect(normalized, contains('drop policy if exists'));
       expect(normalized, contains('on storage.objects for insert'));
       expect(normalized, contains('on storage.objects for select'));
