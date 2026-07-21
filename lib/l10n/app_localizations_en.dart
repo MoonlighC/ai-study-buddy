@@ -2330,6 +2330,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get analysisCompleted => 'Completed';
+
+  @override
   String get analysisPreparingDocument => 'Preparing document';
 
   @override

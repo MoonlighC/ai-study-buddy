@@ -2373,6 +2373,9 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get analysisCompleted => 'Abgeschlossen';
+
+  @override
   String get analysisPreparingDocument => 'Dokument wird vorbereitet';
 
   @override

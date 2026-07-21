@@ -130,16 +130,37 @@ void main() {
         textScale: 2,
       );
       await tester.scrollUntilVisible(
-        find.text('Completed with warnings'),
+        find.text('Partial pages'),
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text('Completed with warnings'), findsOneWidget);
+      expect(find.text('Completed with warnings'), findsWidgets);
       expect(find.text('Partial pages'), findsOneWidget);
       expect(find.text('Missing pages'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('completed analysis labels header and progress consistently', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _UiRepo(
+        status: _status(
+          stage: AnalysisPublicStage.creatingSummary,
+          state: AnalysisState.completed,
+          completedPages: 4,
+          summary: _summary(),
+        ),
+      ),
+    );
+
+    expect(find.text('Completed'), findsWidgets);
+    expect(find.text('Ready'), findsNothing);
+    expect(find.text('Text extracted'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
 
   testWidgets('forced reconciliation replaces stale stage without navigation', (
     tester,
@@ -256,7 +277,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Ready'), findsWidgets);
+    expect(find.text('Completed'), findsWidgets);
     expect(find.text('Section'), findsOneWidget);
     expect(find.text('Creating summary'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);

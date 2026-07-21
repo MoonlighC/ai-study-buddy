@@ -3904,6 +3904,12 @@ abstract class AppLocalizations {
   /// **'Retry available in {seconds} seconds'**
   String analysisRetryAvailableIn(Object seconds);
 
+  /// No description provided for @analysisCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get analysisCompleted;
+
   /// No description provided for @analysisPreparingDocument.
   ///
   /// In en, this message translates to:

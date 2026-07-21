@@ -2409,6 +2409,9 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get analysisCompleted => 'Завершено';
+
+  @override
   String get analysisPreparingDocument => 'Подготовка документа';
 
   @override

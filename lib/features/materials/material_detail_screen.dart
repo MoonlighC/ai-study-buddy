@@ -54,6 +54,9 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
         freshMaterial.hasContentText;
     final usesPersistentAnalysis =
         state.config.effectiveBackendMode == AppBackendMode.supabase;
+    final analysisStatus = usesPersistentAnalysis
+        ? state.analysisStatusFor(freshMaterial.id)
+        : null;
     final l10n = context.l10n;
     final viewerUser = AuthScope.read(context).user;
     final canViewOriginal =
@@ -75,7 +78,11 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
               title: freshMaterial.title,
               subject: subject.name,
               typeLabel: _materialTypeLabel(context, freshMaterial),
-              statusLabel: _materialStatus(context, freshMaterial),
+              statusLabel: _materialStatus(
+                context,
+                freshMaterial,
+                analysisStatus: analysisStatus,
+              ),
               isFavorite: isFavorite,
               onFavorite: deleting || state.isUpdatingMaterialFavorite
                   ? null
@@ -172,7 +179,11 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                   ),
                   (
                     l10n.materialStatusLabel,
-                    _materialStatus(context, freshMaterial),
+                    _materialStatus(
+                      context,
+                      freshMaterial,
+                      analysisStatus: analysisStatus,
+                    ),
                   ),
                 ],
               ),
@@ -248,7 +259,11 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                 ),
                 (
                   l10n.materialStatusLabel,
-                  _materialStatus(context, freshMaterial),
+                  _materialStatus(
+                    context,
+                    freshMaterial,
+                    analysisStatus: analysisStatus,
+                  ),
                 ),
               ],
             ),
@@ -528,8 +543,21 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     );
   }
 
-  String _materialStatus(BuildContext context, StudyMaterial material) {
+  String _materialStatus(
+    BuildContext context,
+    StudyMaterial material, {
+    MaterialAnalysisStatus? analysisStatus,
+  }) {
     final l10n = context.l10n;
+    if (analysisStatus?.state == AnalysisState.completed) {
+      return l10n.analysisCompleted;
+    }
+    if (analysisStatus?.state == AnalysisState.completedWithWarnings) {
+      return l10n.analysisCompletedWithWarnings;
+    }
+    if (analysisStatus?.state == AnalysisState.failed) {
+      return l10n.materialFailedStatus;
+    }
     if (material.kind == MaterialKind.pdf &&
         material.processingStatus == MaterialProcessingStatus.ready &&
         material.hasContentText) {
@@ -1256,12 +1284,12 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
           title: status.state == AnalysisState.completedWithWarnings
               ? l.analysisCompletedWithWarnings
               : status.state == AnalysisState.completed
-              ? l.uploadReady
+              ? l.analysisCompleted
               : _stage(l, status),
           message: _retryRemaining != null && _retryRemaining! > 0
               ? l.analysisRetryAvailableIn(_retryRemaining!)
               : status.state == AnalysisState.completed
-              ? l.materialTextExtracted
+              ? l.analysisCompleted
               : status.publicStage == AnalysisPublicStage.analyzingPages
               ? l.analysisPageProgress(status.completedPages, status.pageCount)
               : _stage(l, status),
