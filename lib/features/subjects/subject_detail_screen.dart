@@ -18,6 +18,7 @@ import '../auth/auth_controller.dart';
 import '../deletion/deletion_models.dart';
 import '../materials/upload_material_screen.dart';
 import '../study_sessions/study_session_result_screen.dart';
+import '../progress/progress_screen.dart';
 
 class SubjectDetailScreen extends StatelessWidget {
   const SubjectDetailScreen({required this.subject, super.key});
@@ -358,6 +359,17 @@ class _StudyActions extends StatelessWidget {
           onPressed: materials.isEmpty
               ? null
               : () => _chooseFlashcardMaterial(context),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        GlassButton(
+          keyValue: const ValueKey('subject-open-progress'),
+          label: context.l10n.progressOpenAction,
+          icon: Icons.insights_outlined,
+          onPressed: () => Navigator.pushNamed(
+            context,
+            AppRoutes.progress,
+            arguments: ProgressRouteArgs(subjectId: subject.id),
+          ),
         ),
         const SizedBox(height: AppSpacing.xs),
         GlassButton(

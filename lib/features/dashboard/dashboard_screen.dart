@@ -4,9 +4,12 @@ import '../../app/app_state.dart';
 import '../../app/design_system/responsive.dart';
 import '../../app/design_system/tokens.dart';
 import '../../app/routes.dart';
+import '../../app/app_config.dart';
+import '../progress/progress_screen.dart';
 import '../../core/models/material.dart';
 import '../../core/models/quiz_attempt.dart';
 import '../../core/models/weak_topic.dart';
+import '../../core/models/knowledge_score.dart';
 import '../../l10n/l10n_extensions.dart';
 import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/glass_components.dart';
@@ -21,7 +24,11 @@ class DashboardScreen extends StatelessWidget {
     final state = AppStateScope.watch(context);
     final recentSubjects = state.subjects.take(3).toList();
     final recentMaterials = state.materials.take(4).toList();
-    final focusTopics = state.cumulativeWeakTopics.take(3).toList();
+    final authoritative = state.studyProgress?.global;
+    final focusTopics =
+        state.config.effectiveBackendMode == AppBackendMode.supabase
+        ? const <CumulativeWeakTopic>[]
+        : state.cumulativeWeakTopics.take(3).toList();
     final latestAttempt = state.latestQuizAttempt;
     final l10n = context.l10n;
 
@@ -116,8 +123,25 @@ class DashboardScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _LatestProgress(attempt: latestAttempt, state: state),
+                  if (authoritative?.recentCompletedSessions.isNotEmpty ??
+                      false) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    _RecentSessions(
+                      sessions: authoritative!.recentCompletedSessions
+                          .take(3)
+                          .toList(),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
-                  _FocusTopics(topics: focusTopics, state: state),
+                  if (state.config.effectiveBackendMode ==
+                      AppBackendMode.supabase)
+                    _AuthoritativeFocusTopics(
+                      topics:
+                          authoritative?.weakTopics.take(3).toList() ??
+                          const [],
+                    )
+                  else
+                    _FocusTopics(topics: focusTopics, state: state),
                   const SizedBox(height: AppSpacing.lg),
                   const _QuickActions(),
                 ],
@@ -258,13 +282,36 @@ class _LatestProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final latest = attempt;
+    final authoritative =
+        state.config.effectiveBackendMode == AppBackendMode.supabase
+        ? state.studyProgress?.global
+        : null;
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionHeading(title: context.l10n.homeLatestProgress),
           const SizedBox(height: AppSpacing.md),
-          if (latest == null)
+          if (state.config.effectiveBackendMode == AppBackendMode.supabase) ...[
+            Text(
+              authoritative?.knowledgeScore == null
+                  ? context.l10n.progressNotEnoughActivity
+                  : '${authoritative!.knowledgeScore!.toStringAsFixed(2)}%',
+              style: Theme.of(context).textTheme.displaySmall,
+            ),
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              context.l10n.progressEvidenceCounts(
+                authoritative?.quizEvidenceCount ?? 0,
+                authoritative?.flashcardEvidenceCount ?? 0,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextButton(
+              onPressed: () => Navigator.pushNamed(context, AppRoutes.progress),
+              child: Text(context.l10n.progressOpenAction),
+            ),
+          ] else if (latest == null)
             EmptyState(
               title: context.l10n.homeNoQuizAttemptsTitle,
               message: context.l10n.homeNoQuizAttemptsMessage,
@@ -292,6 +339,78 @@ class _LatestProgress extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AuthoritativeFocusTopics extends StatelessWidget {
+  const _AuthoritativeFocusTopics({required this.topics});
+  final List<ProgressWeakTopic> topics;
+  @override
+  Widget build(BuildContext context) => GlassCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeading(title: context.l10n.homeFocusTopics),
+        const SizedBox(height: AppSpacing.sm),
+        if (topics.isEmpty)
+          Text(context.l10n.homeFocusTopicsEmpty)
+        else
+          for (final topic in topics)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(topic.topic),
+              subtitle: Text(topic.materialTitle),
+              trailing: Text(context.l10n.studyMisses(topic.missCount)),
+              onTap: () {
+                final material = AppStateScope.read(
+                  context,
+                ).materialById(topic.materialId);
+                if (material == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(context.l10n.continueUnavailableMessage),
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pushNamed(
+                  context,
+                  AppRoutes.materialDetail,
+                  arguments: material,
+                );
+              },
+            ),
+      ],
+    ),
+  );
+}
+
+class _RecentSessions extends StatelessWidget {
+  const _RecentSessions({required this.sessions});
+  final List<ProgressSession> sessions;
+  @override
+  Widget build(BuildContext context) => GlassCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeading(title: context.l10n.progressRecentSessions),
+        const SizedBox(height: AppSpacing.sm),
+        for (final session in sessions)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(session.materialTitle),
+            subtitle: Text(session.sessionType.replaceAll('_', ' ')),
+            onTap: () => Navigator.pushNamed(
+              context,
+              AppRoutes.progress,
+              arguments: ProgressRouteArgs(
+                subjectId: session.subjectId,
+                materialId: session.materialId,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 class _FocusTopics extends StatelessWidget {

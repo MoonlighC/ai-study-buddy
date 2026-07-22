@@ -13,6 +13,7 @@ import 'package:ai_study_buddy/core/models/quiz_question.dart';
 import 'package:ai_study_buddy/core/models/subject.dart';
 import 'package:ai_study_buddy/core/models/study_session.dart';
 import 'package:ai_study_buddy/core/models/weak_topic.dart';
+import 'package:ai_study_buddy/core/models/knowledge_score.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/favorites/favorite_repository.dart';
@@ -23,6 +24,7 @@ import 'package:ai_study_buddy/features/generation/summary_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_lifecycle_repository.dart';
 import 'package:ai_study_buddy/features/progress/weak_topic_repository.dart';
+import 'package:ai_study_buddy/features/progress/study_progress_repository.dart';
 import 'package:ai_study_buddy/features/quizzes/quiz_repository.dart';
 import 'package:ai_study_buddy/features/quizzes/quiz_taking_screen.dart';
 import 'package:ai_study_buddy/features/subjects/subject_repository.dart';
@@ -946,12 +948,16 @@ void main() {
             lastSeenAt: DateTime.utc(2026, 7, 10),
           ),
         ]),
+        studyProgressRepository: _StaticStudyProgressRepository(
+          _widgetStudyProgress(withEvidence: true),
+        ),
       ),
     );
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.progress);
 
-    expect(find.text('Attempts completed'), findsOneWidget);
+    expect(find.text('Knowledge score'), findsOneWidget);
+    expect(find.text('50.00%'), findsWidgets);
     expect(find.text('4 misses'), findsOneWidget);
     expect(find.text('Biology'), findsOneWidget);
     expect(find.text('Knowledge scores'), findsNothing);
@@ -974,15 +980,15 @@ void main() {
         config: _supabaseConfig(),
         authRepository: _RecordingAuthRepository(initialUser: _supabaseUser),
         weakTopicRepository: const _StaticWeakTopicRepository([]),
+        studyProgressRepository: _StaticStudyProgressRepository(
+          _widgetStudyProgress(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
     await _pushRoute(tester, AppRoutes.progress);
 
-    expect(
-      find.text('Complete a quiz to build your progress history.'),
-      findsOneWidget,
-    );
+    expect(find.text('Not enough activity'), findsOneWidget);
     expect(find.text('Knowledge scores'), findsNothing);
   });
 
@@ -3814,6 +3820,64 @@ class _StaticWeakTopicRepository implements WeakTopicRepository {
   Future<List<CumulativeWeakTopic>> loadWeakTopics(AuthUser user) async {
     return List.of(topics);
   }
+}
+
+class _StaticStudyProgressRepository implements StudyProgressRepository {
+  const _StaticStudyProgressRepository(this.progress);
+  final StudyProgress progress;
+  @override
+  Future<StudyProgress> loadProgress(
+    AuthUser user, {
+    String? subjectId,
+    String? materialId,
+  }) async => progress;
+}
+
+StudyProgress _widgetStudyProgress({bool withEvidence = false}) {
+  final metrics = ProgressMetrics(
+    quizCorrectAnswers: withEvidence ? 1 : 0,
+    quizTotalAnswers: withEvidence ? 2 : 0,
+    quizAccuracy: withEvidence ? 50 : null,
+    completedQuizAttemptCount: withEvidence ? 1 : 0,
+    flashcardKnownCount: 0,
+    flashcardNotKnownCount: 0,
+    weakCardCount: 0,
+    dueCardCount: 0,
+    activeSessionCount: 0,
+    completedSessionCount: 0,
+    quizEvidenceCount: withEvidence ? 2 : 0,
+    flashcardEvidenceCount: 0,
+    activeSessions: const [],
+    recentCompletedSessions: const [],
+    weakTopics: withEvidence
+        ? [
+            ProgressWeakTopic(
+              id: 'progress-weak',
+              topic: 'Cell division',
+              missCount: 4,
+              subjectId: 'biology',
+              subjectName: 'Biology',
+              materialId: '',
+            ),
+          ]
+        : const [],
+    knowledgeScore: withEvidence ? 50 : null,
+  );
+  return StudyProgress(
+    schemaVersion: 1,
+    generatedAt: DateTime.utc(2026, 7, 22),
+    global: metrics,
+    subjects: const [],
+    materials: const [],
+    historical: const HistoricalProgress(
+      label: 'Deleted or detached material activity',
+      quizCorrectAnswers: 0,
+      quizTotalAnswers: 0,
+      completedQuizAttemptCount: 0,
+      completedSessionCount: 0,
+      recentCompletedSessions: [],
+    ),
+  );
 }
 
 class _WidgetMaterialLifecycle implements MaterialLifecycleRepository {

@@ -25,6 +25,7 @@ import '../features/materials/original_material_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/study_sessions/study_activity_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
+import '../features/progress/study_progress_repository.dart';
 import '../features/subjects/subject_repository.dart';
 
 class StudyBuddyApp extends StatefulWidget {
@@ -51,6 +52,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.quizRepository,
     this.studyActivityRepository,
     this.weakTopicRepository,
+    this.studyProgressRepository,
     this.preferencesStore,
     super.key,
   });
@@ -77,6 +79,7 @@ class StudyBuddyApp extends StatefulWidget {
   final QuizRepository? quizRepository;
   final StudyActivityRepository? studyActivityRepository;
   final WeakTopicRepository? weakTopicRepository;
+  final StudyProgressRepository? studyProgressRepository;
   final AppPreferencesStore? preferencesStore;
 
   @override
@@ -106,6 +109,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp>
     quizRepository: widget.quizRepository,
     studyActivityRepository: widget.studyActivityRepository,
     weakTopicRepository: widget.weakTopicRepository,
+    studyProgressRepository: widget.studyProgressRepository,
     preferencesStore: widget.preferencesStore,
   );
   late final AuthController authController = AuthController(

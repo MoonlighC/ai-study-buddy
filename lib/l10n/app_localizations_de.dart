@@ -1704,6 +1704,65 @@ class AppLocalizationsDe extends AppLocalizations {
       'Schließe ein Quiz ab, um deinen Fortschrittsverlauf aufzubauen.';
 
   @override
+  String get progressKnowledgeScore => 'Wissensstand';
+
+  @override
+  String get progressNotEnoughActivity => 'Noch nicht genügend Aktivität';
+
+  @override
+  String progressEvidenceCounts(int quiz, int flashcards) {
+    return 'Quiznachweise: $quiz Antworten · Lernkartennachweise: $flashcards Karten';
+  }
+
+  @override
+  String get progressQuizAccuracy => 'Quizgenauigkeit';
+
+  @override
+  String get progressFlashcardState => 'Lernkarten';
+
+  @override
+  String get progressKnownNotKnown => 'Gewusst / nicht gewusst';
+
+  @override
+  String get progressWeakCards => 'Schwache Karten';
+
+  @override
+  String get progressCardsDue => 'Fällige Karten';
+
+  @override
+  String get progressActiveSessions => 'Aktive Sitzungen';
+
+  @override
+  String get progressCompletedSessions => 'Abgeschlossene Sitzungen';
+
+  @override
+  String get progressRecentSessions => 'Letzte abgeschlossene Sitzungen';
+
+  @override
+  String get progressBySubject => 'Nach Fach';
+
+  @override
+  String get progressByMaterial => 'Nach Material';
+
+  @override
+  String get progressHistoricalActivity => 'Historische Aktivität';
+
+  @override
+  String progressHistoricalSummary(int attempts, int sessions) {
+    return '$attempts abgeschlossene Quizversuche und $sessions abgeschlossene Sitzungen gehören zu gelöschten oder getrennten Materialien. Sie beeinflussen den aktuellen Wert nicht.';
+  }
+
+  @override
+  String get progressNoCurrentMaterials =>
+      'Keine aktuellen Materialien in diesem Bereich.';
+
+  @override
+  String get progressUnavailableMaterial => 'Material nicht verfügbar';
+
+  @override
+  String get progressOpenAction => 'Fortschritt öffnen';
+
+  @override
   String get afterLectureTitle => 'Nach der Vorlesung';
 
   @override

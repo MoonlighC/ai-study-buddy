@@ -2788,6 +2788,114 @@ abstract class AppLocalizations {
   /// **'Complete a quiz to build your progress history.'**
   String get progressEmptyMessage;
 
+  /// No description provided for @progressKnowledgeScore.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge score'**
+  String get progressKnowledgeScore;
+
+  /// No description provided for @progressNotEnoughActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough activity'**
+  String get progressNotEnoughActivity;
+
+  /// No description provided for @progressEvidenceCounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiz evidence: {quiz} answers · Flashcard evidence: {flashcards} cards'**
+  String progressEvidenceCounts(int quiz, int flashcards);
+
+  /// No description provided for @progressQuizAccuracy.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiz accuracy'**
+  String get progressQuizAccuracy;
+
+  /// No description provided for @progressFlashcardState.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards'**
+  String get progressFlashcardState;
+
+  /// No description provided for @progressKnownNotKnown.
+  ///
+  /// In en, this message translates to:
+  /// **'Known / not known'**
+  String get progressKnownNotKnown;
+
+  /// No description provided for @progressWeakCards.
+  ///
+  /// In en, this message translates to:
+  /// **'Weak cards'**
+  String get progressWeakCards;
+
+  /// No description provided for @progressCardsDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Cards due'**
+  String get progressCardsDue;
+
+  /// No description provided for @progressActiveSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Active sessions'**
+  String get progressActiveSessions;
+
+  /// No description provided for @progressCompletedSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed sessions'**
+  String get progressCompletedSessions;
+
+  /// No description provided for @progressRecentSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent completed sessions'**
+  String get progressRecentSessions;
+
+  /// No description provided for @progressBySubject.
+  ///
+  /// In en, this message translates to:
+  /// **'By subject'**
+  String get progressBySubject;
+
+  /// No description provided for @progressByMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'By material'**
+  String get progressByMaterial;
+
+  /// No description provided for @progressHistoricalActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Historical activity'**
+  String get progressHistoricalActivity;
+
+  /// No description provided for @progressHistoricalSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{attempts} completed quiz attempts and {sessions} completed sessions belong to deleted or detached materials. They do not affect the current score.'**
+  String progressHistoricalSummary(int attempts, int sessions);
+
+  /// No description provided for @progressNoCurrentMaterials.
+  ///
+  /// In en, this message translates to:
+  /// **'No current materials in this scope.'**
+  String get progressNoCurrentMaterials;
+
+  /// No description provided for @progressUnavailableMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Material unavailable'**
+  String get progressUnavailableMaterial;
+
+  /// No description provided for @progressOpenAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open progress'**
+  String get progressOpenAction;
+
   /// No description provided for @afterLectureTitle.
   ///
   /// In en, this message translates to:

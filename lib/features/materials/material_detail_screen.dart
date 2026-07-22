@@ -21,6 +21,7 @@ import '../flashcards/flashcards_screen.dart';
 import '../quizzes/quiz_repository.dart';
 import '../quizzes/quiz_taking_screen.dart';
 import '../study_sessions/study_session_result_screen.dart';
+import '../progress/progress_screen.dart';
 import 'material_presentation.dart';
 import 'summary_document_view.dart';
 import 'structured_summary_view.dart';
@@ -271,6 +272,22 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                 child: Text(freshMaterial.content),
               ),
             ],
+            const SizedBox(height: 16),
+            GlassButton(
+              key: const ValueKey('material-open-progress'),
+              label: l10n.progressOpenAction,
+              icon: Icons.insights_outlined,
+              onPressed: deleting
+                  ? null
+                  : () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.progress,
+                      arguments: ProgressRouteArgs(
+                        subjectId: freshMaterial.subjectId,
+                        materialId: freshMaterial.id,
+                      ),
+                    ),
+            ),
             const SizedBox(height: 16),
             MaterialMetadata(
               rows: [

@@ -26,6 +26,7 @@ class QuizTakingArgs {
     required this.quiz,
     this.randomSeed,
     this.session,
+    this.completedAttempt,
   });
 
   final Subject subject;
@@ -33,6 +34,7 @@ class QuizTakingArgs {
   final Quiz quiz;
   final int? randomSeed;
   final PersistedStudyActivity? session;
+  final QuizAttempt? completedAttempt;
 }
 
 class QuizTakingScreen extends StatefulWidget {
@@ -65,6 +67,16 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
     _random = Random(widget.args.randomSeed);
     _initializeAttempt();
     _persisted = widget.args.session;
+    final completed = widget.args.completedAttempt;
+    if (completed != null) {
+      _answers.addEntries(
+        completed.answers.map(
+          (answer) => MapEntry(answer.questionId, answer.selectedAnswer),
+        ),
+      );
+      _mode = _QuizMode.result;
+      _starting = false;
+    }
     if (_persisted != null) {
       _restorePersisted(_persisted!);
       _starting = false;
@@ -79,7 +91,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
       if (AppStateScope.read(context).config.effectiveBackendMode !=
           AppBackendMode.supabase) {
         _starting = false;
-      } else if (_persisted == null) {
+      } else if (_persisted == null && widget.args.completedAttempt == null) {
         _startPersisted();
       }
     }
@@ -137,7 +149,8 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
               _ResultView(
                 questions: questions,
                 answers: _answers,
-                attempt: state.latestQuizCompletion,
+                attempt:
+                    widget.args.completedAttempt ?? state.latestQuizCompletion,
                 isSaving: state.isSavingQuizAttempt || _isCompleting,
                 warningMessage: state.quizAttemptSyncErrorMessage,
                 onReviewMaterial: () => Navigator.pop(context),

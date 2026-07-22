@@ -1665,6 +1665,65 @@ class AppLocalizationsEn extends AppLocalizations {
       'Complete a quiz to build your progress history.';
 
   @override
+  String get progressKnowledgeScore => 'Knowledge score';
+
+  @override
+  String get progressNotEnoughActivity => 'Not enough activity';
+
+  @override
+  String progressEvidenceCounts(int quiz, int flashcards) {
+    return 'Quiz evidence: $quiz answers · Flashcard evidence: $flashcards cards';
+  }
+
+  @override
+  String get progressQuizAccuracy => 'Quiz accuracy';
+
+  @override
+  String get progressFlashcardState => 'Flashcards';
+
+  @override
+  String get progressKnownNotKnown => 'Known / not known';
+
+  @override
+  String get progressWeakCards => 'Weak cards';
+
+  @override
+  String get progressCardsDue => 'Cards due';
+
+  @override
+  String get progressActiveSessions => 'Active sessions';
+
+  @override
+  String get progressCompletedSessions => 'Completed sessions';
+
+  @override
+  String get progressRecentSessions => 'Recent completed sessions';
+
+  @override
+  String get progressBySubject => 'By subject';
+
+  @override
+  String get progressByMaterial => 'By material';
+
+  @override
+  String get progressHistoricalActivity => 'Historical activity';
+
+  @override
+  String progressHistoricalSummary(int attempts, int sessions) {
+    return '$attempts completed quiz attempts and $sessions completed sessions belong to deleted or detached materials. They do not affect the current score.';
+  }
+
+  @override
+  String get progressNoCurrentMaterials =>
+      'No current materials in this scope.';
+
+  @override
+  String get progressUnavailableMaterial => 'Material unavailable';
+
+  @override
+  String get progressOpenAction => 'Open progress';
+
+  @override
   String get afterLectureTitle => 'After Lecture';
 
   @override

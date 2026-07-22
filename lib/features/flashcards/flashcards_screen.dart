@@ -4,6 +4,7 @@ import '../../app/app_config.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
 import '../../core/models/flashcard.dart';
+import '../../core/models/persisted_study_activity.dart';
 import '../../core/models/subject.dart';
 import '../../l10n/l10n_extensions.dart';
 import '../../l10n/localized_formatters.dart';
@@ -19,11 +20,13 @@ class FlashcardsRouteArgs {
     required this.subject,
     this.materialId,
     this.materialTitle,
+    this.initialMode = FlashcardTrainingMode.all,
   });
 
   final Subject subject;
   final String? materialId;
   final String? materialTitle;
+  final FlashcardTrainingMode initialMode;
 
   bool get isMaterialScoped => materialId != null;
 }
@@ -41,6 +44,16 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
   int? sessionSize;
   _FlashcardFilter _filter = _FlashcardFilter.all;
   final Set<String> _revealedCardIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _filter = switch (widget.args.initialMode) {
+      FlashcardTrainingMode.weak => _FlashcardFilter.weak,
+      FlashcardTrainingMode.due => _FlashcardFilter.due,
+      _ => _FlashcardFilter.all,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {

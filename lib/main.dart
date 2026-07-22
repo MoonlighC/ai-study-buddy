@@ -20,6 +20,7 @@ import 'features/materials/supabase_original_material_repository.dart';
 import 'features/quizzes/quiz_repository.dart';
 import 'features/study_sessions/study_activity_repository.dart';
 import 'features/progress/weak_topic_repository.dart';
+import 'features/progress/study_progress_repository.dart';
 import 'features/subjects/supabase_subject_repository.dart';
 
 Future<void> main() async {
@@ -98,6 +99,9 @@ Future<void> main() async {
       weakTopicRepository: supabaseClient == null
           ? null
           : SupabaseWeakTopicRepository(supabaseClient),
+      studyProgressRepository: supabaseClient == null
+          ? null
+          : SupabaseStudyProgressRepository(supabaseClient),
     ),
   );
 }

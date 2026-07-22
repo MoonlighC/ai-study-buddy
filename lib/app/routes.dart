@@ -97,6 +97,9 @@ class AppRoutes {
             sessionId: '',
             materialId: '',
           );
+    final progressArgs = routeSettings.arguments is ProgressRouteArgs
+        ? routeSettings.arguments! as ProgressRouteArgs
+        : const ProgressRouteArgs();
 
     final widget = switch (routeSettings.name) {
       authGate => const AuthGateScreen(),
@@ -122,7 +125,7 @@ class AppRoutes {
       continueStudying => const ContinueStudyingScreen(),
       studySessionResult => StudySessionResultScreen(args: studySessionArgs),
       aiTeacher => AiTeacherScreen(subject: subject),
-      progress => const ProgressScreen(),
+      progress => ProgressScreen(args: progressArgs),
       usage => const UsageLimitsScreen(),
       search => const SearchScreen(),
       settings => const SettingsScreen(),

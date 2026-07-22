@@ -1743,6 +1743,65 @@ class AppLocalizationsRu extends AppLocalizations {
       'Пройдите тест, чтобы начать историю прогресса.';
 
   @override
+  String get progressKnowledgeScore => 'Уровень знаний';
+
+  @override
+  String get progressNotEnoughActivity => 'Недостаточно активности';
+
+  @override
+  String progressEvidenceCounts(int quiz, int flashcards) {
+    return 'Данные тестов: $quiz ответов · Данные карточек: $flashcards карточек';
+  }
+
+  @override
+  String get progressQuizAccuracy => 'Точность тестов';
+
+  @override
+  String get progressFlashcardState => 'Карточки';
+
+  @override
+  String get progressKnownNotKnown => 'Знаю / не знаю';
+
+  @override
+  String get progressWeakCards => 'Слабые карточки';
+
+  @override
+  String get progressCardsDue => 'Карточки к повторению';
+
+  @override
+  String get progressActiveSessions => 'Активные занятия';
+
+  @override
+  String get progressCompletedSessions => 'Завершённые занятия';
+
+  @override
+  String get progressRecentSessions => 'Недавние завершённые занятия';
+
+  @override
+  String get progressBySubject => 'По предметам';
+
+  @override
+  String get progressByMaterial => 'По материалам';
+
+  @override
+  String get progressHistoricalActivity => 'Историческая активность';
+
+  @override
+  String progressHistoricalSummary(int attempts, int sessions) {
+    return '$attempts завершённых попыток теста и $sessions завершённых занятий относятся к удалённым или отсоединённым материалам. Они не влияют на текущий результат.';
+  }
+
+  @override
+  String get progressNoCurrentMaterials =>
+      'В этом разделе нет текущих материалов.';
+
+  @override
+  String get progressUnavailableMaterial => 'Материал недоступен';
+
+  @override
+  String get progressOpenAction => 'Открыть прогресс';
+
+  @override
   String get afterLectureTitle => 'После лекции';
 
   @override

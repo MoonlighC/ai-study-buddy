@@ -37,6 +37,8 @@ import '../features/materials/original_material_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
 import '../features/study_sessions/study_activity_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
+import '../features/progress/study_progress_repository.dart';
+import '../core/models/knowledge_score.dart';
 import '../features/subjects/subject_repository.dart';
 import '../mock/mock_ai_service.dart';
 import '../mock/mock_data.dart';
@@ -63,6 +65,7 @@ class AppState extends ChangeNotifier {
     QuizRepository? quizRepository,
     StudyActivityRepository? studyActivityRepository,
     WeakTopicRepository? weakTopicRepository,
+    StudyProgressRepository? studyProgressRepository,
     SubjectDeletionRepository? subjectDeletionRepository,
     AppPreferencesStore? preferencesStore,
     Future<void> Function(Duration)? analysisDelay,
@@ -156,6 +159,8 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyWeakTopicRepository()
                : const MockWeakTopicRepository()),
+       studyProgressRepository =
+           studyProgressRepository ?? const EmptyStudyProgressRepository(),
        subjectDeletionRepository =
            subjectDeletionRepository ??
            ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
@@ -218,6 +223,7 @@ class AppState extends ChangeNotifier {
   final QuizRepository quizRepository;
   final StudyActivityRepository studyActivityRepository;
   final WeakTopicRepository weakTopicRepository;
+  final StudyProgressRepository studyProgressRepository;
   final SubjectDeletionRepository subjectDeletionRepository;
   final Future<void> Function(Duration) _analysisDelay;
   final DateTime Function() _analysisNow;
@@ -230,6 +236,9 @@ class AppState extends ChangeNotifier {
   List<PersistedStudyActivity> _completedStudyActivities = [];
   String? _studyActivityErrorMessage;
   List<CumulativeWeakTopic> _cumulativeWeakTopics = [];
+  StudyProgress? _studyProgress;
+  bool _isLoadingStudyProgress = false;
+  String? _studyProgressErrorMessage;
   QuizAttempt? _latestQuizCompletion;
   final Set<String> _favoriteMaterialIds = {};
   final Set<String> _favoriteFlashcardIds = {};
@@ -1009,6 +1018,7 @@ class AppState extends ChangeNotifier {
     await loadQuizAttemptsFor(user);
     await loadStudyActivitiesFor(user);
     await loadCumulativeWeakTopicsFor(user);
+    await loadStudyProgressFor(user);
     if (user != null) {
       _studySessionRestoration = _restoreActiveStudySession(user);
       unawaited(_studySessionRestoration);
@@ -1644,6 +1654,7 @@ class AppState extends ChangeNotifier {
         _imageExtractionErrors.remove(id);
         _staleMaterialProcessors.remove(id);
       }
+      await loadStudyProgressFor(user);
       return true;
     } on DeletionException catch (error) {
       _subjectDeletionErrors[subjectId] = error.code;
@@ -1683,6 +1694,7 @@ class AppState extends ChangeNotifier {
         materialId: materialId,
       );
       _removeMaterialLocally(materialId);
+      await loadStudyProgressFor(user);
       return true;
     } catch (error) {
       final exists = await materialLifecycleRepository.materialExists(
@@ -1691,6 +1703,7 @@ class AppState extends ChangeNotifier {
       );
       if (exists == false) {
         _removeMaterialLocally(materialId);
+        await loadStudyProgressFor(user);
         return true;
       }
       _materialLifecycleErrors[materialId] = error is MaterialLifecycleException
@@ -1997,6 +2010,38 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  StudyProgress? get studyProgress => _studyProgress;
+  bool get isLoadingStudyProgress => _isLoadingStudyProgress;
+  String? get studyProgressErrorMessage => _studyProgressErrorMessage;
+
+  Future<void> loadStudyProgressFor(AuthUser? user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      _studyProgress = null;
+      _studyProgressErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+    if (user == null) {
+      _studyProgress = null;
+      _studyProgressErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+    _isLoadingStudyProgress = true;
+    _studyProgressErrorMessage = null;
+    notifyListeners();
+    try {
+      _studyProgress = await studyProgressRepository.loadProgress(user);
+    } catch (error) {
+      _studyProgressErrorMessage = error is StudyProgressRepositoryException
+          ? error.message
+          : 'Could not load authoritative study progress.';
+    } finally {
+      _isLoadingStudyProgress = false;
+      notifyListeners();
+    }
+  }
+
   void clearSyncedSubjectsForSignOut() {
     final signedOutUserId = _materialWorkSessionUserId;
     if (signedOutUserId != null) {
@@ -2057,6 +2102,9 @@ class AppState extends ChangeNotifier {
     _quizzes = [];
     _quizAttempts = [];
     _cumulativeWeakTopics = [];
+    _studyProgress = null;
+    _isLoadingStudyProgress = false;
+    _studyProgressErrorMessage = null;
     _activeStudyActivities = [];
     _completedStudyActivities = [];
     _studyActivityErrorMessage = null;
@@ -2390,7 +2438,10 @@ class AppState extends ChangeNotifier {
         reviewedAt: result == null ? null : DateTime.now().toUtc(),
       );
       _upsertActiveStudyActivity(updated);
-      if (result != null) await loadFlashcardsFor(user);
+      if (result != null) {
+        await loadFlashcardsFor(user);
+        await loadStudyProgressFor(user);
+      }
       return updated;
     } catch (error) {
       _studyActivityErrorMessage = error is StudyActivityRepositoryException
@@ -2412,6 +2463,7 @@ class AppState extends ChangeNotifier {
         sessionId: sessionId,
       );
       await loadStudyActivitiesFor(user);
+      await loadStudyProgressFor(user);
       return true;
     } catch (error) {
       _studyActivityErrorMessage = error is StudyActivityRepositoryException
@@ -2502,6 +2554,9 @@ class AppState extends ChangeNotifier {
         attemptId: attemptId,
       );
       await loadStudyActivitiesFor(user);
+      await loadQuizAttemptsFor(user);
+      await loadCumulativeWeakTopicsFor(user);
+      await loadStudyProgressFor(user);
       return true;
     } catch (error) {
       _studyActivityErrorMessage = error is StudyActivityRepositoryException
@@ -2547,6 +2602,7 @@ class AppState extends ChangeNotifier {
       );
       if (updated.isCompleted) {
         await loadStudyActivitiesFor(user);
+        await loadStudyProgressFor(user);
       } else {
         _upsertActiveStudyActivity(updated);
       }
@@ -3221,6 +3277,9 @@ class AppState extends ChangeNotifier {
       _flashcards = [
         for (final item in _flashcards) item.id == card.id ? updatedCard : item,
       ];
+      if (config.effectiveBackendMode == AppBackendMode.supabase) {
+        await loadStudyProgressFor(user);
+      }
       return true;
     } catch (error) {
       _flashcardReviewErrorMessage = _flashcardReviewMessageFor(error);
