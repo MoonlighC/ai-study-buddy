@@ -196,7 +196,21 @@ await runSql(
   "migration 023_",
 );
 
-console.log("PHASE_C_DATABASE_TESTS_OK migrations=23 sql_suites=13");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "024_material_analysis_reconciliation_operation.sql",
+  ),
+  "migration 024_",
+);
+await runSql(
+  path.join(root, "supabase", "tests", "phase_c_reconciliation_operation.sql"),
+  "phase_c_reconciliation_operation.sql",
+);
+
+console.log("PHASE_C_DATABASE_TESTS_OK migrations=24 sql_suites=14");
 await database.close();
 
 async function runSql(file, label) {

@@ -424,6 +424,68 @@ Deno.test("repeated final-summary reconciliation persists once with zero POSTs",
   equal(fake.completions, 1);
 });
 
+Deno.test("reduction reconciliation retrieves once and persists without POST", async () => {
+  const fake = fakeDependencies(
+    pngBytes(),
+    "image",
+    "retrieval_reduction_success",
+  );
+  fake.work = reductionReconciliationWorkUnit();
+  const handler = createAdvanceMaterialAnalysisHandler(fake.deps);
+  equal((await handler(request({ material_id: materialId }))).status, 200);
+  equal((await handler(request({ material_id: materialId }))).status, 200);
+  equal(fake.providerMethods, ["GET"]);
+  equal(fake.submissions, 0);
+  equal(fake.completions, 1);
+});
+
+Deno.test("page-text reconciliation retrieves once and persists without POST", async () => {
+  const fake = fakeDependencies(pngBytes(), "image");
+  fake.work = pageTextReconciliationWorkUnit();
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+  equal(response.status, 200);
+  equal(fake.providerMethods, ["GET"]);
+  equal(fake.submissions, 0);
+  equal(fake.completions, 1);
+});
+
+for (
+  const [name, work] of [
+    ["missing trusted operation", {
+      ...reconciliationWorkUnit(),
+      operation: undefined,
+    }],
+    ["conflicting nested operation", {
+      ...reconciliationWorkUnit(),
+      input_payload: { operation: "final_summary" },
+    }],
+    ["conflicting normal operation", {
+      ...workUnit(),
+      operation: "reduction",
+    }],
+    ["conflicting normal nested operation", {
+      ...workUnit(),
+      operation: "page_visual",
+      input_payload: { operation: "reduction" },
+    }],
+  ] as const
+) {
+  Deno.test(`${name} fails before provider access`, async () => {
+    const fake = fakeDependencies(pngBytes(), "image");
+    fake.work = work as InternalWorkUnit;
+    const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+      request({ material_id: materialId }),
+    );
+    equal(response.status, 500);
+    equal((await response.json()).code, "request_failed");
+    equal(fake.providerRequests, 0);
+    equal(fake.submissions, 0);
+    equal(fake.completions, 0);
+  });
+}
+
 Deno.test("C2 DB failure after known PDF response retains file for reconciliation", async () => {
   const pdf = await buildSyntheticPdf(["text"]);
   const fake = fakeDependencies(pdf, "pdf", "completion_failure");
@@ -448,10 +510,9 @@ for (
   Deno.test(`C2 ${providerMode} terminalizes reconciliation without POST`, async () => {
     const fake = fakeDependencies(pngBytes(), "image", providerMode);
     fake.work = reconciliationWorkUnit();
-    const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
-      request({ material_id: materialId }),
-    );
-    equal(response.status, 200);
+    const handler = createAdvanceMaterialAnalysisHandler(fake.deps);
+    equal((await handler(request({ material_id: materialId }))).status, 200);
+    equal((await handler(request({ material_id: materialId }))).status, 200);
     equal(fake.providerMethods, ["GET"]);
     equal(fake.submissions, 0);
     equal(fake.completions, 0);
@@ -620,6 +681,7 @@ function fakeDependencies(
     | "retrieval_failed"
     | "retrieval_invalid"
     | "retrieval_final_success"
+    | "retrieval_reduction_success"
     | "http_429" = "success",
 ) {
   const state = {
@@ -709,6 +771,12 @@ function fakeDependencies(
         if (providerMode === "retrieval_final_success") {
           return new Response(
             JSON.stringify(completedResponse(finalSummary())),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (providerMode === "retrieval_reduction_success") {
+          return new Response(
+            JSON.stringify(completedResponse(reductionResult())),
             { status: 200, headers: { "Content-Type": "application/json" } },
           );
         }
@@ -804,6 +872,9 @@ function fakeDependencies(
     },
     failOperation: (input) => {
       state.failures.push(structuredClone(input));
+      if (String(input.failure_class).startsWith("terminal_")) {
+        state.work = { kind: "none", material_id: materialId };
+      }
       return Promise.resolve();
     },
     reconcileOperation: () => Promise.resolve(),
@@ -871,6 +942,7 @@ function reconciliationWorkUnit(): InternalWorkUnit {
   return {
     ...workUnit(),
     kind: "reconciliation",
+    operation: "page_visual",
     response_id: "resp_12345678",
     idempotency_key: "a".repeat(64),
     input_payload: { operation: "page_visual" },
@@ -894,8 +966,46 @@ function finalSummaryReconciliationWorkUnit(): InternalWorkUnit {
   return {
     ...finalSummaryWorkUnit(),
     kind: "reconciliation",
+    operation: "final_summary",
     response_id: "resp_12345678",
     idempotency_key: "a".repeat(64),
+  };
+}
+
+function reductionReconciliationWorkUnit(): InternalWorkUnit {
+  return {
+    kind: "reconciliation",
+    operation: "reduction",
+    material_id: materialId,
+    job_id: jobId,
+    batch_id: batchId,
+    lease_token: leaseId,
+    response_id: "resp_12345678",
+    idempotency_key: "a".repeat(64),
+    page_count: 1,
+    page_numbers: [1],
+    input_payload: {
+      inputs: [pageBatch().pages[0]],
+      equation_ids: [],
+    },
+  };
+}
+
+function pageTextReconciliationWorkUnit(): InternalWorkUnit {
+  return {
+    kind: "reconciliation",
+    operation: "page_text",
+    material_id: materialId,
+    job_id: jobId,
+    batch_id: batchId,
+    lease_token: leaseId,
+    response_id: "resp_12345678",
+    idempotency_key: "a".repeat(64),
+    page_count: 1,
+    page_numbers: [1],
+    input_payload: {
+      pages: [{ page_number: 1, normalized_text: "Selectable text." }],
+    },
   };
 }
 
@@ -930,6 +1040,17 @@ function pageBatch() {
       warnings: [],
       trustworthy: true,
     }],
+  };
+}
+
+function reductionResult() {
+  return {
+    source_pages: [1],
+    summary_markdown: "Safe reduction.",
+    key_concepts: [],
+    equation_ids: [],
+    warnings: [],
+    confidence: 0.9,
   };
 }
 

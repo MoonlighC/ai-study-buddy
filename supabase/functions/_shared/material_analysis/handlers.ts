@@ -31,6 +31,21 @@ import {
   diagnosticVersion,
 } from "./response_diagnostics.ts";
 
+type AnalysisOperation =
+  | "page_text"
+  | "page_visual"
+  | "page_recovery"
+  | "reduction"
+  | "final_summary";
+
+const analysisOperations: readonly AnalysisOperation[] = [
+  "page_text",
+  "page_visual",
+  "page_recovery",
+  "reduction",
+  "final_summary",
+];
+
 export type InternalWorkUnit = {
   kind:
     | "none"
@@ -41,6 +56,7 @@ export type InternalWorkUnit = {
     | "final_summary"
     | "reconciliation"
     | "cleanup";
+  operation?: AnalysisOperation;
   material_id: string;
   job_id?: string;
   batch_id?: string;
@@ -574,18 +590,7 @@ async function providerRequest(
   material: SourceMaterial,
   idempotencyKey: string,
 ): Promise<ProviderRequest> {
-  const operation = work.kind === "reconciliation"
-    ? operationFromPayload(work.input_payload)
-    : work.kind;
-  if (
-    ![
-      "page_text",
-      "page_visual",
-      "page_recovery",
-      "reduction",
-      "final_summary",
-    ].includes(operation)
-  ) throw new SafeAnalysisError("work_unavailable", 500);
+  const operation = resolveWorkOperation(work);
   const pages = work.page_numbers ?? [];
   let input: ProviderRequest["input"];
   if (
@@ -713,10 +718,35 @@ function equationIds(value: unknown) {
   return [...ids].sort();
 }
 
-function operationFromPayload(value: unknown) {
-  return isRecord(value) && typeof value.operation === "string"
-    ? value.operation
-    : "";
+function resolveWorkOperation(work: InternalWorkUnit): AnalysisOperation {
+  const nestedOperation = isRecord(work.input_payload) &&
+      Object.hasOwn(work.input_payload, "operation")
+    ? work.input_payload.operation
+    : undefined;
+  if (work.kind === "reconciliation") {
+    if (!isAnalysisOperation(work.operation)) {
+      throw new SafeAnalysisError("work_unavailable", 500);
+    }
+    if (
+      nestedOperation !== undefined && nestedOperation !== work.operation
+    ) throw new SafeAnalysisError("work_unavailable", 500);
+    return work.operation;
+  }
+  if (!isAnalysisOperation(work.kind)) {
+    throw new SafeAnalysisError("work_unavailable", 500);
+  }
+  if (work.operation !== undefined && work.operation !== work.kind) {
+    throw new SafeAnalysisError("work_unavailable", 500);
+  }
+  if (nestedOperation !== undefined && nestedOperation !== work.kind) {
+    throw new SafeAnalysisError("work_unavailable", 500);
+  }
+  return work.kind;
+}
+
+function isAnalysisOperation(value: unknown): value is AnalysisOperation {
+  return typeof value === "string" &&
+    analysisOperations.includes(value as AnalysisOperation);
 }
 
 function bearerToken(request: Request) {
