@@ -3,7 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../auth/auth_models.dart';
 import 'favorite_repository.dart';
 
-class SupabaseFavoriteRepository implements FavoriteRepository {
+class SupabaseFavoriteRepository
+    implements FavoriteRepository, FlashcardFavoriteRepository {
   const SupabaseFavoriteRepository(this._client);
 
   static const _materialEntityType = 'material';
@@ -34,22 +35,29 @@ class SupabaseFavoriteRepository implements FavoriteRepository {
   }
 
   @override
+  Future<Set<String>> loadFlashcardFavoriteIds(AuthUser user) async {
+    try {
+      final rows = await _client.rpc('list_favorite_flashcards');
+      if (rows is! List) return const {};
+      return {
+        for (final row in rows)
+          if (row is Map && row['id'] is String) row['id'] as String,
+      };
+    } catch (_) {
+      throw const FavoriteRepositoryException('Could not sync favorites.');
+    }
+  }
+
+  @override
   Future<void> addMaterialFavorite({
     required AuthUser user,
     required String materialId,
   }) async {
     try {
-      await _client
-          .from('favorites')
-          .upsert(
-            <String, Object?>{
-              'user_id': user.id,
-              'entity_type': _materialEntityType,
-              'entity_id': materialId,
-            },
-            onConflict: 'user_id,entity_type,entity_id',
-            ignoreDuplicates: true,
-          );
+      await _client.rpc(
+        'favorite_material',
+        params: {'p_material_id': materialId},
+      );
     } catch (_) {
       throw const FavoriteRepositoryException('Could not update favorite.');
     }
@@ -61,12 +69,40 @@ class SupabaseFavoriteRepository implements FavoriteRepository {
     required String materialId,
   }) async {
     try {
-      await _client
-          .from('favorites')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('entity_type', _materialEntityType)
-          .eq('entity_id', materialId);
+      await _client.rpc(
+        'unfavorite_material',
+        params: {'p_material_id': materialId},
+      );
+    } catch (_) {
+      throw const FavoriteRepositoryException('Could not update favorite.');
+    }
+  }
+
+  @override
+  Future<void> addFlashcardFavorite({
+    required AuthUser user,
+    required String flashcardId,
+  }) async {
+    try {
+      await _client.rpc(
+        'favorite_flashcard',
+        params: {'p_flashcard_id': flashcardId},
+      );
+    } catch (_) {
+      throw const FavoriteRepositoryException('Could not update favorite.');
+    }
+  }
+
+  @override
+  Future<void> removeFlashcardFavorite({
+    required AuthUser user,
+    required String flashcardId,
+  }) async {
+    try {
+      await _client.rpc(
+        'unfavorite_flashcard',
+        params: {'p_flashcard_id': flashcardId},
+      );
     } catch (_) {
       throw const FavoriteRepositoryException('Could not update favorite.');
     }

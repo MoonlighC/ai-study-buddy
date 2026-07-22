@@ -85,9 +85,6 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('subject-open-flashcards')));
     await tester.pumpAndSettle();
-    expect(find.text('Choose material'), findsOneWidget);
-    await tester.tap(find.text('Lecture A').last);
-    await tester.pumpAndSettle();
 
     expect(opened?.name, AppRoutes.materialDetail);
     expect(opened?.arguments, same(material));

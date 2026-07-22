@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../../core/models/quiz.dart';
 import '../../core/models/quiz_attempt.dart';
 import '../../core/models/quiz_question.dart';
+import '../../core/utils/uuid.dart';
 import '../../features/auth/auth_models.dart';
 import '../generation/generation_function_error.dart';
 
@@ -264,7 +265,11 @@ class SupabaseQuizRepository implements QuizRepository {
     try {
       final response = await _client.functions.invoke(
         'generate-quiz',
-        body: <String, Object>{'material_id': materialId, 'count': count},
+        body: <String, Object>{
+          'material_id': materialId,
+          'count': count,
+          'operation_id': newUuidV4(),
+        },
       );
       final data = response.data;
       final error = data['error'];
@@ -286,7 +291,7 @@ class SupabaseQuizRepository implements QuizRepository {
           .map(_mapQuestion)
           .where((question) => question.question.trim().isNotEmpty)
           .toList();
-      if (mappedQuestions.isEmpty) {
+      if (mappedQuestions.length != count) {
         throw const QuizRepositoryException(
           'Could not generate quiz. Try again.',
         );

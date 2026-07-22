@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../../app/app_config.dart';
 import '../../app/app_state.dart';
 import '../../app/routes.dart';
+import '../../core/models/persisted_study_activity.dart';
 import '../../l10n/l10n_extensions.dart';
 import '../../l10n/localized_formatters.dart';
 import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../auth/auth_controller.dart';
+import '../flashcards/flashcard_training_screen.dart';
 
 class FavoritesScreen extends StatelessWidget {
   const FavoritesScreen({super.key});
@@ -61,11 +63,52 @@ class FavoritesScreen extends StatelessWidget {
                 leading: IconButton(
                   tooltip: l10n.favoritesUnfavorite,
                   onPressed: () =>
-                      AppStateScope.read(context).toggleFavorite(card.id),
+                      AppStateScope.read(context).toggleFlashcardFavoriteFor(
+                        AuthScope.read(context).user,
+                        card.id,
+                      ),
                   icon: const Icon(Icons.star),
                 ),
                 title: Text(card.front),
                 subtitle: Text(card.back),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  final material = card.materialId == null
+                      ? null
+                      : state.materialById(card.materialId!);
+                  if (material == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(context.l10n.continueUnavailableMessage),
+                      ),
+                    );
+                    return;
+                  }
+                  final session = await state.startFlashcardActivity(
+                    user: AuthScope.read(context).user,
+                    material: material,
+                    cards: [
+                      for (final favorite in flashcardFavorites)
+                        if (favorite.materialId == material.id) favorite,
+                    ],
+                    mode: FlashcardTrainingMode.favorites,
+                  );
+                  if (!context.mounted || session == null) return;
+                  Navigator.pushNamed(
+                    context,
+                    AppRoutes.flashcardTraining,
+                    arguments: FlashcardTrainingArgs(
+                      subject: state.subjectFor(material.subjectId),
+                      material: material,
+                      cards: [
+                        for (final favorite in flashcardFavorites)
+                          if (favorite.materialId == material.id) favorite,
+                      ],
+                      session: session,
+                      mode: FlashcardTrainingMode.favorites,
+                    ),
+                  );
+                },
                 showDivider: card != flashcardFavorites.last,
               ),
           ],

@@ -11,6 +11,7 @@ import '../../shared/widgets/glass_components.dart';
 import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../../shared/widgets/study_components.dart';
+import '../auth/auth_controller.dart';
 import 'flashcard_training_screen.dart';
 
 class FlashcardsRouteArgs {
@@ -146,7 +147,9 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
               if (state.flashcardSyncErrorMessage != null)
                 GlassCard(
                   child: ErrorRetryState(
-                    message: context.localizedSafeMessage(state.flashcardSyncErrorMessage!),
+                    message: context.localizedSafeMessage(
+                      state.flashcardSyncErrorMessage!,
+                    ),
                     onRetry: null,
                   ),
                 ),
@@ -185,7 +188,9 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                         _startTraining(visibleCards, effectiveSessionSize),
                     icon: const Icon(Icons.school_outlined),
                     label: Text(
-                      context.l10n.flashcardsStartTrainingCount(effectiveSessionSize),
+                      context.l10n.flashcardsStartTrainingCount(
+                        effectiveSessionSize,
+                      ),
                     ),
                   )
                 else
@@ -222,7 +227,10 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                         context.l10n.flashcardsNoWeak
                       else
                         null,
-                      if (dueCards.isEmpty) context.l10n.flashcardsNoDue else null,
+                      if (dueCards.isEmpty)
+                        context.l10n.flashcardsNoDue
+                      else
+                        null,
                     ].whereType<String>().join(' '),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
@@ -244,7 +252,11 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                               _revealedCardIds.remove(card.id);
                             }
                           }),
-                          onToggleFavorite: () => state.toggleFavorite(card.id),
+                          onToggleFavorite: () =>
+                              state.toggleFlashcardFavoriteFor(
+                                AuthScope.read(context).user,
+                                card.id,
+                              ),
                         ),
                     ],
                   ),
@@ -407,7 +419,9 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
                 textInputAction: TextInputAction.done,
                 decoration: InputDecoration(
                   labelText: context.l10n.flashcardsCardsField,
-                  helperText: context.l10n.flashcardsMaximum(widget.availableCount),
+                  helperText: context.l10n.flashcardsMaximum(
+                    widget.availableCount,
+                  ),
                   errorText: _errorText,
                 ),
                 onChanged: (_) {
@@ -439,7 +453,10 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
                 onPressed: () => Navigator.pop(context),
                 child: Text(context.l10n.commonCancel),
               ),
-              FilledButton(onPressed: _save, child: Text(context.l10n.commonSave)),
+              FilledButton(
+                onPressed: _save,
+                child: Text(context.l10n.commonSave),
+              ),
             ],
           ),
         ],
@@ -458,15 +475,15 @@ class _CustomSessionSizeDialogState extends State<_CustomSessionSizeDialog> {
     }
     if (requestedSize > widget.availableCount) {
       setState(() {
-        _errorText =
-            context.l10n.flashcardsOnlyAvailable(widget.availableCount);
+        _errorText = context.l10n.flashcardsOnlyAvailable(
+          widget.availableCount,
+        );
         _showGenerateMoreGuidance = true;
       });
       return;
     }
     Navigator.pop(context, requestedSize);
   }
-
 }
 
 class _FlashcardListItem extends StatelessWidget {
@@ -488,7 +505,10 @@ class _FlashcardListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final reviewStats = card.correctCount == 0 && card.incorrectCount == 0
         ? null
-        : context.l10n.flashcardsReviewStats(card.correctCount, card.incorrectCount);
+        : context.l10n.flashcardsReviewStats(
+            card.correctCount,
+            card.incorrectCount,
+          );
     final details = [
       context.l10n.flashcardsTopicDifficulty(
         card.topic,

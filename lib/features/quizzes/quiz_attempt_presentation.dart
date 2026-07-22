@@ -7,6 +7,8 @@ class QuizAttemptPresentation {
   QuizAttemptPresentation.randomized(Quiz source, Random random)
     : quiz = _randomizedQuiz(source, random);
 
+  QuizAttemptPresentation.fixed(this.quiz);
+
   final Quiz quiz;
 
   static Quiz _randomizedQuiz(Quiz source, Random random) {

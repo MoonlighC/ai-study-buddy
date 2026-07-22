@@ -218,8 +218,16 @@ await runSql(
   path.join(root, "supabase", "tests", "study_generation_flashcards.sql"),
   "study_generation_flashcards.sql",
 );
+await runSql(
+  path.join(root, "supabase", "migrations", "026_persisted_study_sessions_quiz_and_favorites.sql"),
+  "migration 026_",
+);
+await runSql(
+  path.join(root, "supabase", "tests", "persisted_study_sessions_quiz_favorites.sql"),
+  "persisted_study_sessions_quiz_favorites.sql",
+);
 
-console.log("PHASE_C_DATABASE_TESTS_OK migrations=25 sql_suites=15");
+console.log("PHASE_BC_DATABASE_TESTS_OK migrations=26 sql_suites=16");
 await database.close();
 
 async function runSql(file, label) {

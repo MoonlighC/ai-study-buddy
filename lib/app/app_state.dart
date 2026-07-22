@@ -7,6 +7,7 @@ import 'app_config.dart';
 import 'app_preferences.dart';
 import '../core/models/flashcard.dart';
 import '../core/models/material.dart';
+import '../core/models/persisted_study_activity.dart';
 import '../core/models/quiz.dart';
 import '../core/models/quiz_attempt.dart';
 import '../core/models/quiz_question.dart';
@@ -34,6 +35,7 @@ import '../features/materials/scanned_pdf_ocr_repository.dart';
 import '../features/materials/material_lifecycle_repository.dart';
 import '../features/materials/original_material_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
+import '../features/study_sessions/study_activity_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
 import '../mock/mock_ai_service.dart';
@@ -59,6 +61,7 @@ class AppState extends ChangeNotifier {
     FlashcardRepository? flashcardRepository,
     SummaryRepository? summaryRepository,
     QuizRepository? quizRepository,
+    StudyActivityRepository? studyActivityRepository,
     WeakTopicRepository? weakTopicRepository,
     SubjectDeletionRepository? subjectDeletionRepository,
     AppPreferencesStore? preferencesStore,
@@ -145,6 +148,8 @@ class AppState extends ChangeNotifier {
                    AppBackendMode.supabase
                ? const EmptyQuizRepository()
                : MockQuizRepository()),
+       studyActivityRepository =
+           studyActivityRepository ?? const EmptyStudyActivityRepository(),
        weakTopicRepository =
            weakTopicRepository ??
            ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
@@ -211,6 +216,7 @@ class AppState extends ChangeNotifier {
   final FlashcardRepository flashcardRepository;
   final SummaryRepository summaryRepository;
   final QuizRepository quizRepository;
+  final StudyActivityRepository studyActivityRepository;
   final WeakTopicRepository weakTopicRepository;
   final SubjectDeletionRepository subjectDeletionRepository;
   final Future<void> Function(Duration) _analysisDelay;
@@ -220,9 +226,13 @@ class AppState extends ChangeNotifier {
   List<Flashcard> _flashcards;
   List<Quiz> _quizzes = [];
   List<QuizAttempt> _quizAttempts = [];
+  List<PersistedStudyActivity> _activeStudyActivities = [];
+  List<PersistedStudyActivity> _completedStudyActivities = [];
+  String? _studyActivityErrorMessage;
   List<CumulativeWeakTopic> _cumulativeWeakTopics = [];
   QuizAttempt? _latestQuizCompletion;
   final Set<String> _favoriteMaterialIds = {};
+  final Set<String> _favoriteFlashcardIds = {};
   final List<StudySession> _studySessions = [];
   final Set<String> _deletingMaterialIds = {};
   final Set<String> _deletingSubjectIds = {};
@@ -997,6 +1007,7 @@ class AppState extends ChangeNotifier {
     await loadFlashcardsFor(user);
     await loadQuizzesFor(user);
     await loadQuizAttemptsFor(user);
+    await loadStudyActivitiesFor(user);
     await loadCumulativeWeakTopicsFor(user);
     if (user != null) {
       _studySessionRestoration = _restoreActiveStudySession(user);
@@ -1826,12 +1837,22 @@ class AppState extends ChangeNotifier {
     _favoriteSyncErrorMessage = null;
     notifyListeners();
     try {
-      final favoriteIds = await favoriteRepository.loadMaterialFavoriteIds(
-        user,
-      );
+      final flashcardFavorites =
+          favoriteRepository is FlashcardFavoriteRepository
+          ? (favoriteRepository as FlashcardFavoriteRepository)
+                .loadFlashcardFavoriteIds(user)
+          : Future<Set<String>>.value(const {});
+      final favoriteResults = await Future.wait([
+        favoriteRepository.loadMaterialFavoriteIds(user),
+        flashcardFavorites,
+      ]);
+      final favoriteIds = favoriteResults[0];
       _favoriteMaterialIds
         ..clear()
         ..addAll(favoriteIds);
+      _favoriteFlashcardIds
+        ..clear()
+        ..addAll(favoriteResults[1]);
     } catch (error) {
       _favoriteSyncErrorMessage = _favoriteMessageFor(error);
     } finally {
@@ -1866,7 +1887,10 @@ class AppState extends ChangeNotifier {
     _flashcardSyncErrorMessage = null;
     notifyListeners();
     try {
-      _flashcards = await flashcardRepository.loadFlashcards(user);
+      _flashcards = [
+        for (final card in await flashcardRepository.loadFlashcards(user))
+          card.copyWith(isFavorite: _favoriteFlashcardIds.contains(card.id)),
+      ];
     } catch (error) {
       _flashcardSyncErrorMessage = _flashcardMessageFor(error);
     } finally {
@@ -2033,6 +2057,9 @@ class AppState extends ChangeNotifier {
     _quizzes = [];
     _quizAttempts = [];
     _cumulativeWeakTopics = [];
+    _activeStudyActivities = [];
+    _completedStudyActivities = [];
+    _studyActivityErrorMessage = null;
     _latestQuizCompletion = null;
     notifyListeners();
   }
@@ -2202,9 +2229,26 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  Quiz? quizById(String quizId) =>
+      _quizzes.where((quiz) => quiz.id == quizId).firstOrNull;
+  QuizAttempt? quizAttemptById(String attemptId) =>
+      _quizAttempts.where((attempt) => attempt.id == attemptId).firstOrNull;
+  QuizAttempt? latestQuizAttemptForMaterial(String materialId) {
+    final quizIds = _quizzes
+        .where((quiz) => quiz.materialId == materialId)
+        .map((quiz) => quiz.id)
+        .toSet();
+    return _quizAttempts
+        .where((attempt) => quizIds.contains(attempt.quizId))
+        .firstOrNull;
+  }
+
   List<Flashcard> get favoriteFlashcards {
     if (config.effectiveBackendMode == AppBackendMode.supabase) {
-      return const [];
+      return _flashcards
+          .where((card) => _favoriteFlashcardIds.contains(card.id))
+          .map((card) => card.copyWith(isFavorite: true))
+          .toList();
     }
     return _flashcards.where((flashcard) => flashcard.isFavorite).toList();
   }
@@ -2235,8 +2279,295 @@ class AppState extends ChangeNotifier {
   }
 
   bool canGenerateQuizForMaterial(StudyMaterial material) {
-    return isAiSourceReadyForMaterial(material) &&
-        material.content.trim().length >= summaryMinimumContentCharacters;
+    final status = _analysisStatuses[material.id];
+    final hasValidatedSummary =
+        status != null &&
+        status.summarySchemaVersion ==
+            supportedStructuredSummarySchemaVersion &&
+        status.summary != null &&
+        {
+          AnalysisState.completed,
+          AnalysisState.completedWithWarnings,
+        }.contains(status.state);
+    return hasValidatedSummary ||
+        (isAiSourceReadyForMaterial(material) &&
+            material.content.trim().length >= summaryMinimumContentCharacters);
+  }
+
+  List<PersistedStudyActivity> get activeStudyActivities =>
+      List.unmodifiable(_activeStudyActivities);
+
+  List<PersistedStudyActivity> get completedStudyActivities =>
+      List.unmodifiable(_completedStudyActivities);
+
+  PersistedStudyActivity? get latestActiveStudyActivity =>
+      _activeStudyActivities.firstOrNull;
+
+  String? get studyActivityErrorMessage => _studyActivityErrorMessage;
+
+  Future<void> loadStudyActivitiesFor(AuthUser? user) async {
+    if (config.effectiveBackendMode != AppBackendMode.supabase ||
+        user == null) {
+      _activeStudyActivities = [];
+      _completedStudyActivities = [];
+      _studyActivityErrorMessage = null;
+      notifyListeners();
+      return;
+    }
+    try {
+      final results = await Future.wait([
+        studyActivityRepository.loadActive(user),
+        studyActivityRepository.loadRecentCompleted(user),
+      ]);
+      _activeStudyActivities = results[0];
+      _completedStudyActivities = results[1];
+      _studyActivityErrorMessage = null;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not restore study sessions.';
+    }
+    notifyListeners();
+  }
+
+  Future<PersistedStudyActivity?> startFlashcardActivity({
+    required AuthUser? user,
+    required StudyMaterial material,
+    required List<Flashcard> cards,
+    FlashcardTrainingMode mode = FlashcardTrainingMode.all,
+  }) async {
+    if (user == null ||
+        cards.isEmpty ||
+        cards.any(
+          (card) =>
+              card.materialId != material.id ||
+              card.subjectId != material.subjectId,
+        )) {
+      _studyActivityErrorMessage = 'Could not start flashcard training.';
+      notifyListeners();
+      return null;
+    }
+    try {
+      final session = await studyActivityRepository.startFlashcards(
+        user: user,
+        sessionId: newUuidV4(),
+        materialId: material.id,
+        mode: mode,
+        cardIds: cards.map((card) => card.id).toList(),
+      );
+      _upsertActiveStudyActivity(session);
+      return session;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not start flashcard training.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<PersistedStudyActivity?> updateFlashcardActivity({
+    required AuthUser? user,
+    required PersistedStudyActivity session,
+    required int currentIndex,
+    required bool answerVisible,
+    String? cardId,
+    FlashcardReviewResult? result,
+  }) async {
+    if (user == null) return null;
+    try {
+      final updated = await studyActivityRepository.updateFlashcards(
+        user: user,
+        session: session,
+        currentIndex: currentIndex,
+        answerVisible: answerVisible,
+        cardId: cardId,
+        result: result == null
+            ? null
+            : result == FlashcardReviewResult.known
+            ? 'known'
+            : 'not_known',
+        reviewedAt: result == null ? null : DateTime.now().toUtc(),
+      );
+      _upsertActiveStudyActivity(updated);
+      if (result != null) await loadFlashcardsFor(user);
+      return updated;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not save review progress.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<bool> finalizeFlashcardActivity(
+    AuthUser? user,
+    String sessionId,
+  ) async {
+    if (user == null) return false;
+    try {
+      await studyActivityRepository.finalizeFlashcards(
+        user: user,
+        sessionId: sessionId,
+      );
+      await loadStudyActivitiesFor(user);
+      return true;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not complete flashcard training.';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<PersistedStudyActivity?> startQuizActivity({
+    required AuthUser? user,
+    required Quiz quiz,
+  }) async {
+    if (user == null) return null;
+    try {
+      final session = await studyActivityRepository.startQuiz(
+        user: user,
+        attemptId: newUuidV4(),
+        quiz: quiz,
+      );
+      _upsertActiveStudyActivity(session);
+      return session;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not start quiz.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<PersistedStudyActivity?> updateQuizActivity({
+    required AuthUser? user,
+    required PersistedStudyActivity session,
+    required int currentIndex,
+    required String questionId,
+    required String answer,
+  }) async {
+    if (user == null) return null;
+    try {
+      final updated = await studyActivityRepository.updateQuiz(
+        user: user,
+        session: session,
+        currentIndex: currentIndex,
+        questionId: questionId,
+        selectedAnswer: answer,
+      );
+      _upsertActiveStudyActivity(updated);
+      return updated;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not save quiz progress.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<PersistedStudyActivity?> advanceQuizActivity({
+    required AuthUser? user,
+    required PersistedStudyActivity session,
+    required int currentIndex,
+  }) async {
+    if (user == null) return null;
+    try {
+      final updated = await studyActivityRepository.advanceQuiz(
+        user: user,
+        session: session,
+        currentIndex: currentIndex,
+      );
+      _upsertActiveStudyActivity(updated);
+      return updated;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not save quiz progress.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<bool> finalizeQuizActivity(AuthUser? user, String attemptId) async {
+    if (user == null) return false;
+    try {
+      await studyActivityRepository.finalizeQuiz(
+        user: user,
+        attemptId: attemptId,
+      );
+      await loadStudyActivitiesFor(user);
+      return true;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not complete quiz.';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<PersistedStudyActivity?> startMistakeReviewActivity(
+    AuthUser? user,
+    String attemptId,
+  ) async {
+    if (user == null) return null;
+    try {
+      final session = await studyActivityRepository.startMistakeReview(
+        user: user,
+        attemptId: attemptId,
+      );
+      _upsertActiveStudyActivity(session);
+      return session;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'No saved mistakes are available.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<PersistedStudyActivity?> updateMistakeReviewActivity({
+    required AuthUser? user,
+    required PersistedStudyActivity session,
+    required int currentIndex,
+  }) async {
+    if (user == null) return null;
+    try {
+      final updated = await studyActivityRepository.updateMistakeReview(
+        user: user,
+        session: session,
+        currentIndex: currentIndex,
+      );
+      if (updated.isCompleted) {
+        await loadStudyActivitiesFor(user);
+      } else {
+        _upsertActiveStudyActivity(updated);
+      }
+      return updated;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not save mistake review.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  void _upsertActiveStudyActivity(PersistedStudyActivity session) {
+    _activeStudyActivities = [
+      session,
+      for (final existing in _activeStudyActivities)
+        if (existing.id != session.id) existing,
+    ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    _studyActivityErrorMessage = null;
+    notifyListeners();
   }
 
   bool isAiSourceReadyForMaterial(StudyMaterial material) {
@@ -2389,6 +2720,61 @@ class AppState extends ChangeNotifier {
         card.id == cardId ? card.copyWith(isFavorite: !card.isFavorite) : card,
     ];
     notifyListeners();
+  }
+
+  Future<bool> toggleFlashcardFavoriteFor(AuthUser? user, String cardId) async {
+    final card = _flashcardById(cardId);
+    if (card == null) {
+      _favoriteSyncErrorMessage = 'Flashcard unavailable.';
+      notifyListeners();
+      return false;
+    }
+    if (config.effectiveBackendMode != AppBackendMode.supabase) {
+      toggleFavorite(cardId);
+      return true;
+    }
+    if (user == null) {
+      _favoriteSyncErrorMessage = 'Log in to sync favorites.';
+      notifyListeners();
+      return false;
+    }
+    final favorite = _favoriteFlashcardIds.contains(cardId);
+    try {
+      if (favorite) {
+        final repository = favoriteRepository;
+        if (repository is! FlashcardFavoriteRepository) {
+          throw const FavoriteRepositoryException(
+            'Favorite sync is not configured.',
+          );
+        }
+        await (repository as FlashcardFavoriteRepository)
+            .removeFlashcardFavorite(user: user, flashcardId: cardId);
+        _favoriteFlashcardIds.remove(cardId);
+      } else {
+        final repository = favoriteRepository;
+        if (repository is! FlashcardFavoriteRepository) {
+          throw const FavoriteRepositoryException(
+            'Favorite sync is not configured.',
+          );
+        }
+        await (repository as FlashcardFavoriteRepository).addFlashcardFavorite(
+          user: user,
+          flashcardId: cardId,
+        );
+        _favoriteFlashcardIds.add(cardId);
+      }
+      _flashcards = [
+        for (final item in _flashcards)
+          item.id == cardId ? item.copyWith(isFavorite: !favorite) : item,
+      ];
+      _favoriteSyncErrorMessage = null;
+      notifyListeners();
+      return true;
+    } catch (error) {
+      _favoriteSyncErrorMessage = _favoriteUpdateMessageFor(error);
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<bool> toggleMaterialFavoriteFor(

@@ -352,13 +352,32 @@ class _StudyActions extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         GlassButton(
+          keyValue: const ValueKey('subject-open-quiz'),
+          label: context.l10n.materialQuizTitle,
+          icon: Icons.quiz_outlined,
+          onPressed: materials.isEmpty
+              ? null
+              : () => _chooseFlashcardMaterial(context),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        GlassButton(
           keyValue: const ValueKey('subject-create-study-session'),
           label: context.l10n.subjectCreateStudySession,
           icon: Icons.school_outlined,
           onPressed: eligibleMaterial == null
               ? null
-              : () {
-                  final material = eligibleMaterial!;
+              : () async {
+                  final material = await _chooseMaterial(
+                    context,
+                    materials
+                        .where(
+                          (item) => AppStateScope.read(
+                            context,
+                          ).canGenerateSummaryForMaterial(item),
+                        )
+                        .toList(),
+                  );
+                  if (material == null || !context.mounted) return;
                   final session = AppStateScope.read(context)
                       .createStudySession(
                         subject: subject,
@@ -386,19 +405,7 @@ class _StudyActions extends StatelessWidget {
   );
 
   Future<void> _chooseFlashcardMaterial(BuildContext context) async {
-    final selected = await showDialog<StudyMaterial>(
-      context: context,
-      builder: (dialogContext) => SimpleDialog(
-        title: Text(context.l10n.studyChooseMaterial),
-        children: [
-          for (final material in materials)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(dialogContext, material),
-              child: Text(material.title),
-            ),
-        ],
-      ),
-    );
+    final selected = await _chooseMaterial(context, materials);
     if (selected != null && context.mounted) {
       await Navigator.pushNamed(
         context,
@@ -406,6 +413,26 @@ class _StudyActions extends StatelessWidget {
         arguments: selected,
       );
     }
+  }
+
+  Future<StudyMaterial?> _chooseMaterial(
+    BuildContext context,
+    List<StudyMaterial> choices,
+  ) async {
+    if (choices.length == 1) return choices.single;
+    return showDialog<StudyMaterial>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(context.l10n.studyChooseMaterial),
+        children: [
+          for (final material in choices)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, material),
+              child: Text(material.title),
+            ),
+        ],
+      ),
+    );
   }
 }
 

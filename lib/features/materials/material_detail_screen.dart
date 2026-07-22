@@ -6,6 +6,7 @@ import '../../app/app_state.dart';
 import '../../app/app_config.dart';
 import '../../app/routes.dart';
 import '../../core/models/material.dart';
+import '../../core/models/quiz.dart';
 import '../../core/models/subject.dart';
 import '../../core/models/study_session.dart';
 import '../../l10n/l10n_extensions.dart';
@@ -252,6 +253,13 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                 title: l10n.materialFlashcardsTitle,
                 icon: Icons.style_outlined,
                 child: _FlashcardsSection(material: freshMaterial),
+              ),
+              const SizedBox(height: 16),
+              AiOutputSection(
+                key: const Key('quiz-section'),
+                title: l10n.materialQuizTitle,
+                icon: Icons.quiz_outlined,
+                child: _QuizSection(material: freshMaterial),
               ),
             ],
             if (!isUpload) ...[
@@ -937,6 +945,7 @@ class _QuizSection extends StatelessWidget {
         ? context.l10n.quizGenerate
         : context.l10n.quizGenerateMock;
     final subject = state.subjectFor(material.subjectId);
+    final latestAttempt = state.latestQuizAttemptForMaterial(material.id);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -991,6 +1000,20 @@ class _QuizSection extends StatelessWidget {
                   : buttonLabel,
             ),
           ),
+        if (hasQuiz && latestAttempt != null) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _reviewMistakes(
+              context,
+              subject,
+              material,
+              quiz,
+              latestAttempt.id,
+            ),
+            icon: const Icon(Icons.rate_review_outlined),
+            label: Text(context.l10n.quizReviewMissed),
+          ),
+        ],
       ],
     );
   }
@@ -1007,6 +1030,44 @@ class _QuizSection extends StatelessWidget {
         'Could not generate quiz. Try again.';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
+  }
+
+  Future<void> _reviewMistakes(
+    BuildContext context,
+    Subject subject,
+    StudyMaterial material,
+    Quiz quiz,
+    String attemptId,
+  ) async {
+    final state = AppStateScope.read(context);
+    final review = await state.startMistakeReviewActivity(
+      AuthScope.read(context).user,
+      attemptId,
+    );
+    if (!context.mounted) return;
+    if (review == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.localizedSafeMessage(
+              state.studyActivityErrorMessage ??
+                  context.l10n.quizNoMissedTopics,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    Navigator.pushNamed(
+      context,
+      AppRoutes.quizTaking,
+      arguments: QuizTakingArgs(
+        subject: subject,
+        material: material,
+        quiz: quiz,
+        session: review,
+      ),
     );
   }
 }

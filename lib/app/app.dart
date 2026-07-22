@@ -23,6 +23,7 @@ import '../features/materials/scanned_pdf_ocr_repository.dart';
 import '../features/materials/material_lifecycle_repository.dart';
 import '../features/materials/original_material_repository.dart';
 import '../features/quizzes/quiz_repository.dart';
+import '../features/study_sessions/study_activity_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/subjects/subject_repository.dart';
 
@@ -48,6 +49,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.flashcardRepository,
     this.summaryRepository,
     this.quizRepository,
+    this.studyActivityRepository,
     this.weakTopicRepository,
     this.preferencesStore,
     super.key,
@@ -73,6 +75,7 @@ class StudyBuddyApp extends StatefulWidget {
   final FlashcardRepository? flashcardRepository;
   final SummaryRepository? summaryRepository;
   final QuizRepository? quizRepository;
+  final StudyActivityRepository? studyActivityRepository;
   final WeakTopicRepository? weakTopicRepository;
   final AppPreferencesStore? preferencesStore;
 
@@ -101,6 +104,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp>
     flashcardRepository: widget.flashcardRepository,
     summaryRepository: widget.summaryRepository,
     quizRepository: widget.quizRepository,
+    studyActivityRepository: widget.studyActivityRepository,
     weakTopicRepository: widget.weakTopicRepository,
     preferencesStore: widget.preferencesStore,
   );

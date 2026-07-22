@@ -225,7 +225,14 @@ void main() {
     expect(phaseA, contains('insert into public.flashcards'));
     expect(quiz, contains('.from("quizzes")'));
     expect(quiz, contains('.from("quiz_questions")'));
-    expect(quiz, contains('.delete()'));
+    expect(quiz, contains('complete_quiz_generation_internal'));
+    expect(quiz, isNot(contains('.insert(')));
+    expect(quiz, isNot(contains('.delete()')));
+    final phaseBc = await File(
+      'supabase/migrations/026_persisted_study_sessions_quiz_and_favorites.sql',
+    ).readAsString();
+    expect(phaseBc, contains('insert into public.quizzes'));
+    expect(phaseBc, contains('insert into public.quiz_questions'));
   });
 
   test('temporary diagnostic selector is no-argument and fail-closed', () {

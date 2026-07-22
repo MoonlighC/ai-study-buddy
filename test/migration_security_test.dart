@@ -359,7 +359,11 @@ void main() {
           'supabase/functions/generate-flashcards/handler.ts',
           'supabase/functions/_shared/study_generation_source.ts',
         ],
-        ['supabase/functions/generate-quiz/index.ts'],
+        [
+          'supabase/functions/generate-quiz/index.ts',
+          'supabase/functions/generate-quiz/handler.ts',
+          'supabase/functions/_shared/study_generation_source.ts',
+        ],
       ]) {
         final source = (await Future.wait(
           paths.map((path) => File(path).readAsString()),
@@ -513,33 +517,27 @@ void main() {
     },
   );
 
-  test('quiz generation writes only through its trusted server client', () async {
-    final edgeFunction = await File(
-      'supabase/functions/generate-quiz/index.ts',
-    ).readAsString();
+  test(
+    'quiz generation writes only through its trusted server client',
+    () async {
+      final edgeFunction = await File(
+        'supabase/functions/generate-quiz/index.ts',
+      ).readAsString();
 
-    final runtime = await File(
-      'supabase/functions/_shared/generation_runtime.ts',
-    ).readAsString();
-    expect(edgeFunction, contains('resolveProjectKeys(Deno.env.get)'));
-    expect(runtime, contains('SUPABASE_SECRET_KEYS'));
-    expect(runtime, contains('SUPABASE_SERVICE_ROLE_KEY'));
-    expect(edgeFunction, contains('materialOwnerId !== user.id'));
-    expect(edgeFunction, contains('const trustedWriteClient = createClient'));
-    expect(
-      RegExp(
-        r'trustedWriteClient[\s\S]{0,200}\.from\("quizzes"\)[\s\S]{0,100}\.insert\(',
-      ).hasMatch(edgeFunction),
-      isTrue,
-    );
-    expect(
-      RegExp(
-        r'trustedWriteClient[\s\S]{0,240}\.from\("quiz_questions"\)[\s\S]{0,100}\.insert\(',
-      ).hasMatch(edgeFunction),
-      isTrue,
-    );
-    expect(edgeFunction, isNot(contains('service_role_key_value')));
-  });
+      final runtime = await File(
+        'supabase/functions/_shared/generation_runtime.ts',
+      ).readAsString();
+      expect(edgeFunction, contains('resolveProjectKeys(Deno.env.get)'));
+      expect(runtime, contains('SUPABASE_SECRET_KEYS'));
+      expect(runtime, contains('SUPABASE_SERVICE_ROLE_KEY'));
+      expect(edgeFunction, contains('load_study_generation_source_internal'));
+      expect(edgeFunction, contains('reserve_study_generation_internal'));
+      expect(edgeFunction, contains('complete_quiz_generation_internal'));
+      expect(edgeFunction, isNot(contains('.insert(')));
+      expect(edgeFunction, isNot(contains('.delete()')));
+      expect(edgeFunction, isNot(contains('service_role_key_value')));
+    },
+  );
 
   test(
     'material upload migration keeps buckets private and user-owned',

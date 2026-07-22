@@ -160,11 +160,11 @@ void main() {
     expect(find.text('Ready'), findsNothing);
     expect(find.text('Text extracted'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
-    await tester.drag(
-      find.byKey(const ValueKey('material-detail-scroll-view')),
-      const Offset(0, -1200),
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('flashcards-section')),
+      400,
+      scrollable: find.byType(Scrollable).first,
     );
-    await tester.pumpAndSettle();
     expect(find.byKey(const Key('flashcards-section')), findsOneWidget);
     expect(find.text('Generate flashcards'), findsOneWidget);
   });

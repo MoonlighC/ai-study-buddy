@@ -3,7 +3,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
+import '../../app/app_config.dart';
 import '../../core/models/material.dart';
+import '../../core/models/persisted_study_activity.dart';
 import '../../core/models/quiz.dart';
 import '../../core/models/quiz_attempt.dart';
 import '../../core/models/quiz_question.dart';
@@ -23,12 +25,14 @@ class QuizTakingArgs {
     required this.material,
     required this.quiz,
     this.randomSeed,
+    this.session,
   });
 
   final Subject subject;
   final StudyMaterial material;
   final Quiz quiz;
   final int? randomSeed;
+  final PersistedStudyActivity? session;
 }
 
 class QuizTakingScreen extends StatefulWidget {
@@ -51,18 +55,48 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
   bool _isCompleting = false;
   late DateTime _startedAt;
   late String _attemptId;
+  PersistedStudyActivity? _persisted;
+  bool _starting = true;
+  bool _didStart = false;
 
   @override
   void initState() {
     super.initState();
     _random = Random(widget.args.randomSeed);
     _initializeAttempt();
+    _persisted = widget.args.session;
+    if (_persisted != null) {
+      _restorePersisted(_persisted!);
+      _starting = false;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didStart) {
+      _didStart = true;
+      if (AppStateScope.read(context).config.effectiveBackendMode !=
+          AppBackendMode.supabase) {
+        _starting = false;
+      } else if (_persisted == null) {
+        _startPersisted();
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.watch(context);
     final questions = _attempt.quiz.questions;
+    if (_starting) {
+      return ResponsiveAppScaffold(
+        title: context.l10n.quizUiTitle,
+        showBack: true,
+        showNavigation: false,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     if (questions.isEmpty) {
       return ResponsiveAppScaffold(
         title: context.l10n.quizUiTitle,
@@ -124,10 +158,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
                 totalQuestions: _missedQuestions.length,
                 selectedAnswer:
                     _reviewAnswers[_missedQuestions[_reviewIndex].id],
-                onAnswer: (answer) => setState(
-                  () => _reviewAnswers[_missedQuestions[_reviewIndex].id] =
-                      answer,
-                ),
+                onAnswer: _answerMistake,
                 onNext:
                     _reviewAnswers[_missedQuestions[_reviewIndex].id] == null
                     ? null
@@ -140,16 +171,15 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
                 questionNumber: _index + 1,
                 totalQuestions: questions.length,
                 selectedAnswer: _answers[questions[_index].id],
-                onAnswer: (answer) =>
-                    setState(() => _answers[questions[_index].id] = answer),
+                onAnswer: _answerQuestion,
                 onNext: _answers[questions[_index].id] == null
                     ? null
-                    : () {
+                    : () async {
                         if (_index == questions.length - 1) {
-                          _completeQuiz();
+                          await _completeQuiz();
                           return;
                         }
-                        setState(() => _index += 1);
+                        await _advanceQuiz();
                       },
               ),
           ],
@@ -172,14 +202,21 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
       attemptId: _attemptId,
     );
     if (!mounted) return;
+    if (saved && _persisted?.attemptId != null) {
+      await AppStateScope.read(context).finalizeQuizActivity(
+        AuthScope.read(context).user,
+        _persisted!.attemptId!,
+      );
+    }
+    if (!mounted) return;
     setState(() => _isCompleting = false);
     if (!saved) {
       final message =
           AppStateScope.read(context).quizAttemptSyncErrorMessage ??
           context.l10n.errorCouldNotSaveQuizAttempt;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.localizedSafeMessage(message))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.localizedSafeMessage(message))),
+      );
     }
   }
 
@@ -191,7 +228,10 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
 
   List<QuizQuestion> get _missedQuestions => [
     for (final question in _attempt.quiz.questions)
-      if (_answers[question.id] != question.correctAnswer) question,
+      if (_persisted?.type == PersistedStudyActivityType.quizMistakeReview
+          ? _persisted!.itemIds.contains(question.id)
+          : _answers[question.id] != question.correctAnswer)
+        question,
   ];
 
   void _initializeAttempt() {
@@ -206,15 +246,175 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
     _attemptId = newUuidV4();
   }
 
-  void _startMissedReview() {
+  Future<void> _startPersisted() async {
+    final session = await AppStateScope.read(context).startQuizActivity(
+      user: AuthScope.read(context).user,
+      quiz: _attempt.quiz,
+    );
+    if (!mounted) return;
+    if (session == null) {
+      setState(() => _starting = false);
+      _showSessionError();
+      return;
+    }
     setState(() {
+      _persisted = session;
+      _attemptId = session.attemptId!;
+      _starting = false;
+      _restorePersisted(session);
+    });
+  }
+
+  void _restorePersisted(PersistedStudyActivity session) {
+    final source = widget.args.quiz;
+    final byId = {for (final q in source.questions) q.id: q};
+    final restored = <QuizQuestion>[];
+    for (final id in session.itemIds) {
+      final q = byId[id];
+      if (q == null) continue;
+      restored.add(
+        QuizQuestion(
+          id: q.id,
+          quizId: q.quizId,
+          subjectId: q.subjectId,
+          materialId: q.materialId,
+          question: q.question,
+          options: session.optionOrders[id] ?? q.options,
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation,
+          topic: q.topic,
+          difficulty: q.difficulty,
+        ),
+      );
+    }
+    if (restored.length == session.itemIds.length && restored.isNotEmpty) {
+      _attempt = QuizAttemptPresentation.fixed(
+        Quiz(
+          id: source.id,
+          subjectId: source.subjectId,
+          materialId: source.materialId,
+          title: source.title,
+          questions: restored,
+        ),
+      );
+    }
+    _answers
+      ..clear()
+      ..addAll(session.selectedAnswers);
+    _index = session.currentIndex.clamp(
+      0,
+      restored.isEmpty ? 0 : restored.length - 1,
+    );
+    _attemptId = session.attemptId ?? _attemptId;
+    if (session.type == PersistedStudyActivityType.quizMistakeReview) {
+      _mode = _QuizMode.missedReview;
+      _reviewIndex = session.currentIndex.clamp(0, session.itemIds.length - 1);
+    }
+  }
+
+  Future<void> _answerQuestion(String answer) async {
+    final session = _persisted;
+    final question = _attempt.quiz.questions[_index];
+    if (session == null) {
+      setState(() => _answers[question.id] = answer);
+      return;
+    }
+    final updated = await AppStateScope.read(context).updateQuizActivity(
+      user: AuthScope.read(context).user,
+      session: session,
+      currentIndex: _index,
+      questionId: question.id,
+      answer: answer,
+    );
+    if (!mounted) return;
+    if (updated == null) {
+      _showSessionError();
+      return;
+    }
+    setState(() {
+      _persisted = updated;
+      _answers[question.id] = answer;
+    });
+  }
+
+  Future<void> _advanceQuiz() async {
+    final session = _persisted;
+    if (session == null) {
+      setState(() => _index += 1);
+      return;
+    }
+    final updated = await AppStateScope.read(context).advanceQuizActivity(
+      user: AuthScope.read(context).user,
+      session: session,
+      currentIndex: _index + 1,
+    );
+    if (!mounted) return;
+    if (updated == null) {
+      _showSessionError();
+      return;
+    }
+    setState(() {
+      _persisted = updated;
+      _index += 1;
+    });
+  }
+
+  Future<void> _answerMistake(String answer) async {
+    setState(() => _reviewAnswers[_missedQuestions[_reviewIndex].id] = answer);
+  }
+
+  void _showSessionError() {
+    final message =
+        AppStateScope.read(context).studyActivityErrorMessage ??
+        'Could not save quiz progress.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
+  }
+
+  Future<void> _startMissedReview() async {
+    if (AppStateScope.read(context).config.effectiveBackendMode !=
+        AppBackendMode.supabase) {
+      setState(() {
+        _reviewAnswers.clear();
+        _reviewIndex = 0;
+        _mode = _QuizMode.missedReview;
+      });
+      return;
+    }
+    final attemptId = _persisted?.attemptId ?? _attemptId;
+    final review = await AppStateScope.read(
+      context,
+    ).startMistakeReviewActivity(AuthScope.read(context).user, attemptId);
+    if (!mounted) return;
+    if (review == null) {
+      _showSessionError();
+      return;
+    }
+    setState(() {
+      _persisted = review;
       _reviewAnswers.clear();
       _reviewIndex = 0;
       _mode = _QuizMode.missedReview;
     });
   }
 
-  void _advanceMissedReview() {
+  Future<void> _advanceMissedReview() async {
+    final session = _persisted;
+    if (session != null) {
+      final updated = await AppStateScope.read(context)
+          .updateMistakeReviewActivity(
+            user: AuthScope.read(context).user,
+            session: session,
+            currentIndex: _reviewIndex + 1,
+          );
+      if (!mounted) return;
+      if (updated == null) {
+        _showSessionError();
+        return;
+      }
+      _persisted = updated;
+    }
     if (_reviewIndex == _missedQuestions.length - 1) {
       setState(() => _mode = _QuizMode.result);
       return;
@@ -286,10 +486,16 @@ class _QuestionView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(isCorrect ? context.l10n.studyCorrect : context.l10n.studyIncorrect),
+                  Text(
+                    isCorrect
+                        ? context.l10n.studyCorrect
+                        : context.l10n.studyIncorrect,
+                  ),
                   if (!isCorrect) ...[
                     const SizedBox(height: 4),
-                    Text(context.l10n.studyCorrectAnswer(question.correctAnswer)),
+                    Text(
+                      context.l10n.studyCorrectAnswer(question.correctAnswer),
+                    ),
                   ],
                   const SizedBox(height: 4),
                   Text(question.explanation),

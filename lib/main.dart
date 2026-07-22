@@ -18,6 +18,7 @@ import 'features/materials/scanned_pdf_ocr_repository.dart';
 import 'features/materials/material_lifecycle_repository.dart';
 import 'features/materials/supabase_original_material_repository.dart';
 import 'features/quizzes/quiz_repository.dart';
+import 'features/study_sessions/study_activity_repository.dart';
 import 'features/progress/weak_topic_repository.dart';
 import 'features/subjects/supabase_subject_repository.dart';
 
@@ -91,6 +92,9 @@ Future<void> main() async {
       quizRepository: supabaseClient == null
           ? null
           : SupabaseQuizRepository(supabaseClient),
+      studyActivityRepository: supabaseClient == null
+          ? null
+          : SupabaseStudyActivityRepository(supabaseClient),
       weakTopicRepository: supabaseClient == null
           ? null
           : SupabaseWeakTopicRepository(supabaseClient),

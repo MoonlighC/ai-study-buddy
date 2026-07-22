@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
+import '../../app/app_config.dart';
 import '../../core/models/flashcard.dart';
 import '../../core/models/material.dart';
+import '../../core/models/persisted_study_activity.dart';
 import '../../core/models/subject.dart';
 import '../../l10n/l10n_extensions.dart';
 import '../../l10n/localized_formatters.dart';
@@ -10,6 +12,7 @@ import '../../shared/widgets/responsive_app_scaffold.dart';
 import '../../shared/widgets/state_views.dart';
 import '../../shared/widgets/study_components.dart';
 import '../auth/auth_controller.dart';
+import '../study_sessions/study_activity_repository.dart';
 import 'flashcard_repository.dart';
 
 class FlashcardTrainingArgs {
@@ -17,11 +20,15 @@ class FlashcardTrainingArgs {
     required this.subject,
     required this.cards,
     this.material,
+    this.session,
+    this.mode = FlashcardTrainingMode.all,
   });
 
   final Subject subject;
   final StudyMaterial? material;
   final List<Flashcard> cards;
+  final PersistedStudyActivity? session;
+  final FlashcardTrainingMode mode;
 }
 
 class FlashcardTrainingScreen extends StatefulWidget {
@@ -42,16 +49,100 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
   int _missedCount = 0;
   bool _isShowingAnswer = false;
   bool _isComplete = false;
+  PersistedStudyActivity? _persisted;
+  bool _starting = false;
+  bool _initialized = false;
+  StudyMaterial? _sessionMaterial;
 
   @override
   void initState() {
     super.initState();
     _sessionCards = List<Flashcard>.of(widget.args.cards);
+    _persisted = widget.args.session;
+    _sessionMaterial = widget.args.material;
+    _restoreFromPersisted();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      _ensurePersisted();
+    }
+  }
+
+  void _restoreFromPersisted() {
+    final session = _persisted;
+    if (session == null) return;
+    final byId = {for (final card in widget.args.cards) card.id: card};
+    final ordered = [
+      for (final id in session.itemIds)
+        if (byId[id] != null) byId[id]!,
+    ];
+    if (ordered.length == session.itemIds.length) _sessionCards = ordered;
+    _currentIndex = session.currentIndex.clamp(0, _sessionCards.length);
+    _knownCount = session.knownCount;
+    _missedCount = session.notKnownCount;
+    _isShowingAnswer = session.answerVisible;
+    _missedCards
+      ..clear()
+      ..addAll([
+        for (final id in session.firstPassMissedIds)
+          if (byId[id] != null) byId[id]!,
+      ]);
+    _isComplete = session.isCompleted || _currentIndex >= _sessionCards.length;
+  }
+
+  Future<void> _ensurePersisted() async {
+    if (_persisted != null) return;
+    final state = AppStateScope.read(context);
+    final isSupabase =
+        state.config.effectiveBackendMode == AppBackendMode.supabase;
+    if (!isSupabase && _sessionMaterial == null) return;
+    final materialIds = widget.args.cards
+        .map((card) => card.materialId)
+        .whereType<String>()
+        .toSet();
+    if (_sessionMaterial == null && materialIds.length == 1) {
+      _sessionMaterial = state.materialById(materialIds.single);
+    }
+    if (_sessionMaterial == null) {
+      if (isSupabase &&
+          state.studyActivityRepository is! EmptyStudyActivityRepository) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _showSessionError(),
+        );
+      }
+      return;
+    }
+    setState(() => _starting = true);
+    final session = await state.startFlashcardActivity(
+      user: AuthScope.read(context).user,
+      material: _sessionMaterial!,
+      cards: widget.args.cards,
+      mode: widget.args.mode,
+    );
+    if (!mounted) return;
+    setState(() {
+      _starting = false;
+      _persisted = session;
+      _restoreFromPersisted();
+    });
+    if (session == null) _showSessionError();
   }
 
   @override
   Widget build(BuildContext context) {
     final cards = _sessionCards;
+    if (_starting) {
+      return ResponsiveAppScaffold(
+        title: context.l10n.trainingTitle,
+        showBack: true,
+        showNavigation: false,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     if (cards.isEmpty) {
       return ResponsiveAppScaffold(
         title: context.l10n.trainingTitle,
@@ -91,7 +182,7 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
     final card = cards[_currentIndex];
     return ResponsiveAppScaffold(
       title: context.l10n.trainingTitle,
-      subtitle: widget.args.material?.title ?? widget.args.subject.name,
+      subtitle: _sessionMaterial?.title ?? widget.args.subject.name,
       showBack: true,
       showNavigation: false,
       subjectColor: Color(widget.args.subject.colorValue),
@@ -111,13 +202,12 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
               isAnswerVisible: _isShowingAnswer,
               metadata:
                   '${card.topic} · ${LocalizedFormatters.difficulty(context.l10n, card.difficulty)}',
-              onToggleAnswer: () =>
-                  setState(() => _isShowingAnswer = !_isShowingAnswer),
+              onToggleAnswer: () => _setAnswerVisible(!_isShowingAnswer),
             ),
             const SizedBox(height: 16),
             if (!_isShowingAnswer)
               FilledButton.icon(
-                onPressed: () => setState(() => _isShowingAnswer = true),
+                onPressed: () => _setAnswerVisible(true),
                 icon: const Icon(Icons.visibility_outlined),
                 label: Text(context.l10n.studyShowAnswer),
               )
@@ -133,9 +223,25 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
   }
 
   Future<void> _rateCard(Flashcard card, FlashcardReviewResult result) async {
-    final saved = await AppStateScope.read(
-      context,
-    ).reviewFlashcardFor(AuthScope.read(context).user, card.id, result);
+    final state = AppStateScope.read(context);
+    final user = AuthScope.read(context).user;
+    final persisted = _persisted;
+    final updated = persisted == null
+        ? null
+        : await state.updateFlashcardActivity(
+            user: user,
+            session: persisted,
+            currentIndex: _currentIndex + 1,
+            answerVisible: false,
+            cardId: card.id,
+            result: result,
+          );
+    final saved = persisted == null
+        ? state.config.effectiveBackendMode == AppBackendMode.supabase &&
+                  state.studyActivityRepository is! EmptyStudyActivityRepository
+              ? false
+              : await state.reviewFlashcardFor(user, card.id, result)
+        : updated != null;
     if (!mounted) {
       return;
     }
@@ -143,13 +249,14 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
       final message =
           AppStateScope.read(context).flashcardReviewErrorMessage ??
           context.l10n.errorCouldNotSaveReview;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.localizedSafeMessage(message))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.localizedSafeMessage(message))),
+      );
       return;
     }
 
     setState(() {
+      if (updated != null) _persisted = updated;
       if (result == FlashcardReviewResult.known) {
         _knownCount += 1;
       } else {
@@ -163,6 +270,44 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
         _isShowingAnswer = false;
       }
     });
+    if (_isComplete && _persisted != null) {
+      await AppStateScope.read(
+        context,
+      ).finalizeFlashcardActivity(AuthScope.read(context).user, _persisted!.id);
+    }
+  }
+
+  Future<void> _setAnswerVisible(bool value) async {
+    final persisted = _persisted;
+    if (persisted == null) {
+      setState(() => _isShowingAnswer = value);
+      return;
+    }
+    final updated = await AppStateScope.read(context).updateFlashcardActivity(
+      user: AuthScope.read(context).user,
+      session: persisted,
+      currentIndex: _currentIndex,
+      answerVisible: value,
+    );
+    if (!mounted) return;
+    if (updated == null) {
+      _showSessionError();
+      return;
+    }
+    setState(() {
+      _persisted = updated;
+      _isShowingAnswer = value;
+    });
+  }
+
+  void _showSessionError() {
+    if (!mounted) return;
+    final message =
+        AppStateScope.read(context).studyActivityErrorMessage ??
+        'Could not save study session.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
   }
 
   void _reviewAgain() {
@@ -177,9 +322,26 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
     });
   }
 
-  void _reviewMissedAgain() {
+  Future<void> _reviewMissedAgain() async {
+    final immutableMisses = List<Flashcard>.of(_missedCards);
+    final material = _sessionMaterial;
+    PersistedStudyActivity? next;
+    if (material != null && immutableMisses.isNotEmpty) {
+      next = await AppStateScope.read(context).startFlashcardActivity(
+        user: AuthScope.read(context).user,
+        material: material,
+        cards: immutableMisses,
+        mode: FlashcardTrainingMode.firstPassMissed,
+      );
+      if (!mounted) return;
+      if (next == null) {
+        _showSessionError();
+        return;
+      }
+    }
     setState(() {
-      _sessionCards = List<Flashcard>.of(_missedCards);
+      _sessionCards = immutableMisses;
+      _persisted = next;
       _currentIndex = 0;
       _knownCount = 0;
       _missedCount = 0;
