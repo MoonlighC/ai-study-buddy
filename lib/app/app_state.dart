@@ -23,6 +23,7 @@ import '../features/flashcards/flashcard_repository.dart';
 import '../features/generation/summary_repository.dart';
 import '../features/materials/material_repository.dart';
 import '../features/materials/material_analysis_repository.dart';
+import '../features/materials/structured_summary.dart';
 import '../features/materials/material_file_picker.dart';
 import '../features/materials/material_upload.dart';
 import '../features/materials/material_upload_repository.dart';
@@ -2218,8 +2219,19 @@ class AppState extends ChangeNotifier {
   }
 
   bool canGenerateFlashcardsForMaterial(StudyMaterial material) {
-    return isAiSourceReadyForMaterial(material) &&
-        material.content.trim().length >= summaryMinimumContentCharacters;
+    final status = _analysisStatuses[material.id];
+    final hasValidatedSummary =
+        status != null &&
+        status.summarySchemaVersion ==
+            supportedStructuredSummarySchemaVersion &&
+        status.summary != null &&
+        {
+          AnalysisState.completed,
+          AnalysisState.completedWithWarnings,
+        }.contains(status.state);
+    return hasValidatedSummary ||
+        (isAiSourceReadyForMaterial(material) &&
+            material.content.trim().length >= summaryMinimumContentCharacters);
   }
 
   bool canGenerateQuizForMaterial(StudyMaterial material) {
@@ -2228,7 +2240,18 @@ class AppState extends ChangeNotifier {
   }
 
   bool isAiSourceReadyForMaterial(StudyMaterial material) {
-    return (material.kind == MaterialKind.pastedText &&
+    final status = _analysisStatuses[material.id];
+    final hasValidatedSummary =
+        status != null &&
+        status.summarySchemaVersion ==
+            supportedStructuredSummarySchemaVersion &&
+        status.summary != null &&
+        {
+          AnalysisState.completed,
+          AnalysisState.completedWithWarnings,
+        }.contains(status.state);
+    return hasValidatedSummary ||
+        (material.kind == MaterialKind.pastedText &&
             material.sourceKind == MaterialSourceKind.manual) ||
         (material.kind == MaterialKind.pdf &&
             material.sourceKind == MaterialSourceKind.upload &&

@@ -57,6 +57,10 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     final analysisStatus = usesPersistentAnalysis
         ? state.analysisStatusFor(freshMaterial.id)
         : null;
+    final showPersistentFlashcards =
+        isUpload &&
+        usesPersistentAnalysis &&
+        state.canGenerateFlashcardsForMaterial(freshMaterial);
     final l10n = context.l10n;
     final viewerUser = AuthScope.read(context).user;
     final canViewOriginal =
@@ -239,6 +243,15 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                           );
                         },
                 ),
+              ),
+            ],
+            if (showPersistentFlashcards) ...[
+              const SizedBox(height: 16),
+              AiOutputSection(
+                key: const Key('flashcards-section'),
+                title: l10n.materialFlashcardsTitle,
+                icon: Icons.style_outlined,
+                child: _FlashcardsSection(material: freshMaterial),
               ),
             ],
             if (!isUpload) ...[

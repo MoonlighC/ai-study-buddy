@@ -3,9 +3,11 @@ import {
   createGenerateFlashcardsHandler,
   FlashcardInsert,
   GenerateFlashcardsDependencies,
+  SafeGenerationError,
 } from "./handler.ts";
 
 const materialId = "22222222-2222-4222-8222-222222222222";
+const operationId = "33333333-3333-4333-8333-333333333333";
 
 Deno.test("requires authentication and exact count request shape", async () => {
   const fixture = createFixture();
@@ -20,21 +22,26 @@ Deno.test("requires authentication and exact count request shape", async () => {
     const body of [
       {},
       { material_id: materialId },
-      { material_id: materialId, count: 5, extra: true },
-      { material_id: materialId, count: "5" },
-      { material_id: materialId, count: null },
-      { material_id: materialId, count: true },
-      { material_id: materialId, count: 1.5 },
-      { material_id: materialId, count: 0 },
-      { material_id: materialId, count: -1 },
-      { material_id: materialId, count: 31 },
+      {
+        material_id: materialId,
+        operation_id: operationId,
+        count: 5,
+        extra: true,
+      },
+      { material_id: materialId, operation_id: operationId, count: "5" },
+      { material_id: materialId, operation_id: operationId, count: null },
+      { material_id: materialId, operation_id: operationId, count: true },
+      { material_id: materialId, operation_id: operationId, count: 1.5 },
+      { material_id: materialId, operation_id: operationId, count: 0 },
+      { material_id: materialId, operation_id: operationId, count: -1 },
+      { material_id: materialId, operation_id: operationId, count: 31 },
     ]
   ) {
     response = await fixture.handler(request(JSON.stringify(body)));
     assertEquals(response.status, 400);
   }
   response = await fixture.handler(request(
-    `{"material_id":"${materialId}","count":1e999}`,
+    `{"material_id":"${materialId}","operation_id":"${operationId}","count":1e999}`,
   ));
   assertEquals(response.status, 400);
   assertEquals(fixture.generationCalls(), 0);
@@ -46,6 +53,7 @@ Deno.test("one request creates additive cards and returns authoritative counts",
   });
   const response = await fixture.handler(request(JSON.stringify({
     material_id: materialId,
+    operation_id: operationId,
     count: 2,
   })));
   const body = await response.json();
@@ -71,6 +79,7 @@ Deno.test("only requested candidates are inspected and inserted", async () => {
   });
   const body = await (await fixture.handler(request(JSON.stringify({
     material_id: materialId,
+    operation_id: operationId,
     count: 2,
   })))).json();
 
@@ -90,6 +99,7 @@ Deno.test("existing and within-response duplicates are removed", async () => {
   });
   const body = await (await fixture.handler(request(JSON.stringify({
     material_id: materialId,
+    operation_id: operationId,
     count: 4,
   })))).json();
 
@@ -108,6 +118,7 @@ Deno.test("zero unique cards is a successful result", async () => {
   });
   const response = await fixture.handler(request(JSON.stringify({
     material_id: materialId,
+    operation_id: operationId,
     count: 1,
   })));
   const body = await response.json();
@@ -116,13 +127,14 @@ Deno.test("zero unique cards is a successful result", async () => {
   assertEquals(body.requested_count, 1);
   assertEquals(body.created_count, 0);
   assertEquals(body.flashcards, []);
-  assertEquals(fixture.insertCalls(), 0);
+  assertEquals(fixture.insertCalls(), 1);
 });
 
 Deno.test("existing-card load failure stops before OpenAI", async () => {
   const fixture = createFixture({ throwOnExistingLoad: true });
   const response = await fixture.handler(request(JSON.stringify({
     material_id: materialId,
+    operation_id: operationId,
     count: 5,
   })));
 
@@ -131,10 +143,11 @@ Deno.test("existing-card load failure stops before OpenAI", async () => {
   assertEquals(fixture.insertCalls(), 0);
 });
 
-Deno.test("active ownership is rechecked before the trusted insert", async () => {
+Deno.test("the claimed operation completes through the trusted boundary", async () => {
   const fixture = createFixture();
   const response = await fixture.handler(request(JSON.stringify({
     material_id: materialId,
+    operation_id: operationId,
     count: 1,
   })));
   assertEquals(response.status, 200);
@@ -142,21 +155,60 @@ Deno.test("active ownership is rechecked before the trusted insert", async () =>
     "verify",
     "material_read",
     "existing_read",
+    "reserve",
+    "claim",
     "openai",
-    "active_recheck",
-    "trusted_insert",
+    "complete",
   ]);
   assertEquals(fixture.insertedRows()[0].user_id, "user-1");
 });
 
-Deno.test("inactive material stops before trusted insert", async () => {
-  const fixture = createFixture({ activeOnRecheck: false });
+Deno.test("same-operation follower joins without a provider request", async () => {
+  const joined = [{ id: "joined-1", ...card("Joined") }];
+  const fixture = createFixture({ claimProvider: false, joined });
   const response = await fixture.handler(request(JSON.stringify({
     material_id: materialId,
+    operation_id: operationId,
     count: 1,
   })));
-  assertEquals(response.status, 404);
-  assertEquals(fixture.insertCalls(), 0);
+  assertEquals(response.status, 200);
+  const body = await response.json();
+  assertEquals(body.flashcards, joined);
+  assertEquals(fixture.generationCalls(), 0);
+  assertEquals(fixture.calls(), [
+    "verify",
+    "material_read",
+    "existing_read",
+    "reserve",
+    "claim",
+    "await",
+  ]);
+});
+
+Deno.test("validated structured summary is accepted without extracted text", async () => {
+  const fixture = createFixture({
+    sourceKind: "structured_summary",
+    sourceText: "Short but schema-valid summary source.",
+  });
+  const response = await fixture.handler(request(JSON.stringify({
+    material_id: materialId,
+    operation_id: operationId,
+    count: 1,
+  })));
+  assertEquals(response.status, 200);
+  assertEquals(fixture.generationCalls(), 1);
+});
+
+Deno.test("provider failure terminalizes the claimed operation", async () => {
+  const fixture = createFixture({ throwOnGenerate: true });
+  const response = await fixture.handler(request(JSON.stringify({
+    material_id: materialId,
+    operation_id: operationId,
+    count: 1,
+  })));
+  assertEquals(response.status, 500);
+  assertEquals(fixture.generationCalls(), 1);
+  assertEquals(fixture.failures(), [["provider_failed", true]]);
 });
 
 Deno.test("OpenAI request uses exact structured count and bounded tokens", () => {
@@ -178,7 +230,11 @@ function createFixture(options: {
   existing?: Record<string, unknown>[];
   generated?: string;
   throwOnExistingLoad?: boolean;
-  activeOnRecheck?: boolean;
+  claimProvider?: boolean;
+  joined?: Record<string, unknown>[];
+  sourceKind?: string;
+  sourceText?: string;
+  throwOnGenerate?: boolean;
 } = {}) {
   const existing = [...(options.existing ?? [])];
   const inserted: FlashcardInsert[] = [];
@@ -186,6 +242,7 @@ function createFixture(options: {
   let generationCalls = 0;
   let insertCalls = 0;
   const calls: string[] = [];
+  const failures: Array<[string, boolean]> = [];
 
   const deps: GenerateFlashcardsDependencies = {
     model: "test-model",
@@ -215,17 +272,48 @@ function createFixture(options: {
       calls.push("openai");
       generationCalls += 1;
       counts.push(input.count);
-      return options.generated ?? cardsJson([card("Default")]);
+      if (options.throwOnGenerate) {
+        throw new SafeGenerationError("provider_failed");
+      }
+      return {
+        text: options.generated ?? cardsJson([card("Default")]),
+        inputTokens: 100,
+        outputTokens: 50,
+      };
     },
-    async recheckActiveMaterial() {
-      calls.push("active_recheck");
-      return options.activeOnRecheck ?? true;
+    async reserveOperation() {
+      calls.push("reserve");
+      return { status: "reserved" };
     },
-    async insertCards(rows) {
-      calls.push("trusted_insert");
+    async claimProvider() {
+      calls.push("claim");
+      return options.claimProvider ?? true;
+    },
+    async awaitOperation() {
+      calls.push("await");
+      return options.joined ?? [];
+    },
+    async completeOperation(input) {
+      calls.push("complete");
       insertCalls += 1;
+      const rows = input.cards.map((row) => ({
+        ...row,
+        user_id: input.userId,
+        subject_id: "subject-1",
+        material_id: input.materialId,
+        metadata: {},
+      }));
       inserted.push(...rows);
       return rows.map((row, index) => ({ id: `new-${index}`, ...row }));
+    },
+    async failOperation(_userId, _operationId, code, retainCost) {
+      failures.push([code, retainCost]);
+    },
+    canonicalSource(material) {
+      return {
+        kind: options.sourceKind ?? "extracted_text",
+        text: options.sourceText ?? String(material.content_text),
+      };
     },
   };
 
@@ -237,6 +325,7 @@ function createFixture(options: {
     insertedRows: () => inserted,
     existingRows: () => existing,
     calls: () => calls,
+    failures: () => failures,
   };
 }
 

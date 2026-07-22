@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "remark-parse": "npm:remark-parse@11.0.0",
+    "unified": "npm:unified@11.0.5"
+  },
+  "tasks": {
+    "test": "deno test --allow-env --allow-read index_test.ts ../_shared/study_generation_source_test.ts"
+  }
+}

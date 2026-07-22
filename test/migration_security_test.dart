@@ -357,17 +357,30 @@ void main() {
         [
           'supabase/functions/generate-flashcards/index.ts',
           'supabase/functions/generate-flashcards/handler.ts',
+          'supabase/functions/_shared/study_generation_source.ts',
         ],
         ['supabase/functions/generate-quiz/index.ts'],
       ]) {
         final source = (await Future.wait(
           paths.map((path) => File(path).readAsString()),
         )).join('\n');
-        expect(source, contains('material.kind === "pasted_text"'));
-        expect(source, contains('material.source_kind === "manual"'));
-        expect(source, contains('material.kind === "pdf"'));
-        expect(source, contains('material.source_kind === "upload"'));
-        expect(source, contains('material.processing_status === "ready"'));
+        expect(
+          source,
+          anyOf(
+            contains('material.kind === "pasted_text"'),
+            contains('row.kind === "pasted_text"'),
+          ),
+        );
+        expect(source, contains('source_kind === "manual"'));
+        expect(
+          source,
+          anyOf(
+            contains('material.kind === "pdf"'),
+            contains('row.kind === "pdf"'),
+          ),
+        );
+        expect(source, contains('source_kind === "upload"'));
+        expect(source, contains('processing_status === "ready"'));
       }
       final summary = (await Future.wait([
         File('supabase/functions/generate-summary/index.ts').readAsString(),

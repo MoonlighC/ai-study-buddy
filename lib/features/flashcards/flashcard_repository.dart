@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../core/models/flashcard.dart';
+import '../../core/utils/uuid.dart';
 import '../../features/auth/auth_models.dart';
 import '../../mock/mock_data.dart';
 import '../generation/generation_function_error.dart';
@@ -131,6 +132,7 @@ class SupabaseFlashcardRepository implements FlashcardRepository {
         body: <String, Object>{
           'material_id': materialId,
           'count': requestedNewCount,
+          'operation_id': newUuidV4(),
         },
       );
       final data = response.data;

@@ -100,6 +100,7 @@ class SubjectDetailScreen extends StatelessWidget {
                       _StudyActions(
                         subject: subject,
                         eligibleMaterial: eligibleMaterial,
+                        materials: materials,
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       _UploadActions(subject: subject),
@@ -310,10 +311,15 @@ class _SubjectHero extends StatelessWidget {
 }
 
 class _StudyActions extends StatelessWidget {
-  const _StudyActions({required this.subject, required this.eligibleMaterial});
+  const _StudyActions({
+    required this.subject,
+    required this.eligibleMaterial,
+    required this.materials,
+  });
 
   final Subject subject;
   final StudyMaterial? eligibleMaterial;
+  final List<StudyMaterial> materials;
 
   @override
   Widget build(BuildContext context) => GlassCard(
@@ -334,6 +340,15 @@ class _StudyActions extends StatelessWidget {
           ),
           icon: const Icon(Icons.post_add_outlined),
           label: Text(context.l10n.subjectAddPastedText),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        GlassButton(
+          keyValue: const ValueKey('subject-open-flashcards'),
+          label: context.l10n.materialFlashcardsTitle,
+          icon: Icons.style_outlined,
+          onPressed: materials.isEmpty
+              ? null
+              : () => _chooseFlashcardMaterial(context),
         ),
         const SizedBox(height: AppSpacing.xs),
         GlassButton(
@@ -369,6 +384,29 @@ class _StudyActions extends StatelessWidget {
       ],
     ),
   );
+
+  Future<void> _chooseFlashcardMaterial(BuildContext context) async {
+    final selected = await showDialog<StudyMaterial>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(context.l10n.studyChooseMaterial),
+        children: [
+          for (final material in materials)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, material),
+              child: Text(material.title),
+            ),
+        ],
+      ),
+    );
+    if (selected != null && context.mounted) {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.materialDetail,
+        arguments: selected,
+      );
+    }
+  }
 }
 
 class _UploadActions extends StatelessWidget {

@@ -18,6 +18,16 @@ export type FlashcardInsert = FlashcardDraft & {
   metadata: Record<string, unknown>;
 };
 
+export type GeneratedCandidates = {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+};
+
+export type GenerationReservation = {
+  status: "reserved" | "succeeded" | "failed";
+};
+
 type MaterialRow = Record<string, unknown>;
 type FlashcardRow = Record<string, unknown>;
 
@@ -33,13 +43,33 @@ export type GenerateFlashcardsDependencies = {
     materialId: string,
     jwt: string,
   ): Promise<FlashcardRow[]>;
-  generateCandidates(input: { text: string; count: number }): Promise<string>;
-  recheckActiveMaterial(
+  generateCandidates(
+    input: { text: string; count: number },
+  ): Promise<GeneratedCandidates>;
+  reserveOperation(input: {
+    userId: string;
+    operationId: string;
+    materialId: string;
+    requestHash: string;
+    count: number;
+  }): Promise<GenerationReservation>;
+  claimProvider(userId: string, operationId: string): Promise<boolean>;
+  awaitOperation(userId: string, operationId: string): Promise<FlashcardRow[]>;
+  completeOperation(input: {
+    userId: string;
+    operationId: string;
+    materialId: string;
+    cards: FlashcardDraft[];
+    inputTokens: number;
+    outputTokens: number;
+  }): Promise<FlashcardRow[]>;
+  failOperation(
     userId: string,
-    materialId: string,
-    jwt: string,
-  ): Promise<boolean>;
-  insertCards(rows: FlashcardInsert[]): Promise<FlashcardRow[]>;
+    operationId: string,
+    code: string,
+    retainReservedCost: boolean,
+  ): Promise<void>;
+  canonicalSource(material: MaterialRow): { kind: string; text: string };
   model: string;
   log?: (stage: string, details?: Record<string, unknown>) => void;
 };
@@ -76,11 +106,13 @@ export function createGenerateFlashcardsHandler(
 
     let materialId = "";
     let requestedNewCount = 0;
+    let operationId = "";
     try {
       const body: unknown = await request.json();
       if (
-        !isRecord(body) || Object.keys(body).length !== 2 ||
+        !isRecord(body) || Object.keys(body).length !== 3 ||
         typeof body.material_id !== "string" ||
+        typeof body.operation_id !== "string" ||
         typeof body.count !== "number" || !Number.isFinite(body.count) ||
         !Number.isInteger(body.count) || body.count < 1 ||
         body.count > maxRequestedNewCount
@@ -88,23 +120,37 @@ export function createGenerateFlashcardsHandler(
         return json({ error: "Invalid request." }, 400);
       }
       materialId = body.material_id.trim();
+      operationId = body.operation_id.trim();
       requestedNewCount = body.count;
     } catch (_) {
       return json({ error: "Invalid request." }, 400);
     }
-    if (!materialId) return json({ error: "Invalid request." }, 400);
+    if (!materialId || !uuidPattern.test(operationId)) {
+      return json({ error: "Invalid request." }, 400);
+    }
 
+    let ownsProvider = false;
+    let providerSubmitted = false;
     try {
       const material = await deps.loadOwnedMaterial(userId, materialId, jwt);
-      const contentText = stringValue(material?.content_text);
-      if (!material || !isEligibleAiMaterial(material, contentText)) {
+      if (!material) {
+        return json({ error: "Material unavailable." }, 404);
+      }
+      let source: { kind: string; text: string };
+      try {
+        source = deps.canonicalSource(material);
+      } catch (_) {
         return json({ error: "Material unavailable." }, 404);
       }
       log("material_loaded", {
-        content_length: contentText.length,
+        source_kind: source.kind,
+        content_length: source.text.length,
         requested_count: requestedNewCount,
       });
-      if (contentText.length < minFlashcardInputChars) {
+      if (
+        source.kind === "extracted_text" &&
+        source.text.length < minFlashcardInputChars
+      ) {
         return json({ error: shortInputMessage }, 400);
       }
 
@@ -114,16 +160,38 @@ export function createGenerateFlashcardsHandler(
         jwt,
       );
       const existingKeys = new Set(existingCards.map(duplicateKeyForRow));
+      const requestHash = await sha256(
+        `generate_flashcards\n${materialId}\n${requestedNewCount}`,
+      );
+      const reservation = await deps.reserveOperation({
+        userId,
+        operationId,
+        materialId,
+        requestHash,
+        count: requestedNewCount,
+      });
+      if (reservation.status === "failed") {
+        throw new SafeGenerationError("generation_failed");
+      }
+      ownsProvider = await deps.claimProvider(userId, operationId);
+      if (!ownsProvider) {
+        const joined = await deps.awaitOperation(userId, operationId);
+        return success(materialId, requestedNewCount, joined);
+      }
       log("openai_request_started", {
         model: deps.model,
         requested_count: requestedNewCount,
       });
-      const generatedText = await deps.generateCandidates({
-        text: contentText.slice(0, maxInputChars),
+      providerSubmitted = true;
+      const generated = await deps.generateCandidates({
+        text: source.text.slice(0, maxInputChars),
         count: requestedNewCount,
       });
       log("openai_response_received");
-      const parsed = parseFlashcardCandidates(generatedText, requestedNewCount);
+      const parsed = parseFlashcardCandidates(
+        generated.text,
+        requestedNewCount,
+      );
       log("parsed", { requested_count: requestedNewCount });
       const uniqueKeys = new Set<string>();
       const uniqueDrafts = parsed.filter((card) => {
@@ -133,51 +201,26 @@ export function createGenerateFlashcardsHandler(
         return true;
       });
 
-      const subjectId = typeof material.subject_id === "string"
-        ? material.subject_id
-        : null;
-      const rows: FlashcardInsert[] = uniqueDrafts.map((card) => ({
-        user_id: userId,
-        subject_id: subjectId,
-        material_id: materialId,
-        front: card.front,
-        back: card.back,
-        topic: card.topic,
-        difficulty: card.difficulty,
-        metadata: { source: "generate-flashcards", model: deps.model },
-      }));
-      if (
-        rows.length > 0 &&
-        !await deps.recheckActiveMaterial(userId, materialId, jwt)
-      ) {
-        return json({
-          error: "Material unavailable.",
-          code: "material_unavailable",
-        }, 404);
-      }
       log("database_write_started", {
         requested_count: requestedNewCount,
-        created_count: rows.length,
+        created_count: uniqueDrafts.length,
       });
-      const insertedCards = rows.length === 0
-        ? []
-        : await deps.insertCards(rows);
-      if (insertedCards.length !== rows.length) {
+      const insertedCards = await deps.completeOperation({
+        userId,
+        operationId,
+        materialId,
+        cards: uniqueDrafts,
+        inputTokens: generated.inputTokens,
+        outputTokens: generated.outputTokens,
+      });
+      if (insertedCards.length !== uniqueDrafts.length) {
         throw new Error("flashcard_insert_count_mismatch");
       }
-
-      // TODO: Feed requested_count and created_count into daily_usage_limits
-      // and usage_logs when quota enforcement is implemented.
       log("completed", {
         requested_count: requestedNewCount,
         created_count: insertedCards.length,
       });
-      return json({
-        material_id: materialId,
-        requested_count: requestedNewCount,
-        created_count: insertedCards.length,
-        flashcards: insertedCards,
-      });
+      return success(materialId, requestedNewCount, insertedCards);
     } catch (error) {
       const code = error instanceof SafeGenerationError
         ? error.code
@@ -186,9 +229,43 @@ export function createGenerateFlashcardsHandler(
         code,
         status: error instanceof SafeGenerationError ? error.status : undefined,
       });
-      return json({ error: "Could not generate flashcards.", code }, 500);
+      if (ownsProvider) {
+        try {
+          await deps.failOperation(
+            userId,
+            operationId,
+            code,
+            providerSubmitted,
+          );
+        } catch (_) {
+          log("operation_failure_finalize_failed", { code });
+        }
+      }
+      return json(
+        { error: "Could not generate flashcards.", code },
+        error instanceof SafeGenerationError && error.status
+          ? error.status
+          : 500,
+      );
     }
   };
+}
+
+function success(materialId: string, count: number, cards: FlashcardRow[]) {
+  return json({
+    material_id: materialId,
+    requested_count: count,
+    created_count: cards.length,
+    flashcards: cards,
+  });
+}
+
+async function sha256(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
 }
 
 export class SafeGenerationError extends Error {
@@ -331,15 +408,8 @@ function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function isEligibleAiMaterial(material: MaterialRow, content: string) {
-  if (!content) return false;
-  return (material.kind === "pasted_text" &&
-    material.source_kind === "manual") ||
-    (material.kind === "pdf" && material.source_kind === "upload" &&
-      material.processing_status === "ready") ||
-    (material.kind === "image" && material.source_kind === "upload" &&
-      material.processing_status === "ready");
-}
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

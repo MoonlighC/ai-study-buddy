@@ -218,7 +218,11 @@ void main() {
 
     expect(summary, contains('.update({ summary: input.summary })'));
     expect(flashcards, contains('.from("flashcards")'));
-    expect(flashcards, contains('.insert(rows)'));
+    expect(flashcards, contains('complete_flashcard_generation_internal'));
+    final phaseA = await File(
+      'supabase/migrations/025_study_generation_source_flashcards.sql',
+    ).readAsString();
+    expect(phaseA, contains('insert into public.flashcards'));
     expect(quiz, contains('.from("quizzes")'));
     expect(quiz, contains('.from("quiz_questions")'));
     expect(quiz, contains('.delete()'));

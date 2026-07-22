@@ -78,7 +78,7 @@ void main() {
     expect(find.text('Cell respiration notes'), findsOneWidget);
     expect(find.text('Just now · Pasted text'), findsOneWidget);
 
-    await tester.tap(find.text('Cell respiration notes'));
+    await _tapVisible(tester, find.text('Cell respiration notes'));
     await tester.pumpAndSettle();
 
     expect(find.text('Pasted text'), findsOneWidget);
