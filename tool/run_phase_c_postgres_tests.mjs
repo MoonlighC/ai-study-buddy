@@ -113,7 +113,12 @@ await runSql(
 );
 
 await runSql(
-  path.join(root, "supabase", "migrations", "017_material_pdf_upload_limit.sql"),
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "017_material_pdf_upload_limit.sql",
+  ),
   "migration 017_",
 );
 await runSql(
@@ -188,11 +193,21 @@ await runSql(
 );
 
 await runSql(
-  path.join(root, "supabase", "migrations", "022_material_analysis_latex_diagnostic.sql"),
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "022_material_analysis_latex_diagnostic.sql",
+  ),
   "migration 022_",
 );
 await runSql(
-  path.join(root, "supabase", "migrations", "023_material_analysis_latex_diagnostic_cleanup.sql"),
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "023_material_analysis_latex_diagnostic_cleanup.sql",
+  ),
   "migration 023_",
 );
 
@@ -211,7 +226,12 @@ await runSql(
 );
 
 await runSql(
-  path.join(root, "supabase", "migrations", "025_study_generation_source_flashcards.sql"),
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "025_study_generation_source_flashcards.sql",
+  ),
   "migration 025_",
 );
 await runSql(
@@ -219,16 +239,31 @@ await runSql(
   "study_generation_flashcards.sql",
 );
 await runSql(
-  path.join(root, "supabase", "migrations", "026_persisted_study_sessions_quiz_and_favorites.sql"),
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "026_persisted_study_sessions_quiz_and_favorites.sql",
+  ),
   "migration 026_",
 );
 await runSql(
-  path.join(root, "supabase", "tests", "persisted_study_sessions_quiz_favorites.sql"),
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "persisted_study_sessions_quiz_favorites.sql",
+  ),
   "persisted_study_sessions_quiz_favorites.sql",
 );
 
 await runSql(
-  path.join(root, "supabase", "migrations", "027_authoritative_study_progress.sql"),
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "027_authoritative_study_progress.sql",
+  ),
   "migration 027_",
 );
 await runSql(
@@ -237,7 +272,12 @@ await runSql(
 );
 
 await runSql(
-  path.join(root, "supabase", "migrations", "028_cancel_empty_study_session.sql"),
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "028_cancel_empty_study_session.sql",
+  ),
   "migration 028_",
 );
 await runSql(
@@ -246,15 +286,44 @@ await runSql(
 );
 
 await runSql(
-  path.join(root, "supabase", "migrations", "029_material_analysis_page_content_contract.sql"),
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "029_material_analysis_page_content_contract.sql",
+  ),
   "migration 029_",
 );
 await runSql(
-  path.join(root, "supabase", "tests", "material_analysis_page_content_contract.sql"),
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "material_analysis_page_content_contract.sql",
+  ),
   "material_analysis_page_content_contract.sql",
 );
 
-console.log("PHASE_DE_DATABASE_TESTS_OK migrations=29 sql_suites=19");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "030_study_generation_response_reconciliation.sql",
+  ),
+  "migration 030_",
+);
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "study_generation_reconciliation_tester_usage.sql",
+  ),
+  "study_generation_reconciliation_tester_usage.sql",
+);
+
+console.log("PHASE_DE_DATABASE_TESTS_OK migrations=30 sql_suites=20");
 await database.close();
 
 async function runSql(file, label) {

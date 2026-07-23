@@ -40,10 +40,13 @@ import '../features/progress/weak_topic_repository.dart';
 import '../features/progress/study_progress_repository.dart';
 import '../core/models/knowledge_score.dart';
 import '../features/subjects/subject_repository.dart';
+import '../features/usage/usage_status_repository.dart';
 import '../mock/mock_ai_service.dart';
 import '../mock/mock_data.dart';
 
 enum AnalysisExplicitAction { preflight, confirmation, retry }
+
+enum StudyGenerationStatus { idle, generating, reconciling, completed, failed }
 
 class AppState extends ChangeNotifier {
   AppState({
@@ -66,6 +69,7 @@ class AppState extends ChangeNotifier {
     StudyActivityRepository? studyActivityRepository,
     WeakTopicRepository? weakTopicRepository,
     StudyProgressRepository? studyProgressRepository,
+    UsageStatusRepository? usageStatusRepository,
     SubjectDeletionRepository? subjectDeletionRepository,
     AppPreferencesStore? preferencesStore,
     Future<void> Function(Duration)? analysisDelay,
@@ -161,6 +165,12 @@ class AppState extends ChangeNotifier {
                : const MockWeakTopicRepository()),
        studyProgressRepository =
            studyProgressRepository ?? const EmptyStudyProgressRepository(),
+       usageStatusRepository =
+           usageStatusRepository ??
+           ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
+                   AppBackendMode.supabase
+               ? const EmptyUsageStatusRepository()
+               : const MockUsageStatusRepository()),
        subjectDeletionRepository =
            subjectDeletionRepository ??
            ((config ?? AppConfig.fromValues()).effectiveBackendMode ==
@@ -226,6 +236,7 @@ class AppState extends ChangeNotifier {
   final StudyActivityRepository studyActivityRepository;
   final WeakTopicRepository weakTopicRepository;
   final StudyProgressRepository studyProgressRepository;
+  final UsageStatusRepository usageStatusRepository;
   final SubjectDeletionRepository subjectDeletionRepository;
   final Future<void> Function(Duration) _analysisDelay;
   final DateTime Function() _analysisNow;
@@ -299,6 +310,7 @@ class AppState extends ChangeNotifier {
   String? _favoriteSyncErrorMessage;
   bool _isLoadingFlashcards = false;
   bool _isGeneratingFlashcards = false;
+  StudyGenerationStatus _flashcardGenerationStatus = StudyGenerationStatus.idle;
   bool _isSavingFlashcardReview = false;
   String? _flashcardSyncErrorMessage;
   String? _flashcardGenerationErrorMessage;
@@ -307,6 +319,7 @@ class AppState extends ChangeNotifier {
   String? _summaryGenerationErrorMessage;
   bool _isLoadingQuizzes = false;
   bool _isGeneratingQuiz = false;
+  StudyGenerationStatus _quizGenerationStatus = StudyGenerationStatus.idle;
   String? _quizSyncErrorMessage;
   String? _quizGenerationErrorMessage;
   bool _isLoadingQuizAttempts = false;
@@ -906,6 +919,8 @@ class AppState extends ChangeNotifier {
   bool get isLoadingFlashcards => _isLoadingFlashcards;
 
   bool get isGeneratingFlashcards => _isGeneratingFlashcards;
+  StudyGenerationStatus get flashcardGenerationStatus =>
+      _flashcardGenerationStatus;
 
   bool get isSavingFlashcardReview => _isSavingFlashcardReview;
 
@@ -925,6 +940,7 @@ class AppState extends ChangeNotifier {
   bool get isLoadingQuizzes => _isLoadingQuizzes;
 
   bool get isGeneratingQuiz => _isGeneratingQuiz;
+  StudyGenerationStatus get quizGenerationStatus => _quizGenerationStatus;
 
   String? get quizSyncErrorMessage => _quizSyncErrorMessage;
 
@@ -2084,9 +2100,11 @@ class AppState extends ChangeNotifier {
     _isGeneratingSummary = false;
     _isLoadingFlashcards = false;
     _isGeneratingFlashcards = false;
+    _flashcardGenerationStatus = StudyGenerationStatus.idle;
     _isSavingFlashcardReview = false;
     _isLoadingQuizzes = false;
     _isGeneratingQuiz = false;
+    _quizGenerationStatus = StudyGenerationStatus.idle;
     _isLoadingQuizAttempts = false;
     _isSavingQuizAttempt = false;
     _isLoadingCumulativeWeakTopics = false;
@@ -3037,6 +3055,7 @@ class AppState extends ChangeNotifier {
     }
 
     _isGeneratingFlashcards = true;
+    _flashcardGenerationStatus = StudyGenerationStatus.generating;
     _flashcardGenerationErrorMessage = null;
     notifyListeners();
     try {
@@ -3068,6 +3087,7 @@ class AppState extends ChangeNotifier {
             ),
       ];
       _flashcards = [..._flashcards, ...newCards];
+      _flashcardGenerationStatus = StudyGenerationStatus.completed;
       return FlashcardGenerationResult(
         requestedCount: generation.requestedCount,
         createdCount: newCards.length,
@@ -3075,6 +3095,14 @@ class AppState extends ChangeNotifier {
       );
     } catch (error) {
       _flashcardGenerationErrorMessage = _flashcardGenerateMessageFor(error);
+      _flashcardGenerationStatus =
+          error is FlashcardRepositoryException &&
+              error.operationStatus.name == 'reconciling'
+          ? StudyGenerationStatus.reconciling
+          : error is FlashcardRepositoryException &&
+                error.operationStatus.name == 'generating'
+          ? StudyGenerationStatus.generating
+          : StudyGenerationStatus.failed;
       return null;
     } finally {
       _isGeneratingFlashcards = false;
@@ -3087,6 +3115,9 @@ class AppState extends ChangeNotifier {
     String materialId, {
     int count = 5,
   }) async {
+    if (_isGeneratingQuiz) {
+      return false;
+    }
     final material = materialById(materialId);
     if (material == null) {
       _quizGenerationErrorMessage = 'Material unavailable.';
@@ -3120,6 +3151,7 @@ class AppState extends ChangeNotifier {
 
     final requestedCount = count.clamp(1, 20).toInt();
     _isGeneratingQuiz = true;
+    _quizGenerationStatus = StudyGenerationStatus.generating;
     _quizGenerationErrorMessage = null;
     notifyListeners();
     try {
@@ -3160,9 +3192,18 @@ class AppState extends ChangeNotifier {
               quiz.materialId != normalizedQuiz.materialId)
             quiz,
       ];
+      _quizGenerationStatus = StudyGenerationStatus.completed;
       return true;
     } catch (error) {
       _quizGenerationErrorMessage = _quizGenerateMessageFor(error);
+      _quizGenerationStatus =
+          error is QuizRepositoryException &&
+              error.operationStatus.name == 'reconciling'
+          ? StudyGenerationStatus.reconciling
+          : error is QuizRepositoryException &&
+                error.operationStatus.name == 'generating'
+          ? StudyGenerationStatus.generating
+          : StudyGenerationStatus.failed;
       return false;
     } finally {
       _isGeneratingQuiz = false;

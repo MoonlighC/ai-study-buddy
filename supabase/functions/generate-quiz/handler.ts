@@ -40,32 +40,24 @@ export type GenerateQuizDependencies = {
       requestHash: string;
       count: number;
     },
-  ): Promise<{ status: "reserved" | "succeeded" | "failed" }>;
-  claimProvider(userId: string, operationId: string): Promise<boolean>;
-  awaitOperation(
-    userId: string,
-    operationId: string,
-    materialId: string,
-  ): Promise<QuizResult>;
-  generate(
-    input: { text: string; count: number },
-  ): Promise<{ text: string; inputTokens: number; outputTokens: number }>;
-  complete(
-    input: {
-      userId: string;
-      operationId: string;
-      materialId: string;
-      draft: QuizDraft;
-      inputTokens: number;
-      outputTokens: number;
-    },
-  ): Promise<QuizResult>;
-  fail(
-    userId: string,
-    operationId: string,
-    code: string,
-    retainReservedCost: boolean,
-  ): Promise<void>;
+  ): Promise<{
+    status:
+      | "reserved"
+      | "provider_claimed"
+      | "reconciliation_required"
+      | "persisting"
+      | "succeeded"
+      | "failed"
+      | "failed_before_provider"
+      | "failed_after_provider";
+  }>;
+  executeOperation(input: {
+    userId: string;
+    operationId: string;
+    materialId: string;
+    sourceText: string;
+    count: number;
+  }): Promise<QuizResult>;
   log?: (stage: string, details?: Record<string, unknown>) => void;
 };
 
@@ -114,8 +106,6 @@ export function createGenerateQuizHandler(deps: GenerateQuizDependencies) {
       return json({ error: "Invalid request." }, 400);
     }
 
-    let ownsProvider = false;
-    let providerSubmitted = false;
     try {
       const material = await deps.loadOwnedMaterial(userId, materialId);
       if (!material) return json({ error: "Material unavailable." }, 404);
@@ -144,48 +134,55 @@ export function createGenerateQuizHandler(deps: GenerateQuizDependencies) {
         requestHash,
         count,
       });
-      if (reservation.status === "failed") {
+      if (
+        reservation.status === "failed" ||
+        reservation.status === "failed_before_provider" ||
+        reservation.status === "failed_after_provider"
+      ) {
         throw new SafeQuizGenerationError("generation_failed");
       }
-      ownsProvider = await deps.claimProvider(userId, operationId);
-      if (!ownsProvider) {
-        return json(await deps.awaitOperation(userId, operationId, materialId));
-      }
-
-      log("openai_request_started", { count });
-      providerSubmitted = true;
-      const generated = await deps.generate({
-        text: source.text.slice(0, maxInputChars),
-        count,
-      });
-      const draft = parseQuiz(generated.text, count);
-      const result = await deps.complete({
+      const result = await deps.executeOperation({
         userId,
         operationId,
         materialId,
-        draft,
-        inputTokens: generated.inputTokens,
-        outputTokens: generated.outputTokens,
+        sourceText: source.text.slice(0, maxInputChars),
+        count,
       });
       log("completed", { created_count: result.questions.length });
       return json(result);
     } catch (error) {
       const code = error instanceof SafeQuizGenerationError
         ? error.code
+        : isRecord(error) && typeof error.safeCode === "string"
+        ? error.safeCode
         : "generation_failed";
-      if (ownsProvider) {
-        try {
-          await deps.fail(userId, operationId, code, providerSubmitted);
-        } catch (_) { /* keep original failure */ }
-      }
       return json(
-        { error: "Could not generate quiz.", code },
+        {
+          error: "Could not generate quiz.",
+          code,
+          ...safeClientStatus(error),
+        },
         error instanceof SafeQuizGenerationError && error.status
           ? error.status
+          : isRecord(error) &&
+              (error.clientStatus === "generating" ||
+                error.clientStatus === "reconciling")
+          ? 409
           : 500,
       );
     }
   };
+}
+
+function safeClientStatus(error: unknown) {
+  if (
+    isRecord(error) &&
+    (error.clientStatus === "generating" ||
+      error.clientStatus === "reconciling")
+  ) {
+    return { operation_status: error.clientStatus };
+  }
+  return {};
 }
 
 export class SafeQuizGenerationError extends Error {
@@ -201,6 +198,7 @@ export function buildOpenAiRequestBody(
 ) {
   return {
     model,
+    background: true,
     instructions:
       `Create exactly ${count} multiple-choice study questions using only the supplied material.`,
     input,

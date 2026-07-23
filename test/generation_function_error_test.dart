@@ -7,6 +7,15 @@ void main() {
     expect(classify(401).code, GenerationFailureCode.authenticationRequired);
     expect(classify(404).code, GenerationFailureCode.materialUnavailable);
     expect(classify(429).code, GenerationFailureCode.aiRateOrQuota);
+    final reconciling = classify(409, {
+      'code': 'generation_in_progress',
+      'operation_status': 'reconciling',
+    });
+    expect(reconciling.code, GenerationFailureCode.operationActive);
+    expect(
+      reconciling.operationStatus,
+      GenerationOperationClientStatus.reconciling,
+    );
     expect(
       classify(500, {'code': 'openai_auth_failed'}).code,
       GenerationFailureCode.openAiAuthFailed,

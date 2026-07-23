@@ -179,6 +179,7 @@ class AppTopBar extends StatelessWidget {
     this.subtitle,
     this.showBack = false,
     this.showSearch = true,
+    this.showUsage = false,
     super.key,
   });
 
@@ -186,6 +187,7 @@ class AppTopBar extends StatelessWidget {
   final String? subtitle;
   final bool showBack;
   final bool showSearch;
+  final bool showUsage;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -220,6 +222,13 @@ class AppTopBar extends StatelessWidget {
               ],
             ),
           ),
+          if (showUsage)
+            IconButton(
+              key: const ValueKey('top-usage-action'),
+              tooltip: context.l10n.settingsUsageTitle,
+              onPressed: () => Navigator.pushNamed(context, AppRoutes.usage),
+              icon: const Icon(Icons.speed_outlined),
+            ),
           if (showSearch)
             IconButton(
               key: const ValueKey('top-search-action'),
@@ -273,6 +282,7 @@ class ResponsiveAppScaffold extends StatelessWidget {
         title: title,
         subtitle: subtitle,
         showBack: showBack,
+        showUsage: activeRoute == AppRoutes.dashboard,
       );
       final mediaPadding = MediaQuery.paddingOf(context);
       final railWorkspaceInset = !showNavigation

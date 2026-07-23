@@ -4,7 +4,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import {
   buildOpenAiRequestBody,
   createGenerateFlashcardsHandler,
+  duplicateKey,
+  duplicateKeyForRow,
   extractResponseText,
+  parseFlashcardCandidates,
   SafeGenerationError,
 } from "./handler.ts";
 import { canonicalStudySource } from "../_shared/study_generation_source.ts";
@@ -16,6 +19,12 @@ import {
   safeDatabaseFailure,
   safeProviderToken,
 } from "../_shared/generation_runtime.ts";
+import {
+  executeStudyGeneration,
+  providerResponseFromEnvelope,
+  StudyGenerationProviderResponse,
+  StudyGenerationReconciliationClaim,
+} from "../_shared/study_generation_reconciliation.ts";
 
 const defaultModel = "gpt-4.1-mini";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -44,15 +53,13 @@ serve(createGenerateFlashcardsHandler({
     return error || !data.user ? null : data.user.id;
   },
   async loadOwnedMaterial(userId, materialId, _jwt) {
-    if (!trustedClient) {
-      throw new SafeGenerationError("configuration_unavailable");
-    }
-    const { data, error } = await trustedClient.rpc(
+    requireTrusted();
+    const { data, error } = await trustedClient!.rpc(
       "load_study_generation_source_internal",
       { p_user_id: userId, p_material_id: materialId },
     ).maybeSingle();
     if (error || data !== null && !isRecord(data)) {
-      throw new Error("material_load_failed");
+      throw new SafeGenerationError("database_write_failed");
     }
     return data as Record<string, unknown> | null;
   },
@@ -64,61 +71,14 @@ serve(createGenerateFlashcardsHandler({
       .eq("material_id", materialId)
       .is("deleted_at", null)
       .order("created_at", { ascending: true });
-    if (error || !Array.isArray(data)) throw new Error("flashcard_load_failed");
+    if (error || !Array.isArray(data)) {
+      throw new SafeGenerationError("database_write_failed");
+    }
     return data;
   },
-  async generateCandidates(input) {
-    if (!openAiApiKey) {
-      throw new SafeGenerationError("configuration_unavailable");
-    }
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(
-        buildOpenAiRequestBody(model, input.text, input.count),
-      ),
-    });
-    let data: unknown;
-    try {
-      data = await response.json();
-    } catch (_) {
-      data = null;
-    }
-    const providerError = isRecord(data) && isRecord(data.error)
-      ? data.error
-      : null;
-    generationLog("generate-flashcards", "openai_response_received", {
-      status: response.status,
-      code: safeProviderToken(providerError?.code) ??
-        providerSafeCode(response.status),
-      reason: safeProviderToken(providerError?.type),
-    });
-    if (!response.ok) {
-      throw new SafeGenerationError(
-        providerSafeCode(response.status),
-        response.status,
-      );
-    }
-    const text = extractResponseText(data);
-    if (!text) throw new SafeGenerationError("response_parse_failed");
-    const usage = responseUsage(data);
-    if (usage.inputTokens === 0 || usage.outputTokens === 0) {
-      throw new SafeGenerationError("response_parse_failed");
-    }
-    return { text, ...usage };
-  },
   async reserveOperation(input) {
-    ensureDefaultPricedModel();
-    if (!openAiApiKey) {
-      throw new SafeGenerationError("configuration_unavailable");
-    }
-    if (!trustedClient) {
-      throw new SafeGenerationError("configuration_unavailable");
-    }
-    const { data, error } = await trustedClient.rpc(
+    ensureConfigured();
+    const { data, error } = await trustedClient!.rpc(
       "reserve_study_generation_internal",
       {
         p_user_id: input.userId,
@@ -133,96 +93,139 @@ serve(createGenerateFlashcardsHandler({
     ).single();
     if (error || !isRecord(data)) throw reservationError(error);
     const status = data.operation_status;
-    if (
-      status !== "reserved" && status !== "succeeded" && status !== "failed"
-    ) {
+    if (!isOperationStatus(status)) {
       throw new SafeGenerationError("database_write_failed");
     }
     return { status };
   },
-  async claimProvider(userId, operationId) {
-    if (!trustedClient) {
-      throw new SafeGenerationError("configuration_unavailable");
-    }
-    const { data, error } = await trustedClient.rpc(
-      "claim_study_generation_provider_internal",
-      { p_user_id: userId, p_operation_id: operationId },
-    );
-    if (error || typeof data !== "boolean") {
-      throw new SafeGenerationError("database_write_failed");
-    }
-    return data;
-  },
-  async awaitOperation(userId, operationId) {
-    if (!trustedClient) {
-      throw new SafeGenerationError("configuration_unavailable");
-    }
-    for (let attempt = 0; attempt < 150; attempt++) {
-      const { data, error } = await trustedClient.rpc(
-        "get_study_generation_operation_internal",
-        { p_user_id: userId, p_operation_id: operationId },
-      ).maybeSingle();
-      if (error || !isRecord(data)) {
-        throw new SafeGenerationError("database_write_failed");
-      }
-      if (data.operation_status === "failed") {
-        throw new SafeGenerationError("generation_failed");
-      }
-      if (data.operation_status === "succeeded") {
-        const ids = Array.isArray(data.result_ids) ? data.result_ids : [];
-        if (ids.length === 0) return [];
-        const result = await trustedClient.from("flashcards")
-          .select("id,subject_id,material_id,front,back,topic,difficulty")
-          .eq("user_id", userId).in("id", ids).is("deleted_at", null)
-          .order("created_at", { ascending: true });
-        if (result.error || !Array.isArray(result.data)) {
+  async executeOperation(input) {
+    ensureConfigured();
+    return await executeStudyGeneration({
+      claimProvider: async () => {
+        const { data, error } = await trustedClient!.rpc(
+          "claim_study_generation_provider_internal",
+          {
+            p_user_id: input.userId,
+            p_operation_id: input.operationId,
+          },
+        );
+        if (error || typeof data !== "boolean") {
           throw new SafeGenerationError("database_write_failed");
         }
-        return result.data;
-      }
-      await delay(200);
-    }
-    throw new SafeGenerationError("generation_in_progress", 409);
-  },
-  async completeOperation(input) {
-    if (!trustedClient) {
-      throw new SafeGenerationError("configuration_unavailable");
-    }
-    const actualCost = generationCost(input.inputTokens, input.outputTokens);
-    const { data, error } = await trustedClient.rpc(
-      "complete_flashcard_generation_internal",
-      {
-        p_user_id: input.userId,
-        p_operation_id: input.operationId,
-        p_material_id: input.materialId,
-        p_cards: input.cards,
-        p_model: model,
-        p_input_tokens: input.inputTokens,
-        p_output_tokens: input.outputTokens,
-        p_actual_cost_usd: actualCost,
+        return data;
       },
-    );
-    if (error || !Array.isArray(data)) {
-      generationLog("generate-flashcards", "known_failure", {
-        reason: "database_write_failed",
-        ...safeDatabaseFailure(error),
-      });
-      throw new SafeGenerationError("database_write_failed");
-    }
-    return data;
-  },
-  async failOperation(userId, operationId, code, retainReservedCost) {
-    if (!trustedClient) return;
-    const { error } = await trustedClient.rpc(
-      "fail_study_generation_internal",
-      {
-        p_user_id: userId,
-        p_operation_id: operationId,
-        p_safe_failure_code: code,
-        p_retain_reserved_cost: retainReservedCost,
+      submitProvider: async () => {
+        generationLog("generate-flashcards", "openai_request_started", {
+          model,
+          requested_count: input.count,
+        });
+        return await providerRequest(
+          "POST",
+          "https://api.openai.com/v1/responses",
+          buildOpenAiRequestBody(model, input.sourceText, input.count),
+        );
       },
-    );
-    if (error) throw new Error("generation_failure_finalize_failed");
+      recordProviderResponse: async (response) => {
+        const { error } = await trustedClient!.rpc(
+          "record_study_generation_response_internal",
+          {
+            p_user_id: input.userId,
+            p_operation_id: input.operationId,
+            p_provider_response_identity: response.identity,
+            p_provider_status: response.status,
+          },
+        );
+        if (error) throw new SafeGenerationError("database_write_failed");
+      },
+      claimReconciliation: async (token) =>
+        await claimReconciliation(input.userId, input.operationId, token),
+      retrieveProvider: async (identity) =>
+        await providerRequest(
+          "GET",
+          `https://api.openai.com/v1/responses/${encodeURIComponent(identity)}`,
+        ),
+      updateProviderStatus: async (token, status) => {
+        const { error } = await trustedClient!.rpc(
+          "update_study_generation_provider_status_internal",
+          {
+            p_user_id: input.userId,
+            p_operation_id: input.operationId,
+            p_reconciliation_token: token,
+            p_provider_status: status,
+          },
+        );
+        if (error) throw new SafeGenerationError("database_write_failed");
+      },
+      persist: async (response, token) => {
+        const generated = completedOutput(response);
+        const parsed = parseFlashcardCandidates(generated.text, input.count);
+        const existingKeys = new Set(
+          input.existingCards.map(duplicateKeyForRow),
+        );
+        const newKeys = new Set<string>();
+        const cards = parsed.filter((card) => {
+          const key = duplicateKey(card.front, card.back);
+          if (existingKeys.has(key) || newKeys.has(key)) return false;
+          newKeys.add(key);
+          return true;
+        });
+        const actualCost = generationCost(
+          generated.inputTokens,
+          generated.outputTokens,
+        );
+        const { data, error } = await trustedClient!.rpc(
+          "complete_flashcard_generation_internal",
+          {
+            p_user_id: input.userId,
+            p_operation_id: input.operationId,
+            p_material_id: input.materialId,
+            p_cards: cards,
+            p_model: model,
+            p_input_tokens: generated.inputTokens,
+            p_output_tokens: generated.outputTokens,
+            p_actual_cost_usd: actualCost,
+            p_reconciliation_token: token,
+          },
+        );
+        if (error || !Array.isArray(data) || data.length !== cards.length) {
+          generationLog("generate-flashcards", "known_failure", {
+            reason: "database_write_failed",
+            ...safeDatabaseFailure(error),
+          });
+          throw new SafeGenerationError("database_write_failed");
+        }
+        return data;
+      },
+      replay: async (ids) => {
+        if (ids.length === 0) return [];
+        const { data, error } = await trustedClient!.from("flashcards")
+          .select("id,subject_id,material_id,front,back,topic,difficulty")
+          .eq("user_id", input.userId)
+          .in("id", ids)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: true });
+        if (error || !Array.isArray(data) || data.length !== ids.length) {
+          throw new SafeGenerationError("database_write_failed");
+        }
+        return data;
+      },
+      fail: async (code, phase, token) => {
+        const { error } = await trustedClient!.rpc(
+          "fail_study_generation_reconciliation_internal",
+          {
+            p_user_id: input.userId,
+            p_operation_id: input.operationId,
+            p_safe_failure_code: code,
+            p_failure_phase: phase,
+            p_reconciliation_token: token ?? null,
+          },
+        );
+        if (error) throw new SafeGenerationError("database_write_failed");
+      },
+      createToken: () => crypto.randomUUID(),
+      wait: (milliseconds) =>
+        new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    });
   },
   canonicalSource: canonicalStudySource,
   model,
@@ -233,18 +236,112 @@ serve(createGenerateFlashcardsHandler({
     }),
 }));
 
+async function claimReconciliation(
+  userId: string,
+  operationId: string,
+  token: string,
+): Promise<StudyGenerationReconciliationClaim> {
+  const { data, error } = await trustedClient!.rpc(
+    "claim_study_generation_reconciliation_internal",
+    {
+      p_user_id: userId,
+      p_operation_id: operationId,
+      p_reconciliation_token: token,
+    },
+  ).single();
+  if (error || !isRecord(data)) {
+    throw new SafeGenerationError("database_write_failed");
+  }
+  const status = data.operation_status;
+  if (status === "succeeded") {
+    return { kind: "completed", resultIds: stringArray(data.result_ids) };
+  }
+  if (
+    status === "failed" || status === "failed_before_provider" ||
+    status === "failed_after_provider"
+  ) {
+    return {
+      kind: "failed",
+      safeCode: safeString(data.safe_failure_code) || "generation_failed",
+    };
+  }
+  if (data.claimed === true) {
+    const identity = safeString(data.provider_response_identity);
+    if (!identity) throw new SafeGenerationError("database_write_failed");
+    return { kind: "claimed", token, responseIdentity: identity };
+  }
+  return {
+    kind: "active",
+    status: status === "provider_claimed" || status === "reserved"
+      ? "generating"
+      : "reconciling",
+  };
+}
+
+async function providerRequest(
+  method: "POST" | "GET",
+  url: string,
+  body?: Record<string, unknown>,
+): Promise<StudyGenerationProviderResponse> {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${openAiApiKey}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (_) {
+    data = null;
+  }
+  const providerError = isRecord(data) && isRecord(data.error)
+    ? data.error
+    : null;
+  generationLog("generate-flashcards", "openai_response_received", {
+    status: response.status,
+    code: safeProviderToken(providerError?.code) ??
+      providerSafeCode(response.status),
+    reason: safeProviderToken(providerError?.type),
+  });
+  if (!response.ok) {
+    throw new SafeGenerationError(
+      providerSafeCode(response.status),
+      response.status,
+    );
+  }
+  return providerResponseFromEnvelope(data);
+}
+
+function completedOutput(response: StudyGenerationProviderResponse) {
+  if (response.status !== "completed") {
+    throw new SafeGenerationError("provider_terminal_failed");
+  }
+  const text = extractResponseText(response.envelope);
+  const usage = responseUsage(response.envelope);
+  if (!text || usage.inputTokens === 0 || usage.outputTokens === 0) {
+    throw new SafeGenerationError("response_parse_failed");
+  }
+  return { text, ...usage };
+}
+
 function clientFor(jwt: string) {
   return createClient(supabaseUrl, publicKey, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function requireTrusted() {
+  if (!trustedClient) {
+    throw new SafeGenerationError("configuration_unavailable");
+  }
 }
 
-function ensureDefaultPricedModel() {
-  if (model !== defaultModel) {
+function ensureConfigured() {
+  requireTrusted();
+  if (!openAiApiKey || model !== defaultModel) {
     throw new SafeGenerationError("configuration_unavailable");
   }
 }
@@ -280,9 +377,39 @@ function reservationError(error: unknown) {
   if (message.includes("limit_exceeded")) {
     return new SafeGenerationError("daily_limit_exceeded", 429);
   }
+  if (message.includes("generation_operation_conflict")) {
+    return new SafeGenerationError("generation_operation_conflict", 409);
+  }
   return new SafeGenerationError("database_write_failed");
 }
 
-function delay(milliseconds: number) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function isOperationStatus(value: unknown): value is
+  | "reserved"
+  | "provider_claimed"
+  | "reconciliation_required"
+  | "persisting"
+  | "succeeded"
+  | "failed"
+  | "failed_before_provider"
+  | "failed_after_provider" {
+  return value === "reserved" || value === "provider_claimed" ||
+    value === "reconciliation_required" || value === "persisting" ||
+    value === "succeeded" || value === "failed" ||
+    value === "failed_before_provider" || value === "failed_after_provider";
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function safeString(value: unknown) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,255}$/.test(value)
+    ? value
+    : "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -27,6 +27,7 @@ import '../features/study_sessions/study_activity_repository.dart';
 import '../features/progress/weak_topic_repository.dart';
 import '../features/progress/study_progress_repository.dart';
 import '../features/subjects/subject_repository.dart';
+import '../features/usage/usage_status_repository.dart';
 
 class StudyBuddyApp extends StatefulWidget {
   const StudyBuddyApp({
@@ -53,6 +54,7 @@ class StudyBuddyApp extends StatefulWidget {
     this.studyActivityRepository,
     this.weakTopicRepository,
     this.studyProgressRepository,
+    this.usageStatusRepository,
     this.preferencesStore,
     super.key,
   });
@@ -80,6 +82,7 @@ class StudyBuddyApp extends StatefulWidget {
   final StudyActivityRepository? studyActivityRepository;
   final WeakTopicRepository? weakTopicRepository;
   final StudyProgressRepository? studyProgressRepository;
+  final UsageStatusRepository? usageStatusRepository;
   final AppPreferencesStore? preferencesStore;
 
   @override
@@ -110,6 +113,7 @@ class _StudyBuddyAppState extends State<StudyBuddyApp>
     studyActivityRepository: widget.studyActivityRepository,
     weakTopicRepository: widget.weakTopicRepository,
     studyProgressRepository: widget.studyProgressRepository,
+    usageStatusRepository: widget.usageStatusRepository,
     preferencesStore: widget.preferencesStore,
   );
   late final AuthController authController = AuthController(

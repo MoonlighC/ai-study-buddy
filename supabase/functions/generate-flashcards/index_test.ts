@@ -1,8 +1,11 @@
 import {
   buildOpenAiRequestBody,
   createGenerateFlashcardsHandler,
+  duplicateKey,
+  duplicateKeyForRow,
   FlashcardInsert,
   GenerateFlashcardsDependencies,
+  parseFlashcardCandidates,
   SafeGenerationError,
 } from "./handler.ts";
 
@@ -268,35 +271,38 @@ function createFixture(options: {
       if (options.throwOnExistingLoad) throw new Error("load failed");
       return existing;
     },
-    async generateCandidates(input) {
-      calls.push("openai");
-      generationCalls += 1;
-      counts.push(input.count);
-      if (options.throwOnGenerate) {
-        throw new SafeGenerationError("provider_failed");
-      }
-      return {
-        text: options.generated ?? cardsJson([card("Default")]),
-        inputTokens: 100,
-        outputTokens: 50,
-      };
-    },
     async reserveOperation() {
       calls.push("reserve");
       return { status: "reserved" };
     },
-    async claimProvider() {
+    async executeOperation(input) {
       calls.push("claim");
-      return options.claimProvider ?? true;
-    },
-    async awaitOperation() {
-      calls.push("await");
-      return options.joined ?? [];
-    },
-    async completeOperation(input) {
+      if (options.claimProvider === false) {
+        calls.push("await");
+        return options.joined ?? [];
+      }
+      calls.push("openai");
+      generationCalls += 1;
+      counts.push(input.count);
+      if (options.throwOnGenerate) {
+        failures.push(["provider_failed", true]);
+        throw new SafeGenerationError("provider_failed");
+      }
+      const parsed = parseFlashcardCandidates(
+        options.generated ?? cardsJson([card("Default")]),
+        input.count,
+      );
+      const existingKeys = new Set(existing.map(duplicateKeyForRow));
+      const newKeys = new Set<string>();
+      const cards = parsed.filter((row) => {
+        const key = duplicateKey(row.front, row.back);
+        if (existingKeys.has(key) || newKeys.has(key)) return false;
+        newKeys.add(key);
+        return true;
+      });
       calls.push("complete");
       insertCalls += 1;
-      const rows = input.cards.map((row) => ({
+      const rows = cards.map((row) => ({
         ...row,
         user_id: input.userId,
         subject_id: "subject-1",
@@ -305,9 +311,6 @@ function createFixture(options: {
       }));
       inserted.push(...rows);
       return rows.map((row, index) => ({ id: `new-${index}`, ...row }));
-    },
-    async failOperation(_userId, _operationId, code, retainCost) {
-      failures.push([code, retainCost]);
     },
     canonicalSource(material) {
       return {

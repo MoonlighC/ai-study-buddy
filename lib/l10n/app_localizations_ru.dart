@@ -185,13 +185,14 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get settingsUsageUnavailable =>
-      'Отслеживание использования не подключено';
+      'Дневное использование и политика генерации';
 
   @override
   String get settingsViewUsage => 'Посмотреть сведения об использовании';
 
   @override
-  String get settingsUsagePlanned => 'Лимиты и их применение запланированы.';
+  String get settingsUsagePlanned =>
+      'Фактическое использование сегодня и время сброса.';
 
   @override
   String get settingsSupportTitle => 'Поддержка';
@@ -728,12 +729,70 @@ class AppLocalizationsRu extends AppLocalizations {
   String get usageTitle => 'Использование';
 
   @override
-  String get usageUnavailableTitle =>
-      'Отслеживание использования пока не подключено';
+  String get usageUnavailableTitle => 'Не удалось загрузить использование';
 
   @override
   String get usageUnavailableMessage =>
-      'Этот прототип не показывает токены, квоты или данные об оплате.';
+      'Статус использования временно недоступен. Повторите попытку.';
+
+  @override
+  String get usageRetry => 'Повторить';
+
+  @override
+  String get usageTesterTitle => 'Режим тестировщика: без дневных ограничений';
+
+  @override
+  String get usageTesterMessage =>
+      'Использование за сегодня по-прежнему учитывается. Лимиты на один запрос и защита от дублей и повторов остаются.';
+
+  @override
+  String get usageStandardTitle => 'Стандартные дневные лимиты';
+
+  @override
+  String get usageFlashcards => 'Карточки';
+
+  @override
+  String get usageQuizQuestions => 'Вопросы викторины';
+
+  @override
+  String get usageEstimatedCost => 'Оценочная стоимость провайдера';
+
+  @override
+  String usageCountOfLimit(int used, int limit) {
+    return '$used / $limit';
+  }
+
+  @override
+  String usageCountToday(int used) {
+    return '$used сегодня';
+  }
+
+  @override
+  String usageCostOfLimit(String used, String limit) {
+    return '$used / $limit USD';
+  }
+
+  @override
+  String usageCostToday(String used) {
+    return '$used USD сегодня';
+  }
+
+  @override
+  String usageActiveReservations(int count) {
+    return 'Активные генерации: $count';
+  }
+
+  @override
+  String usageResetAt(String dateTime) {
+    return 'Сброс: $dateTime';
+  }
+
+  @override
+  String get generationReconcilingMessage =>
+      'Предыдущая генерация восстанавливается. Продолжите её без нового запроса к провайдеру.';
+
+  @override
+  String get generationResume => 'Продолжить генерацию';
 
   @override
   String get materialDetailTitle => 'Материал';

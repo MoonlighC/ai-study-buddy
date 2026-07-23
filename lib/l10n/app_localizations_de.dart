@@ -185,13 +185,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsUsageUnavailable =>
-      'Nutzungsverfolgung ist nicht verbunden';
+      'Tägliche Nutzung und Generierungsrichtlinie';
 
   @override
   String get settingsViewUsage => 'Nutzungsinformationen anzeigen';
 
   @override
-  String get settingsUsagePlanned => 'Limits und Durchsetzung sind geplant.';
+  String get settingsUsagePlanned =>
+      'Heutige autoritative Nutzung und Rücksetzzeit anzeigen.';
 
   @override
   String get settingsSupportTitle => 'Support';
@@ -719,12 +720,71 @@ class AppLocalizationsDe extends AppLocalizations {
   String get usageTitle => 'Nutzung';
 
   @override
-  String get usageUnavailableTitle =>
-      'Nutzungsverfolgung ist noch nicht verbunden';
+  String get usageUnavailableTitle => 'Nutzung konnte nicht geladen werden';
 
   @override
   String get usageUnavailableMessage =>
-      'Dieser Prototyp zeigt keine Tokenzahlen, Kontingente oder Abrechnungsdaten.';
+      'Dein Nutzungsstatus ist vorübergehend nicht verfügbar. Versuche es erneut.';
+
+  @override
+  String get usageRetry => 'Erneut versuchen';
+
+  @override
+  String get usageTesterTitle =>
+      'Testermodus: unbegrenzte tägliche Generierung';
+
+  @override
+  String get usageTesterMessage =>
+      'Die heutige Nutzung wird weiterhin erfasst. Limits pro Anfrage sowie Duplikat- und Wiederholungsschutz bleiben aktiv.';
+
+  @override
+  String get usageStandardTitle => 'Standard-Tageslimits';
+
+  @override
+  String get usageFlashcards => 'Lernkarten';
+
+  @override
+  String get usageQuizQuestions => 'Quizfragen';
+
+  @override
+  String get usageEstimatedCost => 'Geschätzte Anbieterkosten';
+
+  @override
+  String usageCountOfLimit(int used, int limit) {
+    return '$used / $limit';
+  }
+
+  @override
+  String usageCountToday(int used) {
+    return '$used heute';
+  }
+
+  @override
+  String usageCostOfLimit(String used, String limit) {
+    return '$used / $limit USD';
+  }
+
+  @override
+  String usageCostToday(String used) {
+    return '$used USD heute';
+  }
+
+  @override
+  String usageActiveReservations(int count) {
+    return 'Aktive Generierungen: $count';
+  }
+
+  @override
+  String usageResetAt(String dateTime) {
+    return 'Zurücksetzung: $dateTime';
+  }
+
+  @override
+  String get generationReconcilingMessage =>
+      'Eine frühere Generierung wird abgeglichen. Setze sie fort, ohne eine neue Anbieteranfrage zu starten.';
+
+  @override
+  String get generationResume => 'Generierung fortsetzen';
 
   @override
   String get materialDetailTitle => 'Material';

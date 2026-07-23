@@ -25,7 +25,15 @@ export type GeneratedCandidates = {
 };
 
 export type GenerationReservation = {
-  status: "reserved" | "succeeded" | "failed";
+  status:
+    | "reserved"
+    | "provider_claimed"
+    | "reconciliation_required"
+    | "persisting"
+    | "succeeded"
+    | "failed"
+    | "failed_before_provider"
+    | "failed_after_provider";
 };
 
 type MaterialRow = Record<string, unknown>;
@@ -43,9 +51,6 @@ export type GenerateFlashcardsDependencies = {
     materialId: string,
     jwt: string,
   ): Promise<FlashcardRow[]>;
-  generateCandidates(
-    input: { text: string; count: number },
-  ): Promise<GeneratedCandidates>;
   reserveOperation(input: {
     userId: string;
     operationId: string;
@@ -53,22 +58,14 @@ export type GenerateFlashcardsDependencies = {
     requestHash: string;
     count: number;
   }): Promise<GenerationReservation>;
-  claimProvider(userId: string, operationId: string): Promise<boolean>;
-  awaitOperation(userId: string, operationId: string): Promise<FlashcardRow[]>;
-  completeOperation(input: {
+  executeOperation(input: {
     userId: string;
     operationId: string;
     materialId: string;
-    cards: FlashcardDraft[];
-    inputTokens: number;
-    outputTokens: number;
+    sourceText: string;
+    count: number;
+    existingCards: FlashcardRow[];
   }): Promise<FlashcardRow[]>;
-  failOperation(
-    userId: string,
-    operationId: string,
-    code: string,
-    retainReservedCost: boolean,
-  ): Promise<void>;
   canonicalSource(material: MaterialRow): { kind: string; text: string };
   model: string;
   log?: (stage: string, details?: Record<string, unknown>) => void;
@@ -129,8 +126,6 @@ export function createGenerateFlashcardsHandler(
       return json({ error: "Invalid request." }, 400);
     }
 
-    let ownsProvider = false;
-    let providerSubmitted = false;
     try {
       const material = await deps.loadOwnedMaterial(userId, materialId, jwt);
       if (!material) {
@@ -159,7 +154,6 @@ export function createGenerateFlashcardsHandler(
         materialId,
         jwt,
       );
-      const existingKeys = new Set(existingCards.map(duplicateKeyForRow));
       const requestHash = await sha256(
         `generate_flashcards\n${materialId}\n${requestedNewCount}`,
       );
@@ -170,52 +164,21 @@ export function createGenerateFlashcardsHandler(
         requestHash,
         count: requestedNewCount,
       });
-      if (reservation.status === "failed") {
+      if (
+        reservation.status === "failed" ||
+        reservation.status === "failed_before_provider" ||
+        reservation.status === "failed_after_provider"
+      ) {
         throw new SafeGenerationError("generation_failed");
       }
-      ownsProvider = await deps.claimProvider(userId, operationId);
-      if (!ownsProvider) {
-        const joined = await deps.awaitOperation(userId, operationId);
-        return success(materialId, requestedNewCount, joined);
-      }
-      log("openai_request_started", {
-        model: deps.model,
-        requested_count: requestedNewCount,
-      });
-      providerSubmitted = true;
-      const generated = await deps.generateCandidates({
-        text: source.text.slice(0, maxInputChars),
-        count: requestedNewCount,
-      });
-      log("openai_response_received");
-      const parsed = parseFlashcardCandidates(
-        generated.text,
-        requestedNewCount,
-      );
-      log("parsed", { requested_count: requestedNewCount });
-      const uniqueKeys = new Set<string>();
-      const uniqueDrafts = parsed.filter((card) => {
-        const key = duplicateKey(card.front, card.back);
-        if (existingKeys.has(key) || uniqueKeys.has(key)) return false;
-        uniqueKeys.add(key);
-        return true;
-      });
-
-      log("database_write_started", {
-        requested_count: requestedNewCount,
-        created_count: uniqueDrafts.length,
-      });
-      const insertedCards = await deps.completeOperation({
+      const insertedCards = await deps.executeOperation({
         userId,
         operationId,
         materialId,
-        cards: uniqueDrafts,
-        inputTokens: generated.inputTokens,
-        outputTokens: generated.outputTokens,
+        sourceText: source.text.slice(0, maxInputChars),
+        count: requestedNewCount,
+        existingCards,
       });
-      if (insertedCards.length !== uniqueDrafts.length) {
-        throw new Error("flashcard_insert_count_mismatch");
-      }
       log("completed", {
         requested_count: requestedNewCount,
         created_count: insertedCards.length,
@@ -224,31 +187,48 @@ export function createGenerateFlashcardsHandler(
     } catch (error) {
       const code = error instanceof SafeGenerationError
         ? error.code
+        : isRecord(error) && typeof error.safeCode === "string"
+        ? error.safeCode
         : "generation_failed";
       log("known_failure", {
         code,
         status: error instanceof SafeGenerationError ? error.status : undefined,
       });
-      if (ownsProvider) {
-        try {
-          await deps.failOperation(
-            userId,
-            operationId,
-            code,
-            providerSubmitted,
-          );
-        } catch (_) {
-          log("operation_failure_finalize_failed", { code });
-        }
-      }
       return json(
-        { error: "Could not generate flashcards.", code },
-        error instanceof SafeGenerationError && error.status
-          ? error.status
-          : 500,
+        {
+          error: "Could not generate flashcards.",
+          code,
+          ...safeClientStatus(error),
+        },
+        safeStatus(error),
       );
     }
   };
+}
+
+function safeClientStatus(error: unknown) {
+  if (
+    isRecord(error) &&
+    (error.clientStatus === "generating" ||
+      error.clientStatus === "reconciling")
+  ) {
+    return { operation_status: error.clientStatus };
+  }
+  return {};
+}
+
+function safeStatus(error: unknown) {
+  if (error instanceof SafeGenerationError && error.status) {
+    return error.status;
+  }
+  if (
+    isRecord(error) &&
+    (error.clientStatus === "generating" ||
+      error.clientStatus === "reconciling")
+  ) {
+    return 409;
+  }
+  return 500;
 }
 
 function success(materialId: string, count: number, cards: FlashcardRow[]) {
@@ -281,6 +261,7 @@ export function buildOpenAiRequestBody(
 ) {
   return {
     model,
+    background: true,
     instructions:
       `Create exactly ${requestedNewCount} candidate new study flashcards from only the provided material. Each card must test a distinct useful fact or concept. Return no outside facts, markdown, explanations, or quiz questions.`,
     input: inputText,
@@ -384,11 +365,11 @@ function collectResponseText(value: unknown, parts: string[]) {
   collectResponseText(value.content, parts);
 }
 
-function duplicateKeyForRow(row: FlashcardRow) {
+export function duplicateKeyForRow(row: FlashcardRow) {
   return duplicateKey(stringValue(row.front), stringValue(row.back));
 }
 
-function duplicateKey(front: string, back: string) {
+export function duplicateKey(front: string, back: string) {
   return `${normalizeForDuplicate(front)}\u0000${normalizeForDuplicate(back)}`;
 }
 

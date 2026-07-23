@@ -11,13 +11,21 @@ enum GenerationFailureCode {
   openAiUnavailable,
   responseParseFailed,
   databaseWriteFailed,
+  operationActive,
   generic,
 }
 
+enum GenerationOperationClientStatus { generating, reconciling, failed }
+
 class GenerationFunctionFailure {
-  const GenerationFunctionFailure(this.code, this.message);
+  const GenerationFunctionFailure(
+    this.code,
+    this.message, {
+    this.operationStatus = GenerationOperationClientStatus.failed,
+  });
   final GenerationFailureCode code;
   final String message;
+  final GenerationOperationClientStatus operationStatus;
 }
 
 GenerationFunctionFailure classifyGenerationFunctionException(
@@ -30,6 +38,7 @@ GenerationFunctionFailure classifyGenerationFunctionException(
     401 => GenerationFailureCode.authenticationRequired,
     404 => GenerationFailureCode.materialUnavailable,
     429 => GenerationFailureCode.aiRateOrQuota,
+    409 => GenerationFailureCode.operationActive,
     500 => _knownServerCode(safeCode),
     _ => GenerationFailureCode.generic,
   };
@@ -40,9 +49,19 @@ GenerationFunctionFailure classifyGenerationFunctionException(
   }
   final message = switch (code) {
     GenerationFailureCode.materialUnavailable => 'Material unavailable.',
+    GenerationFailureCode.operationActive =>
+      'Generation is being reconciled. Try again shortly.',
     _ => genericMessage,
   };
-  return GenerationFunctionFailure(code, message);
+  return GenerationFunctionFailure(
+    code,
+    message,
+    operationStatus: switch (_safeOperationStatus(exception.details)) {
+      'generating' => GenerationOperationClientStatus.generating,
+      'reconciling' => GenerationOperationClientStatus.reconciling,
+      _ => GenerationOperationClientStatus.failed,
+    },
+  );
 }
 
 String? _safeDetailCode(Object? details) {
@@ -57,6 +76,12 @@ String? _safeDetailCode(Object? details) {
     }
   }
   return null;
+}
+
+String? _safeOperationStatus(Object? details) {
+  if (details is! Map) return null;
+  final value = details['operation_status'];
+  return value == 'generating' || value == 'reconciling' ? value : null;
 }
 
 GenerationFailureCode _knownServerCode(String? code) => switch (code) {

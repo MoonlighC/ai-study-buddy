@@ -439,7 +439,7 @@ abstract class AppLocalizations {
   /// Settings placeholder explaining that usage tracking is not connected.
   ///
   /// In en, this message translates to:
-  /// **'Usage tracking is not connected'**
+  /// **'Daily usage and generation policy'**
   String get settingsUsageUnavailable;
 
   /// Settings action for opening usage screen.
@@ -451,7 +451,7 @@ abstract class AppLocalizations {
   /// Settings row subtitle for planned usage limits.
   ///
   /// In en, this message translates to:
-  /// **'Limits and enforcement are planned.'**
+  /// **'View today’s authoritative usage and reset time.'**
   String get settingsUsagePlanned;
 
   /// Settings support section title.
@@ -1339,14 +1339,104 @@ abstract class AppLocalizations {
   /// Usage empty state title.
   ///
   /// In en, this message translates to:
-  /// **'Usage tracking is not connected yet'**
+  /// **'Could not load usage'**
   String get usageUnavailableTitle;
 
   /// Usage empty state message.
   ///
   /// In en, this message translates to:
-  /// **'This prototype does not show token counts, quotas, or billing data.'**
+  /// **'Your usage status is temporarily unavailable. Try again.'**
   String get usageUnavailableMessage;
+
+  /// No description provided for @usageRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get usageRetry;
+
+  /// No description provided for @usageTesterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tester mode: unlimited daily generation'**
+  String get usageTesterTitle;
+
+  /// No description provided for @usageTesterMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Today’s usage is still recorded. Per-request limits and duplicate/retry protections still apply.'**
+  String get usageTesterMessage;
+
+  /// No description provided for @usageStandardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard daily limits'**
+  String get usageStandardTitle;
+
+  /// No description provided for @usageFlashcards.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards'**
+  String get usageFlashcards;
+
+  /// No description provided for @usageQuizQuestions.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiz questions'**
+  String get usageQuizQuestions;
+
+  /// No description provided for @usageEstimatedCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated provider cost'**
+  String get usageEstimatedCost;
+
+  /// No description provided for @usageCountOfLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} / {limit}'**
+  String usageCountOfLimit(int used, int limit);
+
+  /// No description provided for @usageCountToday.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} today'**
+  String usageCountToday(int used);
+
+  /// No description provided for @usageCostOfLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} / {limit} USD'**
+  String usageCostOfLimit(String used, String limit);
+
+  /// No description provided for @usageCostToday.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} USD today'**
+  String usageCostToday(String used);
+
+  /// No description provided for @usageActiveReservations.
+  ///
+  /// In en, this message translates to:
+  /// **'Active generations: {count}'**
+  String usageActiveReservations(int count);
+
+  /// No description provided for @usageResetAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Resets {dateTime}'**
+  String usageResetAt(String dateTime);
+
+  /// No description provided for @generationReconcilingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A previous generation is being reconciled. Resume it without starting a new provider request.'**
+  String get generationReconcilingMessage;
+
+  /// No description provided for @generationResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume generation'**
+  String get generationResume;
 
   /// Material detail screen title.
   ///

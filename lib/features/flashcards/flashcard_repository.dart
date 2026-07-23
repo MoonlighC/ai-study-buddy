@@ -1,10 +1,10 @@
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../core/models/flashcard.dart';
-import '../../core/utils/uuid.dart';
 import '../../features/auth/auth_models.dart';
 import '../../mock/mock_data.dart';
 import '../generation/generation_function_error.dart';
+import '../generation/generation_operation_store.dart';
 
 abstract class FlashcardRepository {
   Future<List<Flashcard>> loadFlashcards(AuthUser user);
@@ -38,9 +38,13 @@ class FlashcardGenerationResult {
 enum FlashcardReviewResult { missed, known }
 
 class FlashcardRepositoryException implements Exception {
-  const FlashcardRepositoryException(this.message);
+  const FlashcardRepositoryException(
+    this.message, {
+    this.operationStatus = GenerationOperationClientStatus.failed,
+  });
 
   final String message;
+  final GenerationOperationClientStatus operationStatus;
 }
 
 const flashcardsTooShortMessage =
@@ -97,9 +101,13 @@ class MockFlashcardRepository implements FlashcardRepository {
 }
 
 class SupabaseFlashcardRepository implements FlashcardRepository {
-  const SupabaseFlashcardRepository(this._client);
+  const SupabaseFlashcardRepository(
+    this._client, [
+    this._operationStore = const SharedPreferencesGenerationOperationStore(),
+  ]);
 
   final supabase.SupabaseClient _client;
+  final GenerationOperationStore _operationStore;
 
   @override
   Future<List<Flashcard>> loadFlashcards(AuthUser user) async {
@@ -126,13 +134,19 @@ class SupabaseFlashcardRepository implements FlashcardRepository {
     required int requestedNewCount,
   }) async {
     _validateRequestedCount(requestedNewCount);
+    final operationId = await _operationStore.loadOrCreate(
+      userId: user.id,
+      feature: 'generate_flashcards',
+      materialId: materialId,
+      count: requestedNewCount,
+    );
     try {
       final response = await _client.functions.invoke(
         'generate-flashcards',
         body: <String, Object>{
           'material_id': materialId,
           'count': requestedNewCount,
-          'operation_id': newUuidV4(),
+          'operation_id': operationId,
         },
       );
       final data = response.data;
@@ -168,26 +182,57 @@ class SupabaseFlashcardRepository implements FlashcardRepository {
           'Could not generate flashcards. Try again.',
         );
       }
-      return FlashcardGenerationResult(
+      final result = FlashcardGenerationResult(
         requestedCount: requestedCount,
         createdCount: createdCount,
         newFlashcards: mappedCards,
       );
+      await _clearOperation(
+        user: user,
+        materialId: materialId,
+        count: requestedNewCount,
+        operationId: operationId,
+      );
+      return result;
     } on FlashcardRepositoryException {
       rethrow;
     } on supabase.FunctionException catch (error) {
+      if (error.status != 409) {
+        await _clearOperation(
+          user: user,
+          materialId: materialId,
+          count: requestedNewCount,
+          operationId: operationId,
+        );
+      }
       final failure = classifyGenerationFunctionException(
         'generate-flashcards',
         error,
         'Could not generate flashcards. Try again.',
       );
-      throw FlashcardRepositoryException(failure.message);
+      throw FlashcardRepositoryException(
+        failure.message,
+        operationStatus: failure.operationStatus,
+      );
     } catch (_) {
       throw const FlashcardRepositoryException(
         'Could not generate flashcards. Try again.',
       );
     }
   }
+
+  Future<void> _clearOperation({
+    required AuthUser user,
+    required String materialId,
+    required int count,
+    required String operationId,
+  }) => _operationStore.clear(
+    userId: user.id,
+    feature: 'generate_flashcards',
+    materialId: materialId,
+    count: count,
+    operationId: operationId,
+  );
 
   @override
   Future<Flashcard> updateReviewResult({

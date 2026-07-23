@@ -22,6 +22,7 @@ import 'features/study_sessions/study_activity_repository.dart';
 import 'features/progress/weak_topic_repository.dart';
 import 'features/progress/study_progress_repository.dart';
 import 'features/subjects/supabase_subject_repository.dart';
+import 'features/usage/usage_status_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -102,6 +103,9 @@ Future<void> main() async {
       studyProgressRepository: supabaseClient == null
           ? null
           : SupabaseStudyProgressRepository(supabaseClient),
+      usageStatusRepository: supabaseClient == null
+          ? null
+          : SupabaseUsageStatusRepository(supabaseClient),
     ),
   );
 }

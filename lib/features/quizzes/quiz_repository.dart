@@ -3,9 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../../core/models/quiz.dart';
 import '../../core/models/quiz_attempt.dart';
 import '../../core/models/quiz_question.dart';
-import '../../core/utils/uuid.dart';
 import '../../features/auth/auth_models.dart';
 import '../generation/generation_function_error.dart';
+import '../generation/generation_operation_store.dart';
 
 abstract class QuizRepository {
   Future<List<Quiz>> loadQuizzes(AuthUser user);
@@ -25,9 +25,13 @@ abstract class QuizRepository {
 }
 
 class QuizRepositoryException implements Exception {
-  const QuizRepositoryException(this.message);
+  const QuizRepositoryException(
+    this.message, {
+    this.operationStatus = GenerationOperationClientStatus.failed,
+  });
 
   final String message;
+  final GenerationOperationClientStatus operationStatus;
 }
 
 const quizTooShortMessage = 'Add more lecture text before generating a quiz.';
@@ -188,9 +192,13 @@ class MockQuizRepository implements QuizRepository {
 DateTime _utcNow() => DateTime.now().toUtc();
 
 class SupabaseQuizRepository implements QuizRepository {
-  const SupabaseQuizRepository(this._client);
+  const SupabaseQuizRepository(
+    this._client, [
+    this._operationStore = const SharedPreferencesGenerationOperationStore(),
+  ]);
 
   final supabase.SupabaseClient _client;
+  final GenerationOperationStore _operationStore;
 
   @override
   Future<List<Quiz>> loadQuizzes(AuthUser user) async {
@@ -262,13 +270,19 @@ class SupabaseQuizRepository implements QuizRepository {
     required String materialId,
     required int count,
   }) async {
+    final operationId = await _operationStore.loadOrCreate(
+      userId: user.id,
+      feature: 'generate_quiz_questions',
+      materialId: materialId,
+      count: count,
+    );
     try {
       final response = await _client.functions.invoke(
         'generate-quiz',
         body: <String, Object>{
           'material_id': materialId,
           'count': count,
-          'operation_id': newUuidV4(),
+          'operation_id': operationId,
         },
       );
       final data = response.data;
@@ -296,28 +310,59 @@ class SupabaseQuizRepository implements QuizRepository {
           'Could not generate quiz. Try again.',
         );
       }
-      return Quiz(
+      final result = Quiz(
         id: quizId,
         subjectId: mappedQuestions.first.subjectId,
         materialId: returnedMaterialId,
         title: title,
         questions: mappedQuestions,
       );
+      await _clearOperation(
+        user: user,
+        materialId: materialId,
+        count: count,
+        operationId: operationId,
+      );
+      return result;
     } on QuizRepositoryException {
       rethrow;
     } on supabase.FunctionException catch (error) {
+      if (error.status != 409) {
+        await _clearOperation(
+          user: user,
+          materialId: materialId,
+          count: count,
+          operationId: operationId,
+        );
+      }
       final failure = classifyGenerationFunctionException(
         'generate-quiz',
         error,
         'Could not generate quiz. Try again.',
       );
-      throw QuizRepositoryException(failure.message);
+      throw QuizRepositoryException(
+        failure.message,
+        operationStatus: failure.operationStatus,
+      );
     } catch (_) {
       throw const QuizRepositoryException(
         'Could not generate quiz. Try again.',
       );
     }
   }
+
+  Future<void> _clearOperation({
+    required AuthUser user,
+    required String materialId,
+    required int count,
+    required String operationId,
+  }) => _operationStore.clear(
+    userId: user.id,
+    feature: 'generate_quiz_questions',
+    materialId: materialId,
+    count: count,
+    operationId: operationId,
+  );
 
   @override
   Future<QuizAttempt> saveQuizAttempt({

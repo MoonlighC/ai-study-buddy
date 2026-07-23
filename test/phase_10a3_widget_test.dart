@@ -15,17 +15,19 @@ const _user = AuthUser(
 );
 
 void main() {
-  testWidgets('usage is honest and contains no prototype quota data', (
+  testWidgets('usage renders the authoritative standard policy', (
     tester,
   ) async {
     await _pump(tester, const Size(390, 844));
     await _route(tester, AppRoutes.usage);
 
     expect(find.byType(ResponsiveAppScaffold), findsOneWidget);
-    expect(find.text('Usage tracking is not connected yet'), findsOneWidget);
+    expect(find.text('Standard daily limits'), findsOneWidget);
+    expect(find.text('0 / 120'), findsOneWidget);
+    expect(find.text('0 / 80'), findsOneWidget);
+    expect(find.text('0.00 / 0.25 USD'), findsOneWidget);
     expect(find.textContaining('tokens='), findsNothing);
-    expect(find.textContaining(r'$0.25'), findsNothing);
-    expect(find.textContaining('/day'), findsNothing);
+    expect(find.textContaining('not connected'), findsNothing);
   });
 
   testWidgets('generated output is labeled as a static prototype preview', (

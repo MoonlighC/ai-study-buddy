@@ -1,6 +1,7 @@
 import {
   createGenerateQuizHandler,
   parseQuiz,
+  QuizResult,
   SafeQuizGenerationError,
 } from "./handler.ts";
 
@@ -39,34 +40,79 @@ function request(id = operationId) {
 }
 function dependencies(overrides: Record<string, unknown> = {}) {
   let providerPosts = 0;
-  const deps = {
-    verifyJwt: async () => userId,
-    loadOwnedMaterial: async () => ({ id: materialId }),
-    loadExistingQuiz: async () => null,
-    canonicalSource: () => source,
-    reserveOperation: async () => ({ status: "reserved" as const }),
-    claimProvider: async () => true,
-    awaitOperation: async () => ({
-      quiz_id: "q",
-      material_id: materialId,
-      title: "Quiz",
-      questions: [],
-    }),
-    generate: async () => {
+  const generate = typeof overrides.generate === "function"
+    ? overrides.generate as () => Promise<{
+      text: string;
+      inputTokens: number;
+      outputTokens: number;
+    }>
+    : async () => {
       providerPosts++;
       return {
         text: JSON.stringify({ title: "Quiz", questions }),
         inputTokens: 10,
         outputTokens: 20,
       };
-    },
-    complete: async () => ({
+    };
+  const complete = typeof overrides.complete === "function"
+    ? overrides.complete as (input: {
+      inputTokens: number;
+      outputTokens: number;
+      [key: string]: unknown;
+    }) => Promise<Record<string, unknown>>
+    : async () => ({
       quiz_id: "q",
       material_id: materialId,
       title: "Quiz",
       questions,
-    }),
-    fail: async () => {},
+    });
+  const deps = {
+    verifyJwt: async () => userId,
+    loadOwnedMaterial: async () => ({ id: materialId }),
+    loadExistingQuiz: async () => null,
+    canonicalSource: () => source,
+    reserveOperation: async () => ({ status: "reserved" as const }),
+    executeOperation: async (input: {
+      sourceText: string;
+      count: number;
+    }) => {
+      if (overrides.claimProvider !== undefined) {
+        const claimed =
+          await (overrides.claimProvider as () => Promise<boolean>)();
+        if (!claimed) {
+          return await (overrides.awaitOperation as () => Promise<
+            QuizResult
+          >)();
+        }
+      }
+      const generated = await generate();
+      const draft = parseQuiz(generated.text, input.count);
+      try {
+        return await complete({
+          inputTokens: generated.inputTokens,
+          outputTokens: generated.outputTokens,
+          ...input,
+          draft,
+        }) as QuizResult;
+      } catch (error) {
+        if (typeof overrides.fail === "function") {
+          await (overrides.fail as (
+            user: string,
+            operation: string,
+            code: string,
+            retain: boolean,
+          ) => Promise<void>)(
+            userId,
+            operationId,
+            error instanceof SafeQuizGenerationError
+              ? error.code
+              : "generation_failed",
+            true,
+          );
+        }
+        throw error;
+      }
+    },
     ...overrides,
   };
   return { deps, posts: () => providerPosts };

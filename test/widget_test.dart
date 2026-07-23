@@ -1465,7 +1465,7 @@ void main() {
     );
   });
 
-  testWidgets('settings renders real controls and planned usage state', (
+  testWidgets('settings renders real controls and usage navigation', (
     tester,
   ) async {
     await _enterDashboard(tester);
@@ -1483,9 +1483,11 @@ void main() {
 
     await _scrollTo(tester, find.text('Usage & Limits'));
 
-    expect(find.text('Usage tracking is not connected'), findsOneWidget);
-    expect(find.textContaining('/day'), findsNothing);
-    expect(find.textContaining(r'$0.25'), findsNothing);
+    expect(find.text('Daily usage and generation policy'), findsOneWidget);
+    expect(
+      find.text('View today’s authoritative usage and reset time.'),
+      findsOneWidget,
+    );
 
     await _scrollTo(tester, find.text('Support'));
 

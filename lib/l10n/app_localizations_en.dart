@@ -183,13 +183,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsUsageTitle => 'Usage & Limits';
 
   @override
-  String get settingsUsageUnavailable => 'Usage tracking is not connected';
+  String get settingsUsageUnavailable => 'Daily usage and generation policy';
 
   @override
   String get settingsViewUsage => 'View usage information';
 
   @override
-  String get settingsUsagePlanned => 'Limits and enforcement are planned.';
+  String get settingsUsagePlanned =>
+      'View today’s authoritative usage and reset time.';
 
   @override
   String get settingsSupportTitle => 'Support';
@@ -712,11 +713,70 @@ class AppLocalizationsEn extends AppLocalizations {
   String get usageTitle => 'Usage';
 
   @override
-  String get usageUnavailableTitle => 'Usage tracking is not connected yet';
+  String get usageUnavailableTitle => 'Could not load usage';
 
   @override
   String get usageUnavailableMessage =>
-      'This prototype does not show token counts, quotas, or billing data.';
+      'Your usage status is temporarily unavailable. Try again.';
+
+  @override
+  String get usageRetry => 'Retry';
+
+  @override
+  String get usageTesterTitle => 'Tester mode: unlimited daily generation';
+
+  @override
+  String get usageTesterMessage =>
+      'Today’s usage is still recorded. Per-request limits and duplicate/retry protections still apply.';
+
+  @override
+  String get usageStandardTitle => 'Standard daily limits';
+
+  @override
+  String get usageFlashcards => 'Flashcards';
+
+  @override
+  String get usageQuizQuestions => 'Quiz questions';
+
+  @override
+  String get usageEstimatedCost => 'Estimated provider cost';
+
+  @override
+  String usageCountOfLimit(int used, int limit) {
+    return '$used / $limit';
+  }
+
+  @override
+  String usageCountToday(int used) {
+    return '$used today';
+  }
+
+  @override
+  String usageCostOfLimit(String used, String limit) {
+    return '$used / $limit USD';
+  }
+
+  @override
+  String usageCostToday(String used) {
+    return '$used USD today';
+  }
+
+  @override
+  String usageActiveReservations(int count) {
+    return 'Active generations: $count';
+  }
+
+  @override
+  String usageResetAt(String dateTime) {
+    return 'Resets $dateTime';
+  }
+
+  @override
+  String get generationReconcilingMessage =>
+      'A previous generation is being reconciled. Resume it without starting a new provider request.';
+
+  @override
+  String get generationResume => 'Resume generation';
 
   @override
   String get materialDetailTitle => 'Material';

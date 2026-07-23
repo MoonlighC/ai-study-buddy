@@ -1014,6 +1014,9 @@ class _QuizSection extends StatelessWidget {
             label: Text(
               state.isGeneratingQuiz
                   ? context.l10n.quizGenerating
+                  : state.quizGenerationStatus ==
+                        StudyGenerationStatus.reconciling
+                  ? context.l10n.generationResume
                   : buttonLabel,
             ),
           ),
@@ -1180,6 +1183,9 @@ class _FlashcardsSection extends StatelessWidget {
             label: Text(
               state.isGeneratingFlashcards
                   ? context.l10n.flashcardsGenerating
+                  : state.flashcardGenerationStatus ==
+                        StudyGenerationStatus.reconciling
+                  ? context.l10n.generationResume
                   : context.l10n.flashcardsGenerate,
             ),
           ),
