@@ -2284,6 +2284,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadReady => 'Ready';
 
   @override
+  String get uploadCompleted => 'Completed';
+
+  @override
+  String get uploadUserRetryRequired =>
+      'Analysis needs your action before it can continue. Retry is available.';
+
+  @override
+  String get uploadTerminalFailureNoRetry =>
+      'Analysis failed and cannot be retried from this upload.';
+
+  @override
+  String get uploadStaleMaterialRemoved =>
+      'This material no longer exists. The stale upload entry was removed.';
+
+  @override
   String get uploadFailed => 'Failed';
 
   @override

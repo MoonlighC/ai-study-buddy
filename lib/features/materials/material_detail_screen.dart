@@ -1333,7 +1333,11 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
     if (status.state == AnalysisState.failed) {
       return MaterialStatusPanel(
         title: l.materialFailedStatus,
-        message: _safeFailureMessage(l, status.safeErrorCode),
+        message:
+            !status.canRetry &&
+                status.safeErrorCode == 'structured_output_invalid'
+            ? l.uploadTerminalFailureNoRetry
+            : _safeFailureMessage(l, status.safeErrorCode),
         icon: Icons.error_outline,
         warning: true,
         actionLabel: status.canRetry ? l.analysisRetryProcessing : null,

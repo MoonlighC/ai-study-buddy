@@ -813,7 +813,7 @@ function fakeDependencies(
       }
       return new Response(
         JSON.stringify(completedResponse(
-          body.text?.format?.name === "phase_c_final_summary_v1"
+          body.text?.format?.name === "phase_c_final_summary_v2"
             ? finalSummary()
             : pageBatch(),
         )),
@@ -1033,6 +1033,7 @@ function pageBatch() {
   return {
     pages: [{
       page_number: 1,
+      content_status: "completed",
       summary_markdown: "Safe summary.",
       key_concepts: [],
       equations: [],

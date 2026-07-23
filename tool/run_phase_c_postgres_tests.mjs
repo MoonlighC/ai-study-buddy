@@ -245,7 +245,16 @@ await runSql(
   "cancel_empty_study_session.sql",
 );
 
-console.log("PHASE_DE_DATABASE_TESTS_OK migrations=28 sql_suites=18");
+await runSql(
+  path.join(root, "supabase", "migrations", "029_material_analysis_page_content_contract.sql"),
+  "migration 029_",
+);
+await runSql(
+  path.join(root, "supabase", "tests", "material_analysis_page_content_contract.sql"),
+  "material_analysis_page_content_contract.sql",
+);
+
+console.log("PHASE_DE_DATABASE_TESTS_OK migrations=29 sql_suites=19");
 await database.close();
 
 async function runSql(file, label) {

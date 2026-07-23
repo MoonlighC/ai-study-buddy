@@ -325,6 +325,7 @@ function pageBatch(): Record<string, any> {
   return {
     pages: [{
       page_number: 1,
+      content_status: "completed",
       summary_markdown: "A grounded STEM summary.",
       key_concepts: ["Quadratic formula"],
       equations: [{

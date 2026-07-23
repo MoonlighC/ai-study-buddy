@@ -1,11 +1,14 @@
 import 'dart:typed_data';
 
 import 'package:ai_study_buddy/app/app.dart';
+import 'package:ai_study_buddy/app/app_state.dart';
 import 'package:ai_study_buddy/app/routes.dart';
 import 'package:ai_study_buddy/core/models/material.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/auth/auth_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_file_picker.dart';
+import 'package:ai_study_buddy/features/materials/material_analysis_repository.dart';
+import 'package:ai_study_buddy/features/materials/material_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_upload.dart';
 import 'package:ai_study_buddy/features/materials/material_upload_repository.dart';
 import 'package:ai_study_buddy/features/materials/upload_material_screen.dart';
@@ -143,7 +146,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text(scenario.filename), findsOneWidget);
-      expect(find.text('Ready'), findsOneWidget);
+      expect(find.text('Completed'), findsOneWidget);
       expect(find.text('1 uploaded / 0 skipped / 0 failed'), findsOneWidget);
       expect(find.byIcon(Icons.open_in_new), findsOneWidget);
     });
@@ -179,6 +182,126 @@ void main() {
     expect(find.text('Quiz'), findsNothing);
     expect(find.text('Create study session'), findsNothing);
   });
+
+  testWidgets('deleting an uploaded material removes its queue row', (
+    tester,
+  ) async {
+    await _pumpCompletedUpload(tester);
+    final context = tester.element(find.byType(UploadMaterialScreen));
+    final state = AppStateScope.read(context);
+    expect(state.materialUploadQueue.items, hasLength(1));
+
+    expect(
+      await state.deleteMaterialFor(
+        testUser,
+        '22222222-2222-4222-8222-222222222222',
+      ),
+      isTrue,
+    );
+    await tester.pumpAndSettle();
+
+    expect(state.materialUploadQueue.items, isEmpty);
+    expect(find.byIcon(Icons.open_in_new), findsNothing);
+  });
+
+  testWidgets('reopening upload screen visibly prunes a stale row', (
+    tester,
+  ) async {
+    await _pumpCompletedUpload(tester);
+    final context = tester.element(find.byType(UploadMaterialScreen));
+    final state = AppStateScope.read(context);
+    expect(state.materialUploadQueue.items, hasLength(1));
+
+    await state.loadSyncedWorkspaceFor(testUser);
+    expect(state.materials, isEmpty);
+    expect(state.materialUploadQueue.items, hasLength(1));
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    await _pushRoute(
+      tester,
+      AppRoutes.uploadMaterial,
+      arguments: UploadMaterialArgs(
+        subject: MockData.subjects.first,
+        kind: MaterialKind.pdf,
+      ),
+    );
+
+    expect(
+      find.text(
+        'This material no longer exists. The stale upload entry was removed.',
+      ),
+      findsOneWidget,
+    );
+    expect(state.materialUploadQueue.items, isEmpty);
+    expect(find.byIcon(Icons.open_in_new), findsNothing);
+  });
+
+  testWidgets('terminal analysis failure has accurate copy and no Retry', (
+    tester,
+  ) async {
+    await _pumpCompletedUpload(tester);
+    final state = AppStateScope.read(
+      tester.element(find.byType(UploadMaterialScreen)),
+    );
+    state.materialUploadQueue.acceptAnalysisStatus(
+      '22222222-2222-4222-8222-222222222222',
+      const MaterialAnalysisStatus(
+        materialId: '22222222-2222-4222-8222-222222222222',
+        processingMode: AnalysisProcessingMode.recommended,
+        state: AnalysisState.failed,
+        publicStage: AnalysisPublicStage.creatingSummary,
+        pageCount: 1,
+        completedPages: 1,
+        confirmationRequired: false,
+        canRetry: false,
+        retryAfterSeconds: null,
+        warnings: [],
+        summarySchemaVersion: null,
+        summary: null,
+        structuredSummaryMalformed: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Analysis failed and cannot be retried from this upload.'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(OutlinedButton, 'Retry'), findsNothing);
+  });
+}
+
+Future<void> _pumpCompletedUpload(WidgetTester tester) async {
+  final picker = _FakePicker(
+    SelectedMaterialFile(
+      name: 'stale.pdf',
+      reportedSizeBytes: 8,
+      readBytes: () async => Uint8List.fromList('%PDF-1.7'.codeUnits),
+    ),
+  );
+  await tester.pumpWidget(
+    StudyBuddyApp(
+      authRepository: MockAuthRepository(initialUser: testUser),
+      materialRepository: MockMaterialRepository(initialMaterials: const []),
+      materialFilePicker: picker,
+      materialUploadRepository: MockMaterialUploadRepository(),
+      materialIdGenerator: () => '22222222-2222-4222-8222-222222222222',
+    ),
+  );
+  await tester.pumpAndSettle();
+  await _pushRoute(
+    tester,
+    AppRoutes.uploadMaterial,
+    arguments: UploadMaterialArgs(
+      subject: MockData.subjects.first,
+      kind: MaterialKind.pdf,
+    ),
+  );
+  await tester.tap(find.text('Choose PDF'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Upload material'));
+  await tester.pumpAndSettle();
+  expect(find.text('Completed'), findsOneWidget);
 }
 
 Future<void> _pushRoute(

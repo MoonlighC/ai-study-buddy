@@ -34,8 +34,27 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   String? _pickerError;
   bool _picking = false;
   AnalysisProcessingMode _analysisMode = AnalysisProcessingMode.recommended;
+  bool _staleRowsReconciled = false;
 
   bool get isPdf => widget.args.kind == MaterialKind.pdf;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_staleRowsReconciled) return;
+    _staleRowsReconciled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = AppStateScope.read(context);
+      final stale = state.materialUploadQueue.pruneStaleAuthoritativeRows(
+        state.materials.map((material) => material.id).toSet(),
+      );
+      if (stale.isEmpty || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.uploadStaleMaterialRemoved)),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +78,12 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                 )
                 .toList(growable: false);
             final succeeded = items
-                .where((item) => item.status == MaterialUploadQueueStatus.ready)
+                .where(
+                  (item) =>
+                      item.status == MaterialUploadQueueStatus.completed ||
+                      item.status ==
+                          MaterialUploadQueueStatus.completedWithWarnings,
+                )
                 .length;
             final skipped = items
                 .where(
@@ -293,7 +317,10 @@ class _QueueItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final failed = item.status == MaterialUploadQueueStatus.failed;
-    final ready = item.status == MaterialUploadQueueStatus.ready;
+    final completed =
+        item.status == MaterialUploadQueueStatus.completed ||
+        item.status == MaterialUploadQueueStatus.completedWithWarnings;
+    final retryable = state.materialUploadQueue.canRetry(item.queueId);
     final skipped = item.status == MaterialUploadQueueStatus.skipped;
     return GlassCard(
       key: ValueKey('upload-queue-${item.queueId}'),
@@ -302,7 +329,7 @@ class _QueueItemCard extends StatelessWidget {
         children: [
           AppListRow(
             leading: Icon(
-              ready
+              completed
                   ? Icons.check_circle_outline
                   : skipped
                   ? Icons.block_outlined
@@ -313,21 +340,10 @@ class _QueueItemCard extends StatelessWidget {
             title: Text(item.fileName),
             subtitle: Text(_queueStatus(context, item)),
             showDivider: false,
-            trailing: ready
+            trailing: completed
                 ? IconButton(
                     tooltip: context.l10n.materialDetailTitle,
-                    onPressed: () {
-                      final materialId = item.authoritativeMaterialId;
-                      final material = materialId == null
-                          ? null
-                          : state.materialById(materialId);
-                      if (material == null) return;
-                      Navigator.pushNamed(
-                        context,
-                        AppRoutes.materialDetail,
-                        arguments: material,
-                      );
-                    },
+                    onPressed: () => _openMaterial(context),
                     icon: const Icon(Icons.open_in_new),
                   )
                 : null,
@@ -339,17 +355,35 @@ class _QueueItemCard extends StatelessWidget {
                 ? const LinearProgressIndicator()
                 : LinearProgressIndicator(value: item.progress),
           ],
-          if (failed) ...[
+          if (retryable) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => state.materialUploadQueue.retry(item.queueId),
               icon: const Icon(Icons.refresh),
               label: Text(context.l10n.materialRetry),
             ),
+          ] else if (failed) ...[
+            const SizedBox(height: 8),
+            Text(context.l10n.uploadTerminalFailureNoRetry),
           ],
         ],
       ),
     );
+  }
+
+  void _openMaterial(BuildContext context) {
+    final materialId = item.authoritativeMaterialId;
+    final material = materialId == null ? null : state.materialById(materialId);
+    if (material == null) {
+      if (materialId != null) {
+        state.materialUploadQueue.removeAuthoritativeMaterial(materialId);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.uploadStaleMaterialRemoved)),
+      );
+      return;
+    }
+    Navigator.pushNamed(context, AppRoutes.materialDetail, arguments: material);
   }
 }
 
@@ -361,10 +395,16 @@ String _queueStatus(BuildContext context, MaterialUploadQueueItem item) {
     MaterialUploadQueueStatus.queued => context.l10n.uploadQueued,
     MaterialUploadQueueStatus.uploading => context.l10n.uploadUploading,
     MaterialUploadQueueStatus.processing => context.l10n.uploadProcessing,
-    MaterialUploadQueueStatus.ready => context.l10n.uploadReady,
+    MaterialUploadQueueStatus.completed => context.l10n.uploadCompleted,
+    MaterialUploadQueueStatus.completedWithWarnings =>
+      context.l10n.analysisCompletedWithWarnings,
+    MaterialUploadQueueStatus.userRetryRequired =>
+      context.l10n.uploadUserRetryRequired,
     MaterialUploadQueueStatus.skipped =>
       context.materialUploadQueueErrorMessage(item.errorCode),
     MaterialUploadQueueStatus.failed => context.l10n.uploadFailed,
+    MaterialUploadQueueStatus.deletedStale =>
+      context.l10n.uploadStaleMaterialRemoved,
   };
 }
 

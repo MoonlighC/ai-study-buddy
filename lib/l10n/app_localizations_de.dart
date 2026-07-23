@@ -2325,6 +2325,21 @@ class AppLocalizationsDe extends AppLocalizations {
   String get uploadReady => 'Bereit';
 
   @override
+  String get uploadCompleted => 'Abgeschlossen';
+
+  @override
+  String get uploadUserRetryRequired =>
+      'Die Analyse benötigt deine Aktion. Ein erneuter Versuch ist verfügbar.';
+
+  @override
+  String get uploadTerminalFailureNoRetry =>
+      'Die Analyse ist fehlgeschlagen und kann von diesem Upload aus nicht wiederholt werden.';
+
+  @override
+  String get uploadStaleMaterialRemoved =>
+      'Dieses Material existiert nicht mehr. Der veraltete Upload-Eintrag wurde entfernt.';
+
+  @override
   String get uploadFailed => 'Fehlgeschlagen';
 
   @override

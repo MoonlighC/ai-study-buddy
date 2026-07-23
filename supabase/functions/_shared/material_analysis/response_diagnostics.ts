@@ -1,4 +1,5 @@
 import {
+  approvedAnalysisWarningCodes,
   validatePageBatchResult,
   validateSummarySemantics,
 } from "./schemas.ts";
@@ -88,6 +89,7 @@ type DiagnosticFailure = Extract<DiagnosticResult, { ok: false }>;
 
 const pageKeys = [
   "page_number",
+  "content_status",
   "summary_markdown",
   "key_concepts",
   "equations",
@@ -613,6 +615,9 @@ export function validatePageSchema(
   }
   if (
     !Number.isInteger(page.page_number) ||
+    !["completed", "partial", "missing"].includes(
+      String(page.content_status),
+    ) ||
     typeof page.summary_markdown !== "string" ||
     !Array.isArray(page.key_concepts) || !Array.isArray(page.equations) ||
     !Array.isArray(page.warnings) || typeof page.trustworthy !== "boolean" ||
@@ -653,11 +658,20 @@ export function validatePageSemantics(
   metadata: DiagnosticMetadata,
 ): DiagnosticResult | null {
   const page = pageRecord(result)!;
+  const status = String(page.content_status);
+  const warnings = page.warnings as Record<string, unknown>[];
   if (
     page.trustworthy !== true ||
     !(page.key_concepts as unknown[]).every((value: unknown) =>
       typeof value === "string" && value.length >= 1 && value.length <= 500
-    )
+    ) ||
+    (status === "partial" &&
+      !warnings.some((warning) => warning.code === "page_content_partial")) ||
+    (status === "missing" &&
+      (page.summary_markdown !== "" ||
+        (page.key_concepts as unknown[]).length !== 0 ||
+        (page.equations as unknown[]).length !== 0 || page.confidence !== 0 ||
+        !warnings.some((warning) => warning.code === "page_content_missing")))
   ) return failure("page_schema_failed", metadata, "validatePageSemantics");
   const equations = page.equations as Record<string, unknown>[];
   const ids = equations.map((equation) => equation.id);
@@ -687,11 +701,12 @@ export function validatePageSemantics(
       "validatePageSemantics",
     );
   }
-  const warnings = page.warnings as Record<string, unknown>[];
   if (
     warnings.some((warning) =>
       typeof warning.code !== "string" ||
-      !/^[a-z0-9_]{1,64}$/.test(warning.code) ||
+      !approvedAnalysisWarningCodes.includes(
+        warning.code as typeof approvedAnalysisWarningCodes[number],
+      ) ||
       typeof warning.detail !== "string" || warning.detail.length < 1 ||
       warning.detail.length > 500 || !Array.isArray(warning.source_pages) ||
       warning.source_pages.length > 100 ||

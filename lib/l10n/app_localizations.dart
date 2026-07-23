@@ -3838,6 +3838,30 @@ abstract class AppLocalizations {
   /// **'Ready'**
   String get uploadReady;
 
+  /// No description provided for @uploadCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get uploadCompleted;
+
+  /// No description provided for @uploadUserRetryRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis needs your action before it can continue. Retry is available.'**
+  String get uploadUserRetryRequired;
+
+  /// No description provided for @uploadTerminalFailureNoRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis failed and cannot be retried from this upload.'**
+  String get uploadTerminalFailureNoRetry;
+
+  /// No description provided for @uploadStaleMaterialRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'This material no longer exists. The stale upload entry was removed.'**
+  String get uploadStaleMaterialRemoved;
+
   /// No description provided for @uploadFailed.
   ///
   /// In en, this message translates to:

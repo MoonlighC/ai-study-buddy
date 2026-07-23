@@ -2365,6 +2365,21 @@ class AppLocalizationsRu extends AppLocalizations {
   String get uploadReady => 'Готово';
 
   @override
+  String get uploadCompleted => 'Завершено';
+
+  @override
+  String get uploadUserRetryRequired =>
+      'Для продолжения анализа нужно ваше действие. Доступен повтор.';
+
+  @override
+  String get uploadTerminalFailureNoRetry =>
+      'Анализ завершился ошибкой и не может быть повторён из этой загрузки.';
+
+  @override
+  String get uploadStaleMaterialRemoved =>
+      'Материал больше не существует. Устаревшая запись загрузки удалена.';
+
+  @override
   String get uploadFailed => 'Ошибка';
 
   @override

@@ -16,12 +16,12 @@ import { miniPdfVersion } from "./mini_pdf.ts";
 import { validatePublicStatus, validateSummarySemantics } from "./schemas.ts";
 
 export const analysisValidatorVersion = "phase-c-validator-v2";
-export const analysisPromptVersion = "phase-c-prompts-v1";
+export const analysisPromptVersion = "phase-c-prompts-v2";
 export const analysisConfigurationVersion = "phase-c-server-v1";
 export const analysisFingerprintVersion = "phase-c-fingerprint-v2";
-export const pageSchemaVersion = "phase-c-page-schema-v1";
-export const reductionSchemaVersion = "phase-c-reduction-schema-v1";
-export const finalSummarySchemaVersion = "phase-c-final-schema-v1";
+export const pageSchemaVersion = "phase-c-page-schema-v2";
+export const reductionSchemaVersion = "phase-c-reduction-schema-v2";
+export const finalSummarySchemaVersion = "phase-c-final-schema-v2";
 export const maximumPdfBytes = 40 * 1024 * 1024;
 export const maximumImageBytes = 8 * 1024 * 1024;
 export const maximumPages = 100;

@@ -139,11 +139,13 @@ export interface StructuredSummary {
 
 export interface PageAnalysisResult {
   page_number: number;
+  content_status: "completed" | "partial" | "missing";
   summary_markdown: string;
   key_concepts: string[];
   equations: Equation[];
   confidence: number;
   warnings: SafeWarning[];
+  /** True means every included claim is grounded; it does not mean extraction was complete. */
   trustworthy: boolean;
 }
 

@@ -368,6 +368,7 @@ Deno.test("LaTeX depth, matrix, and balance limits fail safely", () => {
 Deno.test("page and reduction validators reject unknown fields and invented provenance", () => {
   const pageResult = {
     page_number: 1,
+    content_status: "completed",
     summary_markdown: "Safe summary.",
     key_concepts: ["Concept"],
     equations: validSummary().equations,
@@ -378,12 +379,28 @@ Deno.test("page and reduction validators reject unknown fields and invented prov
   equal(validatePageResult(pageResult, 1, 2).valid, true);
   equal(validatePageResult({ ...pageResult, extra: true }, 1, 2).valid, false);
   equal(
-    validatePageResult({ ...pageResult, trustworthy: false }, 1, 2, "partial")
+    validatePageResult({ ...pageResult, trustworthy: false }, 1, 2).valid,
+    false,
+  );
+  const missingPage = {
+    ...pageResult,
+    content_status: "missing",
+    summary_markdown: "",
+    key_concepts: [],
+    equations: [],
+    confidence: 0,
+    warnings: [{
+      code: "page_content_missing",
+      detail: "No usable grounded content was available.",
+      source_pages: [1],
+    }],
+  };
+  equal(validatePageResult(missingPage, 1, 2).valid, true);
+  equal(
+    validatePageResult({ ...missingPage, summary_markdown: "Invented" }, 1, 2)
       .valid,
     false,
   );
-  equal(validatePageResult(null, 1, 2, "missing").valid, true);
-  equal(validatePageResult(pageResult, 1, 2, "missing").valid, false);
   const reduction = {
     source_pages: [1, 2],
     summary_markdown: "Safe reduction.",

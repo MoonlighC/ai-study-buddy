@@ -43,9 +43,6 @@ export function validateSafeMarkdown(
     errors.push("markdown_length");
   }
   if (typeof value !== "string") return result(errors);
-  if (/\$\$[\s\S]*?\$\$|(^|[^\\])\$[^\n$]+\$/u.test(value)) {
-    errors.push("markdown_latex_delimiter");
-  }
   let tree: MarkdownNode;
   try {
     tree = markdownParser.parse(value) as MarkdownNode;
@@ -67,6 +64,12 @@ function walkMarkdown(node: MarkdownNode, errors: string[]) {
   if (forbiddenMarkdownNodes.has(type)) errors.push(`markdown_node:${type}`);
   if (!allowedMarkdownNodes.has(type) && !forbiddenMarkdownNodes.has(type)) {
     errors.push(`markdown_node:${type || "unknown"}`);
+  }
+  if (
+    type === "text" &&
+    /\$\$[\s\S]*?\$\$|(^|[^\\])\$[^\n$]+\$/u.test(node.value ?? "")
+  ) {
+    errors.push("markdown_latex_delimiter");
   }
   if (
     (type === "text" || type === "code" || type === "inlineCode") &&
@@ -203,6 +206,12 @@ export function validateLatex(value: string): ValidationResult {
   if (value.includes("%")) errors.push("latex_comments_forbidden");
   if (forbiddenUnicodeControls.test(value)) {
     errors.push("latex_unicode_control");
+  }
+  if (
+    /(?:;|['"`]|\+\+|--|\$\{|(?:^|\W)(?:print|int|double|String|bool|var|while|for|if|else|return)(?:\W|$))/u
+      .test(value)
+  ) {
+    errors.push("equation_non_mathematical");
   }
 
   let groupDepth = 0;

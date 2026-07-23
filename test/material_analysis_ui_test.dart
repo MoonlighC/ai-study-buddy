@@ -259,9 +259,7 @@ void main() {
       );
 
       expect(
-        find.text(
-          'The analysis finished, but the result could not be processed. You can retry.',
-        ),
+        find.text('Analysis failed and cannot be retried from this upload.'),
         findsOneWidget,
       );
       expect(find.byType(LinearProgressIndicator), findsNothing);

@@ -12,9 +12,12 @@ enum MaterialUploadQueueStatus {
   queued,
   uploading,
   processing,
-  ready,
+  completed,
+  completedWithWarnings,
+  userRetryRequired,
   skipped,
   failed,
+  deletedStale,
 }
 
 enum MaterialUploadRetryStage { upload, materialCreation, extraction }
@@ -111,6 +114,9 @@ typedef MaterialQueueProcessor =
       MaterialQueueWorkGuard guard,
     );
 
+typedef MaterialQueueRetryProcessor =
+    Future<bool> Function(AuthUser user, String materialId);
+
 class MaterialQueueWorkGuard {
   const MaterialQueueWorkGuard._(
     this._controller,
@@ -136,6 +142,7 @@ class MaterialUploadQueueController extends ChangeNotifier {
     required String Function() queueIdGenerator,
     required String Function() materialIdGenerator,
     required MaterialQueueProcessor processMaterial,
+    MaterialQueueRetryProcessor? retryMaterialAnalysis,
     required void Function(StudyMaterial material) onMaterialChanged,
     int maxWorkers = 2,
   }) => MaterialUploadQueueController._(
@@ -143,6 +150,7 @@ class MaterialUploadQueueController extends ChangeNotifier {
     queueIdGenerator,
     materialIdGenerator,
     processMaterial,
+    retryMaterialAnalysis,
     onMaterialChanged,
     maxWorkers.clamp(1, 2),
   );
@@ -152,6 +160,7 @@ class MaterialUploadQueueController extends ChangeNotifier {
     this._queueIdGenerator,
     this._materialIdGenerator,
     this._processMaterial,
+    this._retryMaterialAnalysis,
     this._onMaterialChanged,
     this.maxWorkers,
   );
@@ -160,6 +169,7 @@ class MaterialUploadQueueController extends ChangeNotifier {
   final String Function() _queueIdGenerator;
   final String Function() _materialIdGenerator;
   final MaterialQueueProcessor _processMaterial;
+  final MaterialQueueRetryProcessor? _retryMaterialAnalysis;
   final void Function(StudyMaterial material) _onMaterialChanged;
   final int maxWorkers;
 
@@ -175,13 +185,21 @@ class MaterialUploadQueueController extends ChangeNotifier {
   List<MaterialUploadQueueItem> get items => List.unmodifiable(_items);
   int get activeWorkers => _activeWorkers;
   int get uploadedCount => _items
-      .where((item) => item.status == MaterialUploadQueueStatus.ready)
+      .where(
+        (item) =>
+            item.status == MaterialUploadQueueStatus.completed ||
+            item.status == MaterialUploadQueueStatus.completedWithWarnings,
+      )
       .length;
   int get skippedCount => _items
       .where((item) => item.status == MaterialUploadQueueStatus.skipped)
       .length;
   int get failedCount => _items
-      .where((item) => item.status == MaterialUploadQueueStatus.failed)
+      .where(
+        (item) =>
+            item.status == MaterialUploadQueueStatus.failed ||
+            item.status == MaterialUploadQueueStatus.userRetryRequired,
+      )
       .length;
 
   bool enqueueBatch({
@@ -246,10 +264,25 @@ class MaterialUploadQueueController extends ChangeNotifier {
 
   bool retry(String queueId) {
     final index = _indexOf(queueId);
-    if (index < 0 ||
-        _items[index].status != MaterialUploadQueueStatus.failed ||
-        !_payloads.containsKey(queueId)) {
+    if (index < 0 || !canRetry(queueId)) {
       return false;
+    }
+    final item = _items[index];
+    if (item.status == MaterialUploadQueueStatus.userRetryRequired) {
+      final payload = _payloads[queueId];
+      final materialId = item.authoritativeMaterialId;
+      final retryAnalysis = _retryMaterialAnalysis;
+      if (payload == null || materialId == null || retryAnalysis == null) {
+        return false;
+      }
+      _items[index] = item.copyWith(
+        status: MaterialUploadQueueStatus.processing,
+        clearError: true,
+        clearRetryStage: true,
+      );
+      notifyListeners();
+      unawaited(_runAuthoritativeRetry(queueId, payload.user, materialId));
+      return true;
     }
     _items[index] = _items[index].copyWith(
       status: MaterialUploadQueueStatus.queued,
@@ -262,6 +295,27 @@ class MaterialUploadQueueController extends ChangeNotifier {
     return true;
   }
 
+  bool canRetry(String queueId) {
+    final index = _indexOf(queueId);
+    if (index < 0 || !_payloads.containsKey(queueId)) return false;
+    return _items[index].status ==
+            MaterialUploadQueueStatus.userRetryRequired ||
+        _items[index].status == MaterialUploadQueueStatus.failed;
+  }
+
+  Future<void> _runAuthoritativeRetry(
+    String queueId,
+    AuthUser user,
+    String materialId,
+  ) async {
+    final retry = _retryMaterialAnalysis;
+    final succeeded = retry != null && await retry(user, materialId);
+    if (_indexOf(queueId) < 0) return;
+    if (!succeeded) {
+      _failTerminal(queueId, MaterialUploadQueueErrorCode.processingFailed);
+    }
+  }
+
   void acceptAuthoritativeMaterial(StudyMaterial material) {
     for (var index = 0; index < _items.length; index += 1) {
       final item = _items[index];
@@ -269,7 +323,7 @@ class MaterialUploadQueueController extends ChangeNotifier {
       if (material.processingStatus == MaterialProcessingStatus.ready &&
           material.hasContentText) {
         _items[index] = item.copyWith(
-          status: MaterialUploadQueueStatus.ready,
+          status: MaterialUploadQueueStatus.completed,
           clearProgress: true,
           clearError: true,
           clearRetryStage: true,
@@ -279,6 +333,70 @@ class MaterialUploadQueueController extends ChangeNotifier {
       }
       return;
     }
+  }
+
+  void acceptAnalysisStatus(String materialId, MaterialAnalysisStatus status) {
+    final index = _items.indexWhere(
+      (item) => item.authoritativeMaterialId == materialId,
+    );
+    if (index < 0) return;
+    final item = _items[index];
+    final next = switch (status.state) {
+      AnalysisState.completed when status.summary != null =>
+        MaterialUploadQueueStatus.completed,
+      AnalysisState.completedWithWarnings when status.summary != null =>
+        MaterialUploadQueueStatus.completedWithWarnings,
+      AnalysisState.completed ||
+      AnalysisState.completedWithWarnings => MaterialUploadQueueStatus.failed,
+      AnalysisState.userRetryRequired =>
+        MaterialUploadQueueStatus.userRetryRequired,
+      AnalysisState.failed => MaterialUploadQueueStatus.failed,
+      _ => MaterialUploadQueueStatus.processing,
+    };
+    _items[index] = item.copyWith(
+      status: next,
+      clearProgress: true,
+      clearError: next != MaterialUploadQueueStatus.failed,
+      clearRetryStage: next != MaterialUploadQueueStatus.userRetryRequired,
+      errorCode: next == MaterialUploadQueueStatus.failed
+          ? MaterialUploadQueueErrorCode.processingFailed
+          : null,
+      retryStage: next == MaterialUploadQueueStatus.userRetryRequired
+          ? MaterialUploadRetryStage.extraction
+          : null,
+    );
+    if (next == MaterialUploadQueueStatus.completed ||
+        next == MaterialUploadQueueStatus.completedWithWarnings ||
+        next == MaterialUploadQueueStatus.failed) {
+      _payloads.remove(item.queueId);
+    }
+    notifyListeners();
+  }
+
+  void removeAuthoritativeMaterial(String materialId) {
+    final queueIds = [
+      for (final item in _items)
+        if (item.authoritativeMaterialId == materialId) item.queueId,
+    ];
+    if (queueIds.isEmpty) return;
+    _items.removeWhere((item) => item.authoritativeMaterialId == materialId);
+    for (final queueId in queueIds) {
+      _payloads.remove(queueId);
+    }
+    notifyListeners();
+  }
+
+  List<String> pruneStaleAuthoritativeRows(Set<String> materialIds) {
+    final stale = [
+      for (final item in _items)
+        if (item.authoritativeMaterialId != null &&
+            !materialIds.contains(item.authoritativeMaterialId))
+          item.authoritativeMaterialId!,
+    ];
+    for (final materialId in stale) {
+      removeAuthoritativeMaterial(materialId);
+    }
+    return stale;
   }
 
   void clearForSessionChange() {
@@ -408,7 +526,7 @@ class MaterialUploadQueueController extends ChangeNotifier {
     }
     if (material.processingStatus == MaterialProcessingStatus.ready &&
         material.hasContentText) {
-      _markReady(queueId);
+      _markCompleted(queueId);
       return;
     }
 
@@ -418,7 +536,13 @@ class MaterialUploadQueueController extends ChangeNotifier {
       if (!guard.isCurrent) return;
       _onMaterialChanged(result.material);
       if (result.succeeded) {
-        _markReady(queueId);
+        if (result.material.processingStatus ==
+                MaterialProcessingStatus.ready &&
+            result.material.hasContentText) {
+          _markCompleted(queueId);
+        } else {
+          _updateStatus(queueId, MaterialUploadQueueStatus.processing);
+        }
       } else {
         _fail(
           queueId,
@@ -490,11 +614,11 @@ class MaterialUploadQueueController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _markReady(String queueId) {
+  void _markCompleted(String queueId) {
     final index = _indexOf(queueId);
     if (index < 0) return;
     _items[index] = _items[index].copyWith(
-      status: MaterialUploadQueueStatus.ready,
+      status: MaterialUploadQueueStatus.completed,
       clearProgress: true,
       clearError: true,
       clearRetryStage: true,
@@ -516,6 +640,19 @@ class MaterialUploadQueueController extends ChangeNotifier {
       errorCode: code,
       retryStage: retryStage,
     );
+    notifyListeners();
+  }
+
+  void _failTerminal(String queueId, MaterialUploadQueueErrorCode code) {
+    final index = _indexOf(queueId);
+    if (index < 0) return;
+    _items[index] = _items[index].copyWith(
+      status: MaterialUploadQueueStatus.failed,
+      clearProgress: true,
+      errorCode: code,
+      clearRetryStage: true,
+    );
+    _payloads.remove(queueId);
     notifyListeners();
   }
 

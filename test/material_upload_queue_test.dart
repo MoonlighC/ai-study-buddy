@@ -6,10 +6,12 @@ import 'package:ai_study_buddy/app/app_state.dart';
 import 'package:ai_study_buddy/core/models/material.dart';
 import 'package:ai_study_buddy/features/auth/auth_models.dart';
 import 'package:ai_study_buddy/features/materials/material_upload.dart';
+import 'package:ai_study_buddy/features/materials/material_analysis_repository.dart';
 import 'package:ai_study_buddy/features/materials/material_upload_queue.dart';
 import 'package:ai_study_buddy/features/materials/material_upload_repository.dart';
 import 'package:ai_study_buddy/features/materials/pdf_text_extraction_repository.dart';
 import 'package:ai_study_buddy/features/materials/image_text_extraction_repository.dart';
+import 'package:ai_study_buddy/features/materials/structured_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _user = AuthUser(
@@ -163,7 +165,7 @@ void main() {
       repository.releaseAll();
       await _waitFor(
         () => queue.items.every(
-          (item) => item.status == MaterialUploadQueueStatus.ready,
+          (item) => item.status == MaterialUploadQueueStatus.completed,
         ),
       );
       expect(queue.items.map((item) => item.fileName), [
@@ -229,13 +231,140 @@ void main() {
       expect(queue.retry('queue'), isTrue);
       expect(queue.retry('queue'), isFalse);
       await _waitFor(
-        () => queue.items.single.status == MaterialUploadQueueStatus.ready,
+        () => queue.items.single.status == MaterialUploadQueueStatus.completed,
       );
       expect(reads, 1);
       expect(repository.uploadedMaterials, hasLength(1));
       expect(queue.items.single.authoritativeMaterialId, 'fixed-material');
     },
   );
+
+  test(
+    'analysis start stays processing until authoritative summary completion',
+    () async {
+      final queue = MaterialUploadQueueController(
+        repository: MockMaterialUploadRepository(),
+        queueIdGenerator: () => 'queue-analysis',
+        materialIdGenerator: () => 'material-analysis',
+        processMaterial: (user, material, guard) async =>
+            MaterialQueueProcessingResult(material: material, succeeded: true),
+        onMaterialChanged: (_) {},
+      );
+      queue.enqueueBatch(
+        user: _user,
+        subjectId: 'biology',
+        kind: MaterialKind.pdf,
+        batch: _pdfBatch('authoritative', 1),
+      );
+      await _waitFor(
+        () => queue.items.single.status == MaterialUploadQueueStatus.processing,
+      );
+      expect(queue.uploadedCount, 0);
+
+      queue.acceptAnalysisStatus(
+        'material-analysis',
+        _analysisStatus(AnalysisState.completed, summary: _summary),
+      );
+
+      expect(queue.items.single.status, MaterialUploadQueueStatus.completed);
+      expect(queue.uploadedCount, 1);
+    },
+  );
+
+  test('terminal failed analysis has no false retry action', () async {
+    final queue = MaterialUploadQueueController(
+      repository: MockMaterialUploadRepository(),
+      queueIdGenerator: () => 'queue-failed',
+      materialIdGenerator: () => 'material-failed',
+      processMaterial: (user, material, guard) async =>
+          MaterialQueueProcessingResult(material: material, succeeded: true),
+      onMaterialChanged: (_) {},
+    );
+    queue.enqueueBatch(
+      user: _user,
+      subjectId: 'biology',
+      kind: MaterialKind.pdf,
+      batch: _pdfBatch('failed', 1),
+    );
+    await _waitFor(
+      () => queue.items.single.status == MaterialUploadQueueStatus.processing,
+    );
+    queue.acceptAnalysisStatus(
+      'material-failed',
+      _analysisStatus(AnalysisState.failed),
+    );
+
+    expect(queue.items.single.status, MaterialUploadQueueStatus.failed);
+    expect(queue.canRetry('queue-failed'), isFalse);
+    expect(queue.retry('queue-failed'), isFalse);
+  });
+
+  test('user-retry-required exposes one real authoritative retry', () async {
+    var retries = 0;
+    late final MaterialUploadQueueController queue;
+    queue = MaterialUploadQueueController(
+      repository: MockMaterialUploadRepository(),
+      queueIdGenerator: () => 'queue-retry',
+      materialIdGenerator: () => 'material-analysis',
+      processMaterial: (user, material, guard) async =>
+          MaterialQueueProcessingResult(material: material, succeeded: true),
+      retryMaterialAnalysis: (user, materialId) async {
+        retries += 1;
+        queue.acceptAnalysisStatus(
+          materialId,
+          _analysisStatus(AnalysisState.completed, summary: _summary),
+        );
+        return true;
+      },
+      onMaterialChanged: (_) {},
+    );
+    queue.enqueueBatch(
+      user: _user,
+      subjectId: 'biology',
+      kind: MaterialKind.pdf,
+      batch: _pdfBatch('retry-required', 1),
+    );
+    await _waitFor(
+      () => queue.items.single.status == MaterialUploadQueueStatus.processing,
+    );
+    queue.acceptAnalysisStatus(
+      'material-analysis',
+      _analysisStatus(AnalysisState.userRetryRequired),
+    );
+
+    expect(queue.canRetry('queue-retry'), isTrue);
+    expect(queue.retry('queue-retry'), isTrue);
+    expect(queue.retry('queue-retry'), isFalse);
+    await _waitFor(() => queue.uploadedCount == 1);
+    expect(retries, 1);
+  });
+
+  test('deleted material mapping and queue row are pruned', () async {
+    final queue = MaterialUploadQueueController(
+      repository: MockMaterialUploadRepository(),
+      queueIdGenerator: () => 'queue-deleted',
+      materialIdGenerator: () => 'material-deleted',
+      processMaterial: (user, material, guard) async =>
+          MaterialQueueProcessingResult(
+            material: material.copyWith(
+              content: 'Ready',
+              processingStatus: MaterialProcessingStatus.ready,
+            ),
+            succeeded: true,
+          ),
+      onMaterialChanged: (_) {},
+    );
+    queue.enqueueBatch(
+      user: _user,
+      subjectId: 'biology',
+      kind: MaterialKind.pdf,
+      batch: _pdfBatch('deleted', 1),
+    );
+    await _waitFor(() => queue.uploadedCount == 1);
+
+    expect(queue.pruneStaleAuthoritativeRows(const {}), ['material-deleted']);
+    expect(queue.items, isEmpty);
+  });
 
   test('session clear drops queued state and ignores stale work', () async {
     final repository = _ControlledRepository();
@@ -319,7 +448,13 @@ void main() {
       queueIdGenerator: () => 'queue-${++queueId}',
       materialIdGenerator: () => 'material-$queueId',
       processMaterial: (user, material, guard) async =>
-          MaterialQueueProcessingResult(material: material, succeeded: true),
+          MaterialQueueProcessingResult(
+            material: material.copyWith(
+              content: 'Ready content',
+              processingStatus: MaterialProcessingStatus.ready,
+            ),
+            succeeded: true,
+          ),
       onMaterialChanged: (_) => changed += 1,
     );
     queue.enqueueBatch(
@@ -352,7 +487,13 @@ void main() {
       queueIdGenerator: () => 'queue-${++queueId}',
       materialIdGenerator: () => 'material-$queueId',
       processMaterial: (user, material, guard) async =>
-          MaterialQueueProcessingResult(material: material, succeeded: true),
+          MaterialQueueProcessingResult(
+            material: material.copyWith(
+              content: 'Ready content',
+              processingStatus: MaterialProcessingStatus.ready,
+            ),
+            succeeded: true,
+          ),
       onMaterialChanged: changed.add,
     );
     queue.enqueueBatch(
@@ -372,7 +513,7 @@ void main() {
     repository.autoRelease = true;
     repository.releaseAll();
     await _waitFor(
-      () => queue.items.single.status == MaterialUploadQueueStatus.ready,
+      () => queue.items.single.status == MaterialUploadQueueStatus.completed,
     );
     expect(
       changed.where((material) => material.title.startsWith('old')),
@@ -466,6 +607,56 @@ void main() {
     },
   );
 }
+
+MaterialAnalysisStatus _analysisStatus(
+  AnalysisState state, {
+  StructuredSummary? summary,
+}) => MaterialAnalysisStatus(
+  materialId: state == AnalysisState.failed
+      ? 'material-failed'
+      : 'material-analysis',
+  processingMode: AnalysisProcessingMode.recommended,
+  state: state,
+  publicStage: AnalysisPublicStage.creatingSummary,
+  pageCount: 1,
+  completedPages: state == AnalysisState.completed ? 1 : 0,
+  confirmationRequired: false,
+  canRetry: state == AnalysisState.userRetryRequired,
+  retryAfterSeconds: null,
+  warnings: const [],
+  summarySchemaVersion: summary == null ? null : 1,
+  summary: summary,
+  structuredSummaryMalformed: false,
+);
+
+const _summary = StructuredSummary(
+  schemaVersion: 1,
+  language: 'en',
+  sections: [
+    StructuredSection(
+      id: 'summary',
+      title: 'Summary',
+      blocks: [
+        ProseBlock(
+          markdown: 'Grounded summary.',
+          display: SummaryDisplay.block,
+        ),
+      ],
+      sourcePages: [1],
+      confidence: 1,
+    ),
+  ],
+  keyConcepts: [],
+  equations: [],
+  warnings: [],
+  partialExtraction: PartialExtraction(
+    isPartial: false,
+    analyzedPages: [1],
+    partialPages: [],
+    missingPages: [],
+    pageModes: [PageMode(page: 1, mode: PageModeKind.text)],
+  ),
+);
 
 MaterialFilePickerBatch _pdfBatch(String token, int count) =>
     validateMaterialFileBatch(

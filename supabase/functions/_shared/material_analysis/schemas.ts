@@ -1,7 +1,6 @@
 import {
   MaterialAnalysisStatus,
   PageAnalysisResult,
-  PageState,
   ReductionResult,
   StructuredSummary,
 } from "./contracts.ts";
@@ -14,8 +13,15 @@ import {
 const page = { type: "integer", minimum: 1, maximum: 100 } as const;
 const confidence = { type: "number", minimum: 0, maximum: 1 } as const;
 const pageArray = { type: "array", items: page, maxItems: 100 } as const;
+export const approvedAnalysisWarningCodes = [
+  "page_content_partial",
+  "page_content_missing",
+  "source_metadata_omitted",
+  "page_missing",
+  "invalid_equation_latex",
+] as const;
 const warningSchema = closed({
-  code: { type: "string", pattern: "^[a-z0-9_]{1,64}$" },
+  code: { type: "string", enum: [...approvedAnalysisWarningCodes] },
   detail: { type: "string" },
   source_pages: pageArray,
 });
@@ -44,6 +50,10 @@ const finalSummaryEquationSchema = equationSchema(nonBlankLatexSchema);
 
 export const pageAnalysisResultSchema = closed({
   page_number: page,
+  content_status: {
+    type: "string",
+    enum: ["completed", "partial", "missing"],
+  },
   summary_markdown: { type: "string" },
   key_concepts: { type: "array", items: { type: "string" }, maxItems: 50 },
   equations: { type: "array", items: pageEquationSchema, maxItems: 100 },
@@ -312,20 +322,43 @@ export function validatePageResult(
   input: unknown,
   expectedPage: number,
   pageCount = expectedPage,
-  terminalStatus: Extract<PageState, "completed" | "partial" | "missing"> =
-    "completed",
 ): ValidationResult {
   const errors: string[] = [];
-  if (terminalStatus === "missing") {
-    if (input !== null) errors.push("missing_has_authoritative_result");
-    return finish(errors);
-  }
   if (!isPageAnalysisResult(input, errors, pageCount)) return finish(errors);
   const pageResult = input as PageAnalysisResult;
   if (pageResult.page_number !== expectedPage) errors.push("page_number");
   if (!pageResult.trustworthy) errors.push("trustworthy_content_required");
-  if (terminalStatus === "partial" && pageResult.warnings.length === 0) {
+  const warningCodes = pageResult.warnings.map((warning) => warning.code);
+  if (
+    warningCodes.some((code) =>
+      ![
+        "page_content_partial",
+        "page_content_missing",
+        "source_metadata_omitted",
+      ].includes(code)
+    )
+  ) errors.push("page_warning_code_not_allowed");
+  if (
+    pageResult.content_status === "completed" &&
+    warningCodes.some((code) =>
+      code === "page_content_partial" || code === "page_content_missing"
+    )
+  ) errors.push("completed_status_warning_conflict");
+  if (
+    pageResult.content_status === "partial" &&
+    !warningCodes.includes("page_content_partial")
+  ) {
     errors.push("partial_warning_required");
+  }
+  if (pageResult.content_status === "missing") {
+    if (
+      pageResult.summary_markdown !== "" ||
+      pageResult.key_concepts.length > 0 ||
+      pageResult.equations.length > 0 || pageResult.confidence !== 0
+    ) errors.push("missing_has_authoritative_content");
+    if (!warningCodes.includes("page_content_missing")) {
+      errors.push("missing_warning_required");
+    }
   }
   if (
     pageResult.warnings.some((warning) =>
@@ -498,6 +531,7 @@ function isPageAnalysisResult(
       value,
       [
         "page_number",
+        "content_status",
         "summary_markdown",
         "key_concepts",
         "equations",
@@ -515,8 +549,20 @@ function isPageAnalysisResult(
     (pageNumber as number) > pageCount
   ) errors.push("page_number");
   if (
-    !boundedString(value.summary_markdown, 1, 6000) ||
-    !validateSafeMarkdown(value.summary_markdown as string).valid
+    !["completed", "partial", "missing"].includes(
+      value.content_status as string,
+    )
+  ) {
+    errors.push("content_status");
+  }
+  const missing = value.content_status === "missing";
+  if (
+    (missing
+      ? value.summary_markdown !== ""
+      : !boundedString(value.summary_markdown, 1, 6000)) ||
+    (typeof value.summary_markdown === "string" &&
+      value.summary_markdown.length > 0 &&
+      !validateSafeMarkdown(value.summary_markdown).valid)
   ) errors.push("summary_markdown");
   if (
     !boundedArray(value.key_concepts, 0, 50) ||
@@ -560,10 +606,18 @@ function isReductionResult(
     !boundedArray(value.source_pages, 1, 100) ||
     !value.source_pages.every(Number.isInteger)
   ) errors.push("source_pages");
+  const markdownValidation = typeof value.summary_markdown === "string"
+    ? validateSafeMarkdown(value.summary_markdown, 12000)
+    : { valid: false, errors: ["markdown_length"] };
   if (
     !boundedString(value.summary_markdown, 1, 12000) ||
-    !validateSafeMarkdown(value.summary_markdown as string, 12000).valid
-  ) errors.push("summary_markdown");
+    !markdownValidation.valid
+  ) {
+    errors.push("summary_markdown");
+    if (markdownValidation.errors.includes("markdown_latex_delimiter")) {
+      errors.push("reduction_markdown_dollar_math");
+    }
+  }
   if (
     !boundedArray(value.key_concepts, 0, 100) ||
     !value.key_concepts.every((item) => boundedString(item, 1, 500))
@@ -677,10 +731,15 @@ function validateEquation(value: unknown, errors: string[], path: string) {
   if (typeof value.id !== "string" || !/^eq_[a-z0-9_-]{1,60}$/.test(value.id)) {
     errors.push(`${path}.id`);
   }
-  if (
-    !boundedString(value.latex, 1, 512) ||
-    !validateLatex(value.latex as string).valid
-  ) errors.push(`${path}.latex`);
+  const latexValidation = typeof value.latex === "string"
+    ? validateLatex(value.latex)
+    : { valid: false, errors: ["latex_length"] };
+  if (!boundedString(value.latex, 1, 512) || !latexValidation.valid) {
+    errors.push(`${path}.latex`);
+    if (latexValidation.errors.includes("equation_non_mathematical")) {
+      errors.push("page_equation_non_mathematical");
+    }
+  }
   if (
     typeof value.explanation_markdown !== "string" ||
     value.explanation_markdown.length > 2000 ||
@@ -718,7 +777,9 @@ function validateWarnings(
     ) return;
     if (
       typeof warning.code !== "string" ||
-      !/^[a-z0-9_]{1,64}$/.test(warning.code)
+      !approvedAnalysisWarningCodes.includes(
+        warning.code as typeof approvedAnalysisWarningCodes[number],
+      )
     ) errors.push(`warnings.${index}.code`);
     if (!boundedString(warning.detail, 1, 500)) {
       errors.push(`warnings.${index}.detail`);

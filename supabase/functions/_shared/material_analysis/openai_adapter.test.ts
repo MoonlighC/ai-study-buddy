@@ -89,11 +89,17 @@ Deno.test("visual STEM page request states the strict Markdown and LaTeX contrac
       const body = JSON.parse(String(init?.body));
       const content = body.input[0].content;
       const prompt = content[0].text as string;
-      equal(body.text.format.name, "phase_c_page_visual_v1");
+      equal(body.text.format.name, "phase_c_page_visual_v2");
       equal(prompt.includes("hardened Markdown"), true);
-      equal(prompt.includes("dollar-delimited math"), true);
+      equal(prompt.includes("dollar-delimited mathematics"), true);
       equal(prompt.includes("control-spacing commands"), true);
-      equal(prompt.includes("exact source_page"), true);
+      equal(prompt.includes("Preserve equation provenance"), true);
+      equal(prompt.includes("page_content_partial"), true);
+      equal(prompt.includes("page_content_missing"), true);
+      equal(prompt.includes("source_metadata_omitted"), true);
+      equal(prompt.includes("page_missing"), true);
+      equal(prompt.includes("invalid_equation_latex"), true);
+      equal(prompt.includes("Source code must never appear"), true);
       equal(content[1], { type: "input_file", file_id: "file_12345678" });
       equal("detail" in content[1], false);
       return Promise.resolve(jsonResponse(completedResponse(stemPageBatch())));
@@ -158,29 +164,29 @@ Deno.test("final summary accepts bounded 20 21 22 and 100 page hierarchies", asy
     const adapter = adapterWith((_input, init) => {
       calls++;
       const body = JSON.parse(String(init?.body));
-      equal(body.text.format.name, "phase_c_final_summary_v1");
+      equal(body.text.format.name, "phase_c_final_summary_v2");
       equal(
         body.text.format.schema.properties.equations.items.properties.latex,
         { type: "string", pattern: "\\S" },
       );
       const prompt = body.input[0].content[0].text as string;
       equal(
-        prompt.includes("only when a valid, non-empty LaTeX expression"),
+        prompt.includes("only for a validated mathematical expression"),
         true,
       );
       equal(
         prompt.includes(
-          "Otherwise omit both the equation object and its block",
+          "omit both when no valid mathematical equation exists",
         ),
         true,
       );
       equal(
         prompt.includes(
-          "Never return empty, whitespace-only, placeholder, prose, or null LaTeX",
+          "Never place source code, prose, placeholders, or null values in LaTeX",
         ),
         true,
       );
-      equal(prompt.includes("never invent a formula"), true);
+      equal(prompt.toLowerCase().includes("never invent a formula"), true);
       return Promise.resolve(jsonResponse(completedResponse(summary)));
     });
     const result = await adapter.execute(finalSummaryRequest(pages));
@@ -752,6 +758,7 @@ function pageBatch() {
   return {
     pages: [{
       page_number: 1,
+      content_status: "completed",
       summary_markdown: "Safe summary.",
       key_concepts: ["Concept"],
       equations: [],
@@ -766,6 +773,7 @@ function stemPageBatch() {
   return {
     pages: [{
       page_number: 1,
+      content_status: "completed",
       summary_markdown:
         "The page contains a quadratic formula and an integral.",
       key_concepts: ["Quadratic formula", "Definite integral"],

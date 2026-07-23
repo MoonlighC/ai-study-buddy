@@ -215,6 +215,8 @@ class AppState extends ChangeNotifier {
         queueIdGenerator: newUuidV4,
         materialIdGenerator: materialIdGenerator,
         processMaterial: _processQueuedMaterial,
+        retryMaterialAnalysis: (user, materialId) =>
+            retryMaterialAnalysis(user, materialId),
         onMaterialChanged: _upsertQueuedMaterial,
       );
   final FavoriteRepository favoriteRepository;
@@ -741,6 +743,7 @@ class AppState extends ChangeNotifier {
             (current.state == AnalysisState.failed && !current.canRetry));
     if (!allowRestart && currentIsFinal && !next.isTerminal) return;
     _analysisStatuses[id] = next;
+    materialUploadQueue.acceptAnalysisStatus(id, next);
     if (!next.isTerminal) return;
     final processingStatus = switch (next.state) {
       AnalysisState.completed ||
@@ -1718,6 +1721,7 @@ class AppState extends ChangeNotifier {
 
   void _removeMaterialLocally(String materialId) {
     stopObservingMaterialAnalysis(materialId);
+    materialUploadQueue.removeAuthoritativeMaterial(materialId);
     _materials = [
       for (final item in _materials)
         if (item.id != materialId) item,
