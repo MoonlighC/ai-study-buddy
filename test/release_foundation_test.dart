@@ -107,7 +107,7 @@ void main() {
       multiLine: true,
     ).firstMatch(read('pubspec.yaml'));
     expect(match, isNotNull);
-    expect(match!.group(0), contains('1.1.0+3'));
+    expect(match!.group(0), contains('1.1.0+4'));
     expect(int.parse(match.group(4)!), greaterThan(0));
     expect(
       read('android/app/build.gradle.kts'),
