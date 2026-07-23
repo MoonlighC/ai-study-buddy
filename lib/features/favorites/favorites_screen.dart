@@ -62,11 +62,7 @@ class FavoritesScreen extends StatelessWidget {
               AppListRow(
                 leading: IconButton(
                   tooltip: l10n.favoritesUnfavorite,
-                  onPressed: () =>
-                      AppStateScope.read(context).toggleFlashcardFavoriteFor(
-                        AuthScope.read(context).user,
-                        card.id,
-                      ),
+                  onPressed: () => _toggleFlashcardFavorite(context, card.id),
                   icon: const Icon(Icons.star),
                 ),
                 title: Text(card.front),
@@ -214,6 +210,22 @@ class FavoritesScreen extends StatelessWidget {
     if (!context.mounted || saved) {
       return;
     }
+    final message =
+        AppStateScope.read(context).favoriteSyncErrorMessage ??
+        context.l10n.errorCouldNotUpdateFavorite;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
+  }
+
+  Future<void> _toggleFlashcardFavorite(
+    BuildContext context,
+    String cardId,
+  ) async {
+    final saved = await AppStateScope.read(
+      context,
+    ).toggleFlashcardFavoriteFor(AuthScope.read(context).user, cardId);
+    if (!context.mounted || saved) return;
     final message =
         AppStateScope.read(context).favoriteSyncErrorMessage ??
         'Could not update favorite.';

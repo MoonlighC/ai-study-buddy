@@ -1805,6 +1805,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get studyContinueSession => 'Lerneinheit fortsetzen';
 
   @override
+  String get studyCancelEmptySession => 'Leere Lerneinheit abbrechen';
+
+  @override
+  String get studyCancelEmptySessionError =>
+      'Die leere Lerneinheit konnte nicht abgebrochen werden.';
+
+  @override
   String get studyNotCompleted => 'Nicht abgeschlossen';
 
   @override

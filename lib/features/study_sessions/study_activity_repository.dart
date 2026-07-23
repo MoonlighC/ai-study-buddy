@@ -27,6 +27,10 @@ abstract class StudyActivityRepository {
     required AuthUser user,
     required String sessionId,
   });
+  Future<void> cancelEmptySession({
+    required AuthUser user,
+    required String sessionId,
+  });
   Future<PersistedStudyActivity> startQuiz({
     required AuthUser user,
     required String attemptId,
@@ -96,6 +100,11 @@ class EmptyStudyActivityRepository implements StudyActivityRepository {
   }) async => _error();
   @override
   Future<PersistedStudyActivity> finalizeFlashcards({
+    required AuthUser user,
+    required String sessionId,
+  }) async => _error();
+  @override
+  Future<void> cancelEmptySession({
     required AuthUser user,
     required String sessionId,
   }) async => _error();
@@ -236,6 +245,23 @@ class SupabaseStudyActivityRepository implements StudyActivityRepository {
       params: {'p_session_id': sessionId},
     ),
   );
+  @override
+  Future<void> cancelEmptySession({
+    required AuthUser user,
+    required String sessionId,
+  }) async {
+    try {
+      await _client.rpc(
+        'cancel_empty_study_session',
+        params: {'p_session_id': sessionId},
+      );
+    } catch (_) {
+      throw const StudyActivityRepositoryException(
+        'Could not cancel the empty study session.',
+      );
+    }
+  }
+
   @override
   Future<PersistedStudyActivity> startQuiz({
     required AuthUser user,

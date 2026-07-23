@@ -2980,6 +2980,18 @@ abstract class AppLocalizations {
   /// **'Continue session'**
   String get studyContinueSession;
 
+  /// No description provided for @studyCancelEmptySession.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel empty session'**
+  String get studyCancelEmptySession;
+
+  /// No description provided for @studyCancelEmptySessionError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not cancel the empty study session.'**
+  String get studyCancelEmptySessionError;
+
   /// No description provided for @studyNotCompleted.
   ///
   /// In en, this message translates to:

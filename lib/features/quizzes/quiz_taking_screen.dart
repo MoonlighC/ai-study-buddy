@@ -58,6 +58,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
   late DateTime _startedAt;
   late String _attemptId;
   PersistedStudyActivity? _persisted;
+  QuizAttempt? _displayedCompletedAttempt;
   bool _starting = true;
   bool _didStart = false;
 
@@ -68,6 +69,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
     _initializeAttempt();
     _persisted = widget.args.session;
     final completed = widget.args.completedAttempt;
+    _displayedCompletedAttempt = completed;
     if (completed != null) {
       _answers.addEntries(
         completed.answers.map(
@@ -150,7 +152,7 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
                 questions: questions,
                 answers: _answers,
                 attempt:
-                    widget.args.completedAttempt ?? state.latestQuizCompletion,
+                    _displayedCompletedAttempt ?? state.latestQuizCompletion,
                 isSaving: state.isSavingQuizAttempt || _isCompleting,
                 warningMessage: state.quizAttemptSyncErrorMessage,
                 onReviewMaterial: () => Navigator.pop(context),
@@ -233,9 +235,59 @@ class _QuizTakingScreenState extends State<QuizTakingScreen> {
     }
   }
 
-  void _retry() {
+  Future<void> _retry() async {
+    final previousAttempt = _attempt;
+    final previousAnswers = Map<String, String>.of(_answers);
+    final previousReviewAnswers = Map<String, String>.of(_reviewAnswers);
+    final previousIndex = _index;
+    final previousReviewIndex = _reviewIndex;
+    final previousMode = _mode;
+    final previousStartedAt = _startedAt;
+    final previousAttemptId = _attemptId;
+    final previousPersisted = _persisted;
+    final previousDisplayedAttempt = _displayedCompletedAttempt;
+    final state = AppStateScope.read(context);
+    final isSupabase =
+        state.config.effectiveBackendMode == AppBackendMode.supabase;
+
     setState(() {
       _initializeAttempt();
+      _displayedCompletedAttempt = null;
+      _starting = isSupabase;
+    });
+    if (!isSupabase) return;
+
+    final next = await state.startQuizActivity(
+      user: AuthScope.read(context).user,
+      quiz: _attempt.quiz,
+    );
+    if (!mounted) return;
+    if (next == null) {
+      setState(() {
+        _attempt = previousAttempt;
+        _answers
+          ..clear()
+          ..addAll(previousAnswers);
+        _reviewAnswers
+          ..clear()
+          ..addAll(previousReviewAnswers);
+        _index = previousIndex;
+        _reviewIndex = previousReviewIndex;
+        _mode = previousMode;
+        _startedAt = previousStartedAt;
+        _attemptId = previousAttemptId;
+        _persisted = previousPersisted;
+        _displayedCompletedAttempt = previousDisplayedAttempt;
+        _starting = false;
+      });
+      _showSessionError();
+      return;
+    }
+    setState(() {
+      _persisted = next;
+      _attemptId = next.attemptId!;
+      _starting = false;
+      _restorePersisted(next);
     });
   }
 

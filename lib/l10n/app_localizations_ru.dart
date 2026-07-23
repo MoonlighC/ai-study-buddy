@@ -1844,6 +1844,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get studyContinueSession => 'Продолжить занятие';
 
   @override
+  String get studyCancelEmptySession => 'Отменить пустое занятие';
+
+  @override
+  String get studyCancelEmptySessionError =>
+      'Не удалось отменить пустое занятие.';
+
+  @override
   String get studyNotCompleted => 'Не завершено';
 
   @override

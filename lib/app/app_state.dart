@@ -2474,6 +2474,41 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> cancelEmptyStudyActivity(
+    AuthUser? user,
+    PersistedStudyActivity session,
+  ) async {
+    if (user == null ||
+        session.type != PersistedStudyActivityType.flashcards ||
+        session.flashcardMode != FlashcardTrainingMode.all ||
+        session.currentIndex != 0 ||
+        session.knownCount != 0 ||
+        session.notKnownCount != 0 ||
+        session.isCompleted) {
+      _studyActivityErrorMessage =
+          'Only an empty active session can be cancelled.';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await studyActivityRepository.cancelEmptySession(
+        user: user,
+        sessionId: session.id,
+      );
+      _activeStudyActivities.removeWhere((item) => item.id == session.id);
+      _studyActivityErrorMessage = null;
+      await loadStudyProgressFor(user);
+      notifyListeners();
+      return true;
+    } catch (error) {
+      _studyActivityErrorMessage = error is StudyActivityRepositoryException
+          ? error.message
+          : 'Could not cancel the empty study session.';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<PersistedStudyActivity?> startQuizActivity({
     required AuthUser? user,
     required Quiz quiz,

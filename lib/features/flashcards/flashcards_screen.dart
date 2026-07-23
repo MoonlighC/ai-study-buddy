@@ -259,17 +259,13 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
                         _FlashcardListItem(
                           card: card,
                           isAnswerVisible: _revealedCardIds.contains(card.id),
-                          isSupabaseMode: isSupabaseMode,
                           onToggleAnswer: () => setState(() {
                             if (!_revealedCardIds.add(card.id)) {
                               _revealedCardIds.remove(card.id);
                             }
                           }),
                           onToggleFavorite: () =>
-                              state.toggleFlashcardFavoriteFor(
-                                AuthScope.read(context).user,
-                                card.id,
-                              ),
+                              _toggleFlashcardFavorite(context, card.id),
                         ),
                     ],
                   ),
@@ -292,6 +288,22 @@ class _FlashcardsScreenState extends State<FlashcardsScreen> {
             : AppStateScope.read(context).materialById(widget.args.materialId!),
         cards: cards.take(selectedSessionSize).toList(),
       ),
+    );
+  }
+
+  Future<void> _toggleFlashcardFavorite(
+    BuildContext context,
+    String cardId,
+  ) async {
+    final saved = await AppStateScope.read(
+      context,
+    ).toggleFlashcardFavoriteFor(AuthScope.read(context).user, cardId);
+    if (!context.mounted || saved) return;
+    final message =
+        AppStateScope.read(context).favoriteSyncErrorMessage ??
+        context.l10n.errorCouldNotUpdateFavorite;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
     );
   }
 
@@ -503,14 +515,12 @@ class _FlashcardListItem extends StatelessWidget {
   const _FlashcardListItem({
     required this.card,
     required this.isAnswerVisible,
-    required this.isSupabaseMode,
     required this.onToggleAnswer,
     required this.onToggleFavorite,
   });
 
   final Flashcard card;
   final bool isAnswerVisible;
-  final bool isSupabaseMode;
   final VoidCallback onToggleAnswer;
   final VoidCallback onToggleFavorite;
 
@@ -548,14 +558,13 @@ class _FlashcardListItem extends StatelessWidget {
             ),
             onPressed: onToggleAnswer,
           ),
-          if (!isSupabaseMode)
-            IconButton(
-              tooltip: card.isFavorite
-                  ? context.l10n.unfavoriteAction
-                  : context.l10n.favoriteAction,
-              icon: Icon(card.isFavorite ? Icons.star : Icons.star_border),
-              onPressed: onToggleFavorite,
-            ),
+          IconButton(
+            tooltip: card.isFavorite
+                ? context.l10n.unfavoriteAction
+                : context.l10n.favoriteAction,
+            icon: Icon(card.isFavorite ? Icons.star : Icons.star_border),
+            onPressed: onToggleFavorite,
+          ),
         ],
       ),
     );

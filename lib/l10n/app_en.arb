@@ -849,6 +849,8 @@
   "studyOpenSubjects": "Open Subjects",
   "studyNoMaterialsTitle": "No materials yet",
   "studyContinueSession": "Continue session",
+  "studyCancelEmptySession": "Cancel empty session",
+  "studyCancelEmptySessionError": "Could not cancel the empty study session.",
   "studyNotCompleted": "Not completed",
   "studyBackToSubject": "Back to subject",
   "studyUnavailableTitle": "No study material available",

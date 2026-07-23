@@ -179,7 +179,15 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
       );
     }
 
-    final card = cards[_currentIndex];
+    final state = AppStateScope.watch(context);
+    final sessionCard = cards[_currentIndex];
+    final card = state
+        .flashcardsForMaterial(sessionCard.materialId ?? '')
+        .fold<Flashcard>(
+          sessionCard,
+          (current, candidate) =>
+              candidate.id == sessionCard.id ? candidate : current,
+        );
     return ResponsiveAppScaffold(
       title: context.l10n.trainingTitle,
       subtitle: _sessionMaterial?.title ?? widget.args.subject.name,
@@ -195,6 +203,17 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
               total: cards.length,
               label: context.l10n.trainingProgress,
             ),
+            if (_sessionMaterial != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  tooltip: card.isFavorite
+                      ? context.l10n.unfavoriteAction
+                      : context.l10n.favoriteAction,
+                  icon: Icon(card.isFavorite ? Icons.star : Icons.star_border),
+                  onPressed: () => _toggleFavorite(card),
+                ),
+              ),
             const SizedBox(height: 16),
             FlashcardSurface(
               front: card.front,
@@ -277,6 +296,19 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
     }
   }
 
+  Future<void> _toggleFavorite(Flashcard card) async {
+    final saved = await AppStateScope.read(
+      context,
+    ).toggleFlashcardFavoriteFor(AuthScope.read(context).user, card.id);
+    if (!mounted || saved) return;
+    final message =
+        AppStateScope.read(context).favoriteSyncErrorMessage ??
+        context.l10n.errorCouldNotUpdateFavorite;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.localizedSafeMessage(message))),
+    );
+  }
+
   Future<void> _setAnswerVisible(bool value) async {
     final persisted = _persisted;
     if (persisted == null) {
@@ -310,15 +342,56 @@ class _FlashcardTrainingScreenState extends State<FlashcardTrainingScreen> {
     );
   }
 
-  void _reviewAgain() {
+  Future<void> _reviewAgain() async {
+    final cards = List<Flashcard>.of(_sessionCards);
+    final material = _sessionMaterial;
+    final state = AppStateScope.read(context);
+    final requiresPersistedSession =
+        _persisted != null ||
+        state.config.effectiveBackendMode == AppBackendMode.supabase;
+    PersistedStudyActivity? next;
+    if (requiresPersistedSession) {
+      if (material == null) {
+        _showSessionError();
+        return;
+      }
+      setState(() => _starting = true);
+      next = await state.startFlashcardActivity(
+        user: AuthScope.read(context).user,
+        material: material,
+        cards: cards,
+        mode: _persisted?.flashcardMode ?? widget.args.mode,
+      );
+      if (!mounted) return;
+      if (next == null) {
+        setState(() => _starting = false);
+        _showSessionError();
+        return;
+      }
+      final byId = {for (final card in cards) card.id: card};
+      final authoritativeOrder = [
+        for (final id in next.itemIds)
+          if (byId[id] != null) byId[id]!,
+      ];
+      if (authoritativeOrder.length != cards.length) {
+        setState(() => _starting = false);
+        _showSessionError();
+        return;
+      }
+      cards
+        ..clear()
+        ..addAll(authoritativeOrder);
+    }
     setState(() {
-      _sessionCards = List<Flashcard>.of(widget.args.cards);
+      _sessionCards = cards;
+      _persisted = next;
       _currentIndex = 0;
       _knownCount = 0;
       _missedCount = 0;
       _missedCards.clear();
       _isShowingAnswer = false;
       _isComplete = false;
+      _starting = false;
     });
   }
 

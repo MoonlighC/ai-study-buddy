@@ -12,6 +12,7 @@ import '../../shared/widgets/study_components.dart';
 import 'study_session_result_screen.dart';
 import '../flashcards/flashcard_training_screen.dart';
 import '../quizzes/quiz_taking_screen.dart';
+import '../auth/auth_controller.dart';
 
 class ContinueStudyingScreen extends StatelessWidget {
   const ContinueStudyingScreen({super.key});
@@ -186,6 +187,14 @@ class _PersistedContinue extends StatelessWidget {
                 icon: const Icon(Icons.play_arrow),
                 label: Text(context.l10n.studyContinueSession),
               ),
+              if (_canCancel(session)) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _cancel(context, session),
+                  icon: const Icon(Icons.close),
+                  label: Text(context.l10n.studyCancelEmptySession),
+                ),
+              ],
             ],
           ],
         ),
@@ -206,6 +215,35 @@ class _PersistedContinue extends StatelessWidget {
     PersistedStudyActivityType.quizDraft => Icons.quiz_outlined,
     PersistedStudyActivityType.quizMistakeReview => Icons.rate_review_outlined,
   };
+  bool _canCancel(PersistedStudyActivity session) =>
+      session.type == PersistedStudyActivityType.flashcards &&
+      session.flashcardMode == FlashcardTrainingMode.all &&
+      session.currentIndex == 0 &&
+      session.knownCount == 0 &&
+      session.notKnownCount == 0 &&
+      !session.isCompleted;
+
+  Future<void> _cancel(
+    BuildContext context,
+    PersistedStudyActivity session,
+  ) async {
+    final cancelled = await state.cancelEmptyStudyActivity(
+      AuthScope.read(context).user,
+      session,
+    );
+    if (!context.mounted || cancelled) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          context.localizedSafeMessage(
+            state.studyActivityErrorMessage ??
+                context.l10n.studyCancelEmptySessionError,
+          ),
+        ),
+      ),
+    );
+  }
+
   void _resume(
     BuildContext context,
     PersistedStudyActivity session,

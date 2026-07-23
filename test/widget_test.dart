@@ -2726,7 +2726,7 @@ void main() {
 
     expect(find.text('Cloud generated front'), findsOneWidget);
     expect(find.textContaining('Cloud topic · exam'), findsOneWidget);
-    expect(find.byTooltip('Favorite'), findsNothing);
+    expect(find.byTooltip('Favorite'), findsOneWidget);
   });
 
   testWidgets('supabase material favorites load from fake repository', (

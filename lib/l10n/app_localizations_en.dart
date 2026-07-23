@@ -1766,6 +1766,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get studyContinueSession => 'Continue session';
 
   @override
+  String get studyCancelEmptySession => 'Cancel empty session';
+
+  @override
+  String get studyCancelEmptySessionError =>
+      'Could not cancel the empty study session.';
+
+  @override
   String get studyNotCompleted => 'Not completed';
 
   @override

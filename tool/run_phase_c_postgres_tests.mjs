@@ -236,7 +236,16 @@ await runSql(
   "authoritative_study_progress.sql",
 );
 
-console.log("PHASE_DE_DATABASE_TESTS_OK migrations=27 sql_suites=17");
+await runSql(
+  path.join(root, "supabase", "migrations", "028_cancel_empty_study_session.sql"),
+  "migration 028_",
+);
+await runSql(
+  path.join(root, "supabase", "tests", "cancel_empty_study_session.sql"),
+  "cancel_empty_study_session.sql",
+);
+
+console.log("PHASE_DE_DATABASE_TESTS_OK migrations=28 sql_suites=18");
 await database.close();
 
 async function runSql(file, label) {
