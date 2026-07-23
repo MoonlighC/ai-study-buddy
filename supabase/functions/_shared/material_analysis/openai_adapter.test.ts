@@ -10,6 +10,7 @@ import {
 } from "./engine.ts";
 import { StructuredSummary } from "./contracts.ts";
 import { buildSyntheticPdf } from "./synthetic_pdf_fixtures.ts";
+import { finalSummaryPartitionOverlapFixture } from "./final_summary_canonicalization_fixture.ts";
 
 Deno.test("C2 adapter keeps model detail schema and background server-only", async () => {
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -183,6 +184,12 @@ Deno.test("final summary accepts bounded 20 21 22 and 100 page hierarchies", asy
       equal(
         prompt.includes(
           "Never place source code, prose, placeholders, or null values in LaTeX",
+        ),
+        true,
+      );
+      equal(
+        prompt.includes(
+          "completed pages belong only in analyzed_pages, partial pages belong only in partial_pages, and missing pages belong only in missing_pages",
         ),
         true,
       );
@@ -431,6 +438,40 @@ Deno.test("C2 retrieval validates reconciled output and never resubmits", async 
   });
   equal(result.status, "completed");
   equal(requests, 1);
+});
+
+Deno.test("final-summary reconciliation canonicalizes the authoritative partition with one GET", async () => {
+  const methods: string[] = [];
+  const request = finalSummaryRequest([1]);
+  const input = JSON.parse(request.input.text);
+  input.manifest = structuredClone(
+    finalSummaryPartitionOverlapFixture.manifest,
+  );
+  request.input.text = JSON.stringify(input);
+  const adapter = adapterWith((_input, init) => {
+    methods.push(init?.method ?? "GET");
+    return Promise.resolve(jsonResponse(completedResponse(
+      finalSummaryPartitionOverlapFixture.providerResult,
+    )));
+  });
+
+  const result = await adapter.retrieve({
+    responseId: "resp_12345678",
+    request,
+  });
+
+  equal(methods, ["GET"]);
+  equal(result.status, "completed");
+  equal(
+    (result.result as StructuredSummary).partial_extraction,
+    {
+      is_partial: true,
+      analyzed_pages: [],
+      partial_pages: [1],
+      missing_pages: [],
+      page_modes: [{ page: 1, mode: "visual" }],
+    },
+  );
 });
 
 Deno.test("diagnostic retrieval performs one GET and zero POST or file upload calls", async () => {

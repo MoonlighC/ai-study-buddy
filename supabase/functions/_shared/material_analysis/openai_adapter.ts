@@ -39,6 +39,23 @@ export type ProviderResult = {
   result: unknown;
 };
 
+export type FinalSummaryPartitionComparison = {
+  changed: boolean;
+  duplicateMembership: boolean;
+  classificationChanged: boolean;
+  orderingChanged: boolean;
+  providerCounts: {
+    analyzed: number;
+    partial: number;
+    missing: number;
+  };
+  canonicalCounts: {
+    analyzed: number;
+    partial: number;
+    missing: number;
+  };
+};
+
 export type OpenAiAdapterOptions = {
   apiKey: string;
   model: string;
@@ -128,7 +145,7 @@ export class TrustedOpenAiAdapter {
     try {
       requireCompletedResponse(response);
       parsed = parseOutputJson(response);
-      validateProviderOutput(request, parsed);
+      parsed = validateProviderOutput(request, parsed);
     } catch (error) {
       throw boundaryWithResponseId(error, responseId);
     }
@@ -149,6 +166,7 @@ export class TrustedOpenAiAdapter {
       result?: unknown;
     }
   > {
+    validateProviderRequest(input.request);
     const responseId = providerId(input.responseId, "invalid_response_id");
     const response = await this.requestJson(
       `https://api.openai.com/v1/responses/${encodeURIComponent(responseId)}`,
@@ -165,8 +183,10 @@ export class TrustedOpenAiAdapter {
     if (response.status !== "completed") return { status: "failed" };
     try {
       requireCompletedResponse(response);
-      const parsed = parseOutputJson(response);
-      validateProviderOutput(input.request, parsed);
+      const parsed = validateProviderOutput(
+        input.request,
+        parseOutputJson(response),
+      );
       return { status: "completed", result: parsed };
     } catch (_) {
       return { status: "invalid" };
@@ -357,7 +377,7 @@ export class ProviderBoundaryError extends Error {
 export function validateProviderOutput(
   request: ProviderRequest,
   result: unknown,
-) {
+): unknown {
   if (
     request.operation === "page_text" || request.operation === "page_visual" ||
     request.operation === "page_recovery"
@@ -373,7 +393,7 @@ export function validateProviderOutput(
         dispatched: true,
       });
     }
-    return;
+    return result;
   }
   if (request.operation === "reduction") {
     const validation = validateReductionResult(
@@ -387,15 +407,156 @@ export function validateProviderOutput(
         dispatched: true,
       });
     }
-    return;
+    return result;
   }
-  const validation = validateSummarySemantics(result, request.pageCount);
+  const canonical = canonicalizeFinalSummaryPartition(request, result);
+  const validation = validateSummarySemantics(
+    canonical.result,
+    request.pageCount,
+  );
   if (!validation.valid) {
     throw new ProviderBoundaryError({
       kind: "invalid_response",
       dispatched: true,
     });
   }
+  return canonical.result;
+}
+
+export function canonicalizeFinalSummaryPartition(
+  request: ProviderRequest,
+  result: unknown,
+): {
+  result: unknown;
+  comparison?: FinalSummaryPartitionComparison;
+} {
+  if (request.operation !== "final_summary") return { result };
+  const manifest = finalSummaryManifest(request);
+  if (!isRecord(result) || !isRecord(result.partial_extraction)) {
+    return { result };
+  }
+  const extraction = result.partial_extraction;
+  if (
+    Object.keys(extraction).sort().join() !==
+      "analyzed_pages,is_partial,missing_pages,page_modes,partial_pages" ||
+    typeof extraction.is_partial !== "boolean" ||
+    !validProviderPageList(extraction.analyzed_pages, request.pageCount) ||
+    !validProviderPageList(extraction.partial_pages, request.pageCount) ||
+    !validProviderPageList(extraction.missing_pages, request.pageCount) ||
+    !Array.isArray(extraction.page_modes)
+  ) {
+    return { result };
+  }
+  const providerLists = [
+    extraction.analyzed_pages,
+    extraction.partial_pages,
+    extraction.missing_pages,
+  ] as number[][];
+  const providerPages = providerLists.flat();
+  const expectedPages = Array.from(
+    { length: request.pageCount },
+    (_, index) => index + 1,
+  );
+  if (
+    !sameNumberList(
+      [...new Set(providerPages)].sort((left, right) => left - right),
+      expectedPages,
+    )
+  ) {
+    return { result };
+  }
+  if (
+    extraction.page_modes.length !== request.pageCount ||
+    extraction.page_modes.some((value) => !isRecord(value)) ||
+    extraction.page_modes.some((value) =>
+      Object.keys(value as Record<string, unknown>).sort().join() !==
+        "mode,page"
+    )
+  ) {
+    return { result };
+  }
+  const modes = extraction.page_modes as Record<string, unknown>[];
+  const modePages = modes.map((entry) => entry.page);
+  if (
+    modePages.some((page) =>
+      !Number.isInteger(page) || (page as number) < 1 ||
+      (page as number) > request.pageCount
+    ) ||
+    new Set(modePages).size !== request.pageCount ||
+    modes.some((entry) => {
+      const authoritative = manifest[(entry.page as number) - 1];
+      return entry.mode !== authoritative.route;
+    })
+  ) {
+    return { result };
+  }
+
+  const canonicalExtraction = {
+    is_partial: manifest.some((page) => page.status !== "completed"),
+    analyzed_pages: manifest
+      .filter((page) => page.status === "completed")
+      .map((page) => page.page_number),
+    partial_pages: manifest
+      .filter((page) => page.status === "partial")
+      .map((page) => page.page_number),
+    missing_pages: manifest
+      .filter((page) => page.status === "missing")
+      .map((page) => page.page_number),
+    page_modes: manifest.map((page) => ({
+      page: page.page_number,
+      mode: page.route,
+    })),
+  };
+  if (extraction.is_partial !== canonicalExtraction.is_partial) {
+    return { result };
+  }
+
+  const duplicateMembership =
+    new Set(providerPages).size !== providerPages.length;
+  const classificationChanged = !sameNumberSet(
+    extraction.analyzed_pages as number[],
+    canonicalExtraction.analyzed_pages,
+  ) ||
+    !sameNumberSet(
+      extraction.partial_pages as number[],
+      canonicalExtraction.partial_pages,
+    ) ||
+    !sameNumberSet(
+      extraction.missing_pages as number[],
+      canonicalExtraction.missing_pages,
+    );
+  const orderingChanged =
+    providerLists.some((pages) =>
+      !sameNumberList(pages, [...pages].sort((left, right) => left - right))
+    ) ||
+    !sameNumberList(
+      modePages as number[],
+      [...modePages as number[]].sort((left, right) => left - right),
+    );
+  const changed = duplicateMembership || classificationChanged ||
+    orderingChanged;
+  const comparison: FinalSummaryPartitionComparison = {
+    changed,
+    duplicateMembership,
+    classificationChanged,
+    orderingChanged,
+    providerCounts: {
+      analyzed: extraction.analyzed_pages.length,
+      partial: extraction.partial_pages.length,
+      missing: extraction.missing_pages.length,
+    },
+    canonicalCounts: {
+      analyzed: canonicalExtraction.analyzed_pages.length,
+      partial: canonicalExtraction.partial_pages.length,
+      missing: canonicalExtraction.missing_pages.length,
+    },
+  };
+  return {
+    result: changed
+      ? { ...result, partial_extraction: canonicalExtraction }
+      : result,
+    comparison,
+  };
 }
 
 function validateProviderRequest(request: ProviderRequest) {
@@ -502,6 +663,22 @@ function validateFinalSummaryRequest(request: ProviderRequest) {
   }
 }
 
+function finalSummaryManifest(request: ProviderRequest): Array<{
+  page_number: number;
+  status: "completed" | "partial" | "missing";
+  route: "text" | "visual";
+}> {
+  validateFinalSummaryRequest(request);
+  const payload = JSON.parse(
+    (request.input as { kind: "text"; text: string }).text,
+  ) as Record<string, unknown>;
+  return (payload.manifest as Record<string, unknown>[]).map((page) => ({
+    page_number: page.page_number as number,
+    status: page.status as "completed" | "partial" | "missing",
+    route: page.route as "text" | "visual",
+  }));
+}
+
 function schemaFor(operation: AnalysisOperation) {
   if (["page_text", "page_visual", "page_recovery"].includes(operation)) {
     return pageBatchResultSchema;
@@ -522,7 +699,7 @@ function promptFor(request: ProviderRequest) {
   if (request.operation === "reduction") {
     return `Reduce only the validated grounded content for source pages ${pages}; exclude missing-page content while preserving its warnings and provenance. Preserve every authoritative source page and use only supplied equation IDs. Use approved hardened Markdown only, with no raw HTML, links, images, URLs, embedded media, or dollar-delimited mathematics. Put source code only in fenced Markdown code blocks and source fragments only in inline code. Mathematical expressions belong only in validated equations referenced by supplied equation IDs; omit equation references when no valid mathematical equation exists. Do not invent provenance or warning codes and do not return unchecked provider fields.`;
   }
-  return "Create the final structured study summary only from validated grounded reductions and the page manifest. Exclude missing-page content while preserving all partial or missing warnings and provenance. Use approved hardened Markdown only, with no raw HTML, links, images, URLs, embedded media, or dollar-delimited mathematics. Put source code only in fenced Markdown code blocks and source fragments only in inline code. Include an equation object and its equation block only for a validated mathematical expression with non-empty LaTeX; omit both when no valid mathematical equation exists. Never place source code, prose, placeholders, or null values in LaTeX. Never invent a formula, provenance, or warning code, and do not return unchecked provider fields.";
+  return "Create the final structured study summary only from validated grounded reductions and the page manifest. In partial_extraction, classify each manifest page exactly once: completed pages belong only in analyzed_pages, partial pages belong only in partial_pages, and missing pages belong only in missing_pages; keep all three arrays sorted. Exclude missing-page content while preserving all partial or missing warnings and provenance. Use approved hardened Markdown only, with no raw HTML, links, images, URLs, embedded media, or dollar-delimited mathematics. Put source code only in fenced Markdown code blocks and source fragments only in inline code. Include an equation object and its equation block only for a validated mathematical expression with non-empty LaTeX; omit both when no valid mathematical equation exists. Never place source code, prose, placeholders, or null values in LaTeX. Never invent a formula, provenance, or warning code, and do not return unchecked provider fields.";
 }
 
 function providerPrompt(request: ProviderRequest) {
@@ -654,4 +831,26 @@ function encodeBase64(bytes: Uint8Array) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validProviderPageList(
+  value: unknown,
+  pageCount: number,
+): value is number[] {
+  return Array.isArray(value) && value.length <= 100 &&
+    value.every((page) =>
+      Number.isInteger(page) && page >= 1 && page <= pageCount
+    );
+}
+
+function sameNumberList(left: number[], right: number[]) {
+  return left.length === right.length &&
+    left.every((value, index) => value === right[index]);
+}
+
+function sameNumberSet(left: number[], right: number[]) {
+  return sameNumberList(
+    [...new Set(left)].sort((a, b) => a - b),
+    [...new Set(right)].sort((a, b) => a - b),
+  );
 }
