@@ -63,7 +63,16 @@ export const gti7Pages26To30 = {
     page(26),
     page(27),
     page(28),
-    page(29, [equation("eq_page29_1", String.raw`x_1,\dots,x_n`, 29)]),
+    page(
+      29,
+      [equation("eq_page29_1", String.raw`x_1,\dots,x_n`, 29)],
+      [{
+        code: "page_content_partial",
+        detail:
+          "The symbolic formatting is only partially recoverable from the page image.",
+        source_pages: [29],
+      }],
+    ),
     page(30, [equation("eq_page30_1", String.raw`x\;+\;y`, 30)]),
   ],
 };

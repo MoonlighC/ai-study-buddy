@@ -48,7 +48,11 @@ export function canonicalizePageBatchResult(
           warning.code as typeof providerPageWarningCodes[number],
         )
       ) return false;
-      providerWarningViolation = { pageIndex, warningIndex, code: warning.code };
+      providerWarningViolation = {
+        pageIndex,
+        warningIndex,
+        code: warning.code,
+      };
       return true;
     })
   );
@@ -63,33 +67,43 @@ export function canonicalizePageBatchResult(
         degradedEquationIds.push(equation.id);
       }
     }
-    if (equations.length === page.equations.length) {
-      return { ...page, equations };
-    }
+    const equationDegraded = equations.length !== page.equations.length;
     const warnings = [...page.warnings];
-    if (
-      !warnings.some((warning) => warning.code === "invalid_equation_latex")
-    ) {
-      warnings.push({
-        code: "invalid_equation_latex",
-        detail:
-          "An equation was omitted because it could not be rendered safely.",
-        source_pages: [page.page_number],
-      });
+    if (equationDegraded) {
+      if (
+        !warnings.some((warning) => warning.code === "invalid_equation_latex")
+      ) {
+        warnings.push({
+          code: "invalid_equation_latex",
+          detail:
+            "An equation was omitted because it could not be rendered safely.",
+          source_pages: [page.page_number],
+        });
+      }
+      if (
+        !warnings.some((warning) => warning.code === "page_content_partial")
+      ) {
+        warnings.push({
+          code: "page_content_partial",
+          detail:
+            "Grounded page content is preserved, but an unsafe equation was omitted.",
+          source_pages: [page.page_number],
+        });
+      }
     }
-    if (!warnings.some((warning) => warning.code === "page_content_partial")) {
-      warnings.push({
-        code: "page_content_partial",
-        detail:
-          "Grounded page content is preserved, but an unsafe equation was omitted.",
-        source_pages: [page.page_number],
-      });
-    }
+    const partialWarning = warnings.some((warning) =>
+      warning.code === "page_content_partial" ||
+      warning.code === "invalid_equation_latex"
+    );
     return {
       ...page,
-      content_status: "partial" as const,
+      content_status: page.content_status === "completed" && partialWarning
+        ? "partial" as const
+        : page.content_status,
       equations,
-      confidence: Math.min(page.confidence, 0.5),
+      confidence: equationDegraded
+        ? Math.min(page.confidence, 0.5)
+        : page.confidence,
       warnings,
     };
   });
@@ -100,7 +114,7 @@ export function canonicalizePageBatchResult(
         canonical,
         expectedPages,
         pageCount,
-    ).valid,
+      ).valid,
     result: canonical,
     degradedEquationIds,
     providerWarningViolation,

@@ -613,6 +613,7 @@ function logEquationComparison(
     | {
       authoritativeEquationCount: number;
       providerEquationCount: number;
+      referencedEquationObjectsAdded: number;
       orphanReferencesAdded: number;
       equationFieldsReplaced: boolean;
     }
@@ -621,12 +622,15 @@ function logEquationComparison(
   if (!comparison) return;
   analysisLog("advance", "equation_canonicalization", {
     validator_stage: "canonicalizeFinalSummaryEquations",
-    validator_code: comparison.orphanReferencesAdded > 0 ||
+    validator_code: comparison.referencedEquationObjectsAdded > 0 ||
+        comparison.orphanReferencesAdded > 0 ||
         comparison.equationFieldsReplaced
       ? "equation_canonicalized"
       : "equation_unchanged",
     authoritative_equation_count: comparison.authoritativeEquationCount,
     provider_equation_count: comparison.providerEquationCount,
+    referenced_equation_objects_added:
+      comparison.referencedEquationObjectsAdded,
     orphan_references_added: comparison.orphanReferencesAdded,
     equation_fields_replaced: comparison.equationFieldsReplaced,
   });

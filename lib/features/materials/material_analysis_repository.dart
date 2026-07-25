@@ -194,10 +194,7 @@ class SupabaseMaterialAnalysisRepository implements MaterialAnalysisRepository {
       }
       if (r is List && r.length == 1) r = r.single;
       return v2
-          ? decodeMaterialAnalysisStatusV2Rpc(
-              r,
-              expectedMaterialId: materialId,
-            )
+          ? decodeMaterialAnalysisStatusV2Rpc(r, expectedMaterialId: materialId)
           : decodeMaterialAnalysisStatusV1Rpc(
               r,
               expectedMaterialId: materialId,
@@ -218,9 +215,22 @@ class SupabaseMaterialAnalysisRepository implements MaterialAnalysisRepository {
     _auth(u, id);
     try {
       final response = await source.invoke(f, {'material_id': id, ...extra});
-      return _hasAnalyzeAgainField(response)
+      final immediate = _hasAnalyzeAgainField(response)
           ? decodeMaterialAnalysisStatus(response, expectedMaterialId: id)
           : decodeMaterialAnalysisStatusV1(response, expectedMaterialId: id);
+      if (immediate.state != AnalysisState.failed ||
+          immediate.safeErrorCode != null) {
+        return immediate;
+      }
+      try {
+        return await fetchStatus(user: u, materialId: id);
+      } on MaterialAnalysisException catch (error) {
+        if (error.code == AnalysisErrorCode.network ||
+            error.code == AnalysisErrorCode.statusNotFound) {
+          return immediate;
+        }
+        rethrow;
+      }
     } on MaterialAnalysisException {
       rethrow;
     } on supabase.FunctionException catch (e) {
@@ -443,9 +453,7 @@ MaterialAnalysisStatus _decodeMaterialAnalysisStatus(
       completedPages: c,
       confirmationRequired: m['confirmation_required'] as bool,
       canRetry: m['can_retry'] as bool,
-      canAnalyzeAgain: version == 2
-          ? m['can_analyze_again'] as bool
-          : false,
+      canAnalyzeAgain: version == 2 ? m['can_analyze_again'] as bool : false,
       retryAfterSeconds: r as int?,
       warnings: warnings,
       summarySchemaVersion: s as int?,

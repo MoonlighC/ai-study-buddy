@@ -515,11 +515,40 @@ Deno.test("runtime logs safe equation comparison metadata", async () => {
     );
     equal(metadata.authoritative_equation_count, 1);
     equal(metadata.provider_equation_count, 1);
+    equal(metadata.referenced_equation_objects_added, 0);
     equal(metadata.orphan_references_added, orphanCount);
     equal(metadata.equation_fields_replaced, replaced);
     equal(JSON.stringify(metadata).includes("eq_runtime"), false);
     equal(JSON.stringify(metadata).includes("x+y"), false);
   }
+});
+
+Deno.test("runtime logs referenced authoritative equation object recovery", async () => {
+  const fake = fakeDependencies(
+    pngBytes(),
+    "image",
+    "final_equation_referenced_only",
+  );
+  fake.work = finalSummaryEquationWorkUnit();
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (line: unknown) => lines.push(String(line));
+  try {
+    const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+      request({ material_id: materialId }),
+    );
+    equal(response.status, 200);
+  } finally {
+    console.log = original;
+  }
+  const metadata = lines.map((line) => JSON.parse(line)).find((line) =>
+    line.stage === "equation_canonicalization"
+  );
+  equal(metadata.referenced_equation_objects_added, 1);
+  equal(metadata.orphan_references_added, 0);
+  equal(metadata.equation_fields_replaced, false);
+  equal(JSON.stringify(metadata).includes("eq_runtime"), false);
+  equal(JSON.stringify(metadata).includes("x+y"), false);
 });
 
 Deno.test("repeated final-summary reconciliation persists once with zero POSTs", async () => {
@@ -797,6 +826,7 @@ function fakeDependencies(
     | "retrieval_reduction_success"
     | "final_equation_replaced"
     | "final_equation_orphan"
+    | "final_equation_referenced_only"
     | "final_equation_unchanged"
     | "http_429" = "success",
 ) {
@@ -931,6 +961,7 @@ function fakeDependencies(
         body.text?.format?.name === "phase_c_final_summary_v3";
       const equationMode = providerMode === "final_equation_replaced" ||
           providerMode === "final_equation_orphan" ||
+          providerMode === "final_equation_referenced_only" ||
           providerMode === "final_equation_unchanged"
         ? providerMode
         : null;
@@ -1243,6 +1274,7 @@ function finalSummaryWithEquation(
   mode:
     | "final_equation_replaced"
     | "final_equation_orphan"
+    | "final_equation_referenced_only"
     | "final_equation_unchanged",
 ) {
   const authoritative = runtimeEquation();
@@ -1261,15 +1293,15 @@ function finalSummaryWithEquation(
     ...summary,
     sections: [{
       ...summary.sections[0],
-      blocks: mode === "final_equation_orphan"
-        ? summary.sections[0].blocks
-        : [{
-          kind: "equation" as const,
-          equation_id: authoritative.id,
-          display: "block" as const,
-        }],
+      blocks: mode === "final_equation_orphan" ? summary.sections[0].blocks : [{
+        kind: "equation" as const,
+        equation_id: authoritative.id,
+        display: "block" as const,
+      }],
     }],
-    equations: [providerEquation],
+    equations: mode === "final_equation_referenced_only"
+      ? []
+      : [providerEquation],
   };
 }
 

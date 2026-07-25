@@ -473,6 +473,7 @@ export function analysisLog(
       "batch_result_count",
       "authoritative_equation_count",
       "provider_equation_count",
+      "referenced_equation_objects_added",
       "orphan_references_added",
     ]
   ) {

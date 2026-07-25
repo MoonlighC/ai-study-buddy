@@ -56,7 +56,18 @@ Deno.test("gti7 positive pages 21-25 remain valid", () => {
   );
 });
 
-Deno.test("gti7 pages 26-30 canonicalize spacing and dots", () => {
+Deno.test("gti7 pages 26-30 repair partial warning status and LaTeX", () => {
+  const rawPage29 = gti7Pages26To30.pages[3];
+  equal(
+    rawPage29.content_status === "completed" &&
+      rawPage29.warnings.some((warning: any) =>
+        warning.code === "page_content_partial"
+      )
+      ? "page_29:completed_status_warning_conflict"
+      : null,
+    "page_29:completed_status_warning_conflict",
+  );
+
   const canonical = canonicalizePageBatchResult(
     gti7Pages26To30,
     [26, 27, 28, 29, 30],
@@ -64,6 +75,8 @@ Deno.test("gti7 pages 26-30 canonicalize spacing and dots", () => {
   );
   equal(canonical.valid, true);
   const result = canonical.result as any;
+  equal(result.pages[3].content_status, "partial");
+  equal(result.pages[3].warnings[0].code, "page_content_partial");
   equal(
     result.pages[3].equations[0].latex,
     String.raw`x_1,\ldots,x_n`,
@@ -140,6 +153,56 @@ Deno.test("GruMCI orphan equation attaches to its unique sourced section", () =>
   equal(validateSummarySemantics(validated, 4).valid, true);
 });
 
+Deno.test("gti6 final summary restores an authoritative referenced equation object", () => {
+  const request = finalRequest();
+  const referencedOnly = clone(grumciFinalSummary);
+  referencedOnly.sections[0].blocks.push({
+    kind: "equation",
+    equation_id: "eq_page1_1",
+    display: "block",
+  } as any);
+  referencedOnly.equations = [];
+
+  const canonical = canonicalizeFinalSummaryEquations(
+    request,
+    referencedOnly,
+  );
+  equal(canonical.valid, true);
+  const result = canonical.result as any;
+  equal(result.equations, [grumciAuthoritativeEquation]);
+  equal(result.sections[0].blocks.length, 2);
+  equal(canonical.comparison.referencedEquationObjectsAdded, 1);
+  equal(canonical.comparison.orphanReferencesAdded, 0);
+  equal(validateSummarySemantics(result, 4).valid, true);
+});
+
+Deno.test("referenced equation repair rejects unknown and wrong-page references", () => {
+  const unknown = clone(grumciFinalSummary);
+  unknown.equations = [];
+  unknown.sections[0].blocks.push({
+    kind: "equation",
+    equation_id: "eq_unknown",
+    display: "block",
+  } as any);
+  equal(
+    canonicalizeFinalSummaryEquations(finalRequest(), unknown).valid,
+    false,
+  );
+
+  const wrongPage = clone(grumciFinalSummary);
+  wrongPage.equations = [];
+  wrongPage.sections[0].source_pages = [2, 3, 4];
+  wrongPage.sections[0].blocks.push({
+    kind: "equation",
+    equation_id: "eq_page1_1",
+    display: "block",
+  } as any);
+  equal(
+    canonicalizeFinalSummaryEquations(finalRequest(), wrongPage).valid,
+    false,
+  );
+});
+
 Deno.test("final provider cannot alter or invent authoritative equations", () => {
   const altered = clone(grumciFinalSummary);
   altered.equations[0].latex = "provider_changed";
@@ -169,6 +232,7 @@ Deno.test("safe equation comparison metadata survives validation", () => {
   equal(orphan.equationComparison, {
     authoritativeEquationCount: 1,
     providerEquationCount: 1,
+    referencedEquationObjectsAdded: 0,
     orphanReferencesAdded: 1,
     equationFieldsReplaced: false,
   });
@@ -185,6 +249,7 @@ Deno.test("safe equation comparison metadata survives validation", () => {
   equal(unchanged.equationComparison, {
     authoritativeEquationCount: 1,
     providerEquationCount: 1,
+    referencedEquationObjectsAdded: 0,
     orphanReferencesAdded: 0,
     equationFieldsReplaced: false,
   });

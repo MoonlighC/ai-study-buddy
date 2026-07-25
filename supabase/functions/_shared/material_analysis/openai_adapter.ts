@@ -50,6 +50,7 @@ export type ProviderResult = {
 export type FinalSummaryEquationComparison = {
   authoritativeEquationCount: number;
   providerEquationCount: number;
+  referencedEquationObjectsAdded: number;
   orphanReferencesAdded: number;
   equationFieldsReplaced: boolean;
 };
@@ -71,6 +72,7 @@ export type FinalSummaryPartitionComparison = {
   };
   authoritativeEquationCount?: number;
   providerEquationCount?: number;
+  referencedEquationObjectsAdded?: number;
   orphanReferencesAdded?: number;
   equationFieldsReplaced?: boolean;
 };
@@ -505,6 +507,7 @@ export function canonicalizeFinalSummaryEquations(
   const comparison = {
     authoritativeEquationCount: authoritative.size,
     providerEquationCount: 0,
+    referencedEquationObjectsAdded: 0,
     orphanReferencesAdded: 0,
     equationFieldsReplaced: false,
   };
@@ -514,6 +517,7 @@ export function canonicalizeFinalSummaryEquations(
   ) {
     return { valid: false, result, comparison };
   }
+
   const providerIds: string[] = [];
   for (const equation of result.equations) {
     if (
@@ -535,21 +539,46 @@ export function canonicalizeFinalSummaryEquations(
     return { valid: false, result, comparison };
   }
   comparison.providerEquationCount = providerIds.length;
-  const equations = providerIds.map((id) => ({ ...authoritative.get(id)! }));
+
   const sections = result.sections.map((section) => {
     if (!isRecord(section) || !Array.isArray(section.blocks)) return section;
     return { ...section, blocks: [...section.blocks] };
   });
-  const references = new Set<string>();
+  const referenceIds: string[] = [];
   for (const section of sections) {
-    if (!isRecord(section) || !Array.isArray(section.blocks)) continue;
+    if (
+      !isRecord(section) || !Array.isArray(section.blocks) ||
+      !Array.isArray(section.source_pages)
+    ) continue;
     for (const block of section.blocks) {
+      if (!isRecord(block) || block.kind !== "equation") continue;
       if (
-        isRecord(block) && block.kind === "equation" &&
-        typeof block.equation_id === "string"
-      ) references.add(block.equation_id);
+        typeof block.equation_id !== "string" ||
+        !authoritative.has(block.equation_id)
+      ) {
+        return { valid: false, result, comparison };
+      }
+      const trusted = authoritative.get(block.equation_id)!;
+      if (!section.source_pages.includes(trusted.source_page)) {
+        return { valid: false, result, comparison };
+      }
+      referenceIds.push(block.equation_id);
     }
   }
+  if (new Set(referenceIds).size !== referenceIds.length) {
+    return { valid: false, result, comparison };
+  }
+
+  const selectedIds = [...providerIds];
+  const selected = new Set(selectedIds);
+  for (const referenceId of referenceIds) {
+    if (selected.has(referenceId)) continue;
+    selected.add(referenceId);
+    selectedIds.push(referenceId);
+    comparison.referencedEquationObjectsAdded++;
+  }
+  const equations = selectedIds.map((id) => ({ ...authoritative.get(id)! }));
+  const references = new Set(referenceIds);
   for (const equation of equations) {
     if (references.has(equation.id)) continue;
     const matches = sections.flatMap((section, index) =>
@@ -871,9 +900,7 @@ function schemaFor(operation: AnalysisOperation) {
 }
 
 function schemaName(operation: AnalysisOperation) {
-  return `phase_c_${operation}_v${
-    operation === "reduction" ? "2" : "3"
-  }`;
+  return `phase_c_${operation}_v${operation === "reduction" ? "2" : "3"}`;
 }
 
 function promptFor(request: ProviderRequest) {

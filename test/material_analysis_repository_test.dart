@@ -45,6 +45,50 @@ void main() {
       expect(source.body!.keys, isNot(contains('storage_path')));
     },
   );
+  test(
+    'terminal Edge failure refreshes authoritative safe error for UI copy',
+    () async {
+      final immediate = _status()
+        ..['state'] = 'failed'
+        ..['public_stage'] = 'creating_summary'
+        ..['completed_pages'] = 1
+        ..['can_analyze_again'] = true;
+      final authoritative = _statusRpcV2()
+        ..['state'] = 'failed'
+        ..['public_stage'] = 'creating_summary'
+        ..['completed_pages'] = 1
+        ..['can_analyze_again'] = true
+        ..['safe_error_code'] = 'structured_output_invalid';
+      final source = _Source(immediate, statusResult: authoritative);
+
+      final status = await SupabaseMaterialAnalysisRepository(
+        source,
+      ).advance(user: user, materialId: id);
+
+      expect(source.statusId, id);
+      expect(status.safeErrorCode, 'structured_output_invalid');
+      expect(status.canAnalyzeAgain, isTrue);
+    },
+  );
+  test(
+    'terminal Edge failure remains usable when authoritative refresh is offline',
+    () async {
+      final immediate = _status()
+        ..['state'] = 'failed'
+        ..['public_stage'] = 'creating_summary'
+        ..['completed_pages'] = 1
+        ..['can_analyze_again'] = true;
+      final status = await SupabaseMaterialAnalysisRepository(
+        _StatusThrowingSource(
+          immediate,
+          const MaterialAnalysisException(AnalysisErrorCode.network),
+        ),
+      ).advance(user: user, materialId: id);
+      expect(status.state, AnalysisState.failed);
+      expect(status.safeErrorCode, isNull);
+      expect(status.canAnalyzeAgain, isTrue);
+    },
+  );
   test('advance retry and status use exact material id only', () async {
     final source = _Source(_status(), statusResult: _statusRpcV2());
     final repo = SupabaseMaterialAnalysisRepository(source);
@@ -56,8 +100,9 @@ void main() {
     expect(source.statusId, id);
   });
   test('new client uses the v2 RPC when migration 031 is present', () async {
-    final source = _RolloutSource(v2Result: _statusRpcV2()
-      ..['can_analyze_again'] = true);
+    final source = _RolloutSource(
+      v2Result: _statusRpcV2()..['can_analyze_again'] = true,
+    );
     final status = await SupabaseMaterialAnalysisRepository(
       source,
     ).fetchStatus(user: user, materialId: id);
@@ -89,10 +134,7 @@ void main() {
         code: 'PGRST202',
       ),
     ]) {
-      final source = _RolloutSource(
-        v2Error: error,
-        v1Result: _statusRpcV1(),
-      );
+      final source = _RolloutSource(v2Error: error, v1Result: _statusRpcV1());
       await expectLater(
         SupabaseMaterialAnalysisRepository(
           source,
@@ -374,6 +416,23 @@ class _Source implements MaterialAnalysisDataSource {
   @override
   Future<Object?> fetchStatusV1(String materialId) async =>
       throw StateError('unexpected v1 fallback');
+}
+
+class _StatusThrowingSource implements MaterialAnalysisDataSource {
+  const _StatusThrowingSource(this.result, this.statusError);
+
+  final Object? result;
+  final Object statusError;
+
+  @override
+  Future<Object?> invoke(String function, Map<String, Object?> body) async =>
+      result;
+
+  @override
+  Future<Object?> fetchStatusV2(String materialId) => Future.error(statusError);
+
+  @override
+  Future<Object?> fetchStatusV1(String materialId) => Future.error(statusError);
 }
 
 class _ThrowingSource implements MaterialAnalysisDataSource {
