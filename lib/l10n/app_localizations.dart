@@ -4156,6 +4156,18 @@ abstract class AppLocalizations {
   /// **'Analyzing pages {completed} of {pageCount}'**
   String analysisPageProgress(Object completed, Object pageCount);
 
+  /// No description provided for @analysisPagesProcessed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pages processed: {completed} of {pageCount}'**
+  String analysisPagesProcessed(Object completed, Object pageCount);
+
+  /// No description provided for @analysisFormulaStageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recognizing formulas and diagrams'**
+  String get analysisFormulaStageTitle;
+
   /// No description provided for @analysisFormulaProgress.
   ///
   /// In en, this message translates to:
@@ -4215,6 +4227,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry processing'**
   String get analysisRetryProcessing;
+
+  /// No description provided for @analysisAnalyzeAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyze again'**
+  String get analysisAnalyzeAgain;
+
+  /// No description provided for @analysisAnalyzeAgainFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'A new analysis could not be started. Try again.'**
+  String get analysisAnalyzeAgainFailed;
 
   /// No description provided for @analysisRetryAvailableLater.
   ///
@@ -4291,7 +4315,7 @@ abstract class AppLocalizations {
   /// No description provided for @analysisStructuredOutputInvalid.
   ///
   /// In en, this message translates to:
-  /// **'The analysis finished, but the result could not be processed. You can retry.'**
+  /// **'The analysis finished, but the result could not be processed. Analyze again to create a new analysis from the stored file.'**
   String get analysisStructuredOutputInvalid;
 
   /// No description provided for @analysisEquationSemantics.
@@ -4341,6 +4365,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Analyzed {completed} of {pageCount} pages'**
   String analysisProgressSemantics(int completed, int pageCount);
+
+  /// No description provided for @analysisStructuredOutputUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The analysis finished, but the result could not be processed. A new analysis is currently unavailable.'**
+  String get analysisStructuredOutputUnavailable;
 }
 
 class _AppLocalizationsDelegate

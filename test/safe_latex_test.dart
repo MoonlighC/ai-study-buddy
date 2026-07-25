@@ -14,12 +14,27 @@ void main() {
       r'\sum_{i=1}^{n}i',
       r'\int_0^1 x dx',
       r'\alpha+\beta',
+      r'A \vee B \wedge C',
+      r'A \land B \lor \neg C',
+      r'A \oplus B',
       r'\begin{bmatrix}1&2\\3&4\end{bmatrix}',
       r'\begin {matrix}1&2\\3&4\end {matrix}',
       r'\begin{cases}x&\begin{matrix}a&b\\c&d\end{matrix}\\y&z\end{cases}',
       r'\begin{matrix}1\end{matrix}+\begin{matrix}2\end{matrix}',
     ]) {
       expect(validator.validate(value).valid, isTrue, reason: value);
+    }
+  });
+
+  testWidgets('flutter_math_fork renders every approved Boolean command', (
+    tester,
+  ) async {
+    for (final command in ['vee', 'wedge', 'land', 'lor', 'neg', 'oplus']) {
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: Math.tex('A \\$command B'))),
+      );
+      expect(tester.takeException(), isNull, reason: command);
+      expect(find.byType(Math), findsOneWidget);
     }
   });
 

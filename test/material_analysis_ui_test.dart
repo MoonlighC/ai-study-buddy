@@ -40,7 +40,7 @@ void main() {
     (AnalysisPublicStage.analyzingPages, 'Analyzing pages 2 of 4'),
     (
       AnalysisPublicStage.recognizingFormulasAndDiagrams,
-      'Recognizing formulas and diagrams 2 of 4',
+      'Recognizing formulas and diagrams',
     ),
     (AnalysisPublicStage.combiningResults, 'Combining results'),
     (AnalysisPublicStage.creatingSummary, 'Creating summary'),
@@ -61,6 +61,13 @@ void main() {
         );
         expect(progress.value, closeTo(0.3, 0.000001));
         expect(progress.semanticsLabel, 'Analyzing pages 2 of 4');
+      }
+      if (stage == AnalysisPublicStage.recognizingFormulasAndDiagrams) {
+        expect(find.text('Pages processed: 2 of 4'), findsOneWidget);
+        expect(
+          find.textContaining('Recognizing formulas and diagrams 2'),
+          findsNothing,
+        );
       }
       expect(
         tester
@@ -194,7 +201,8 @@ void main() {
       onAdvance: () => advance.future,
     );
     final state = await _pump(tester, repo);
-    expect(find.text('Recognizing formulas and diagrams 2 of 4'), findsWidgets);
+    expect(find.text('Recognizing formulas and diagrams'), findsWidgets);
+    expect(find.text('Pages processed: 2 of 4'), findsOneWidget);
 
     final reconciliation = state.observeMaterialAnalysis(
       _user,
@@ -214,7 +222,8 @@ void main() {
       find.text('The document is invalid, damaged, or unsupported.'),
       findsOneWidget,
     );
-    expect(find.text('Recognizing formulas and diagrams 2 of 4'), findsNothing);
+    expect(find.text('Recognizing formulas and diagrams'), findsNothing);
+    expect(find.text('Pages processed: 2 of 4'), findsNothing);
     expect(find.text('Creating summary'), findsNothing);
     expect(repo.advances, 1);
   });
@@ -247,6 +256,37 @@ void main() {
   testWidgets(
     'terminal structured-output failure is specific and stops progress',
     (tester) async {
+      final failed = _status(
+        stage: AnalysisPublicStage.creatingSummary,
+        state: AnalysisState.failed,
+        safeErrorCode: 'structured_output_invalid',
+        canAnalyzeAgain: true,
+      );
+      final repo = _UiRepo(
+        status: failed,
+        onAnalyzeAgain: () => Future.value(failed),
+      );
+      await _pump(tester, repo);
+
+      expect(
+        find.text(
+          'The analysis finished, but the result could not be processed. '
+          'Analyze again to create a new analysis from the stored file.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Analyze again'), findsOneWidget);
+      await tester.tap(find.text('Analyze again'));
+      await tester.pumpAndSettle();
+      expect(repo.analysesAgain, 1);
+    },
+  );
+
+  testWidgets(
+    'structured-output failure without eligibility promises no new analysis',
+    (tester) async {
       await _pump(
         tester,
         _UiRepo(
@@ -254,18 +294,54 @@ void main() {
             stage: AnalysisPublicStage.creatingSummary,
             state: AnalysisState.failed,
             safeErrorCode: 'structured_output_invalid',
+            canAnalyzeAgain: false,
           ),
         ),
       );
 
       expect(
-        find.text('Analysis failed and cannot be retried from this upload.'),
+        find.text(
+          'The analysis finished, but the result could not be processed. '
+          'A new analysis is currently unavailable.',
+        ),
         findsOneWidget,
       );
-      expect(find.byType(LinearProgressIndicator), findsNothing);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Analyze again'), findsNothing);
+      expect(
+        find.text('The document is invalid, damaged, or unsupported.'),
+        findsNothing,
+      );
     },
   );
+
+  for (final completed in [10, 25]) {
+    testWidgets('$completed of 50 is explicitly described as page progress', (
+      tester,
+    ) async {
+      final advance = Completer<MaterialAnalysisStatus>();
+      await _pump(
+        tester,
+        _UiRepo(
+          status: _status(
+            stage: AnalysisPublicStage.recognizingFormulasAndDiagrams,
+            pageCount: 50,
+            completedPages: completed,
+          ),
+          onAdvance: () => advance.future,
+        ),
+      );
+      expect(find.text('Recognizing formulas and diagrams'), findsWidgets);
+      expect(find.text('Pages processed: $completed of 50'), findsOneWidget);
+      advance.complete(
+        _status(
+          stage: AnalysisPublicStage.creatingSummary,
+          state: AnalysisState.failed,
+          pageCount: 50,
+          completedPages: completed,
+        ),
+      );
+    });
+  }
 
   testWidgets('completed reconciliation renders terminal card and summary', (
     tester,
@@ -364,13 +440,20 @@ Future<AppState> _pump(
 }
 
 class _UiRepo implements MaterialAnalysisRepository {
-  _UiRepo({required this.status, this.onFetch, this.onAdvance, this.onPrepare});
+  _UiRepo({
+    required this.status,
+    this.onFetch,
+    this.onAdvance,
+    this.onPrepare,
+    this.onAnalyzeAgain,
+  });
 
   final MaterialAnalysisStatus status;
   final Future<MaterialAnalysisStatus> Function()? onFetch,
       onAdvance,
-      onPrepare;
-  int prepares = 0, advances = 0;
+      onPrepare,
+      onAnalyzeAgain;
+  int prepares = 0, advances = 0, analysesAgain = 0;
   @override
   Future<MaterialAnalysisStatus> fetchStatus({
     required AuthUser user,
@@ -401,6 +484,15 @@ class _UiRepo implements MaterialAnalysisRepository {
     required AuthUser user,
     required String materialId,
   }) async => status;
+  @override
+  Future<MaterialAnalysisStatus> analyzeAgain({
+    required AuthUser user,
+    required String materialId,
+    required AnalysisProcessingMode mode,
+  }) {
+    analysesAgain += 1;
+    return onAnalyzeAgain?.call() ?? Future.value(status);
+  }
 }
 
 MaterialAnalysisStatus _status({
@@ -411,6 +503,7 @@ MaterialAnalysisStatus _status({
   bool confirmationRequired = false,
   StructuredSummary? summary,
   String? safeErrorCode,
+  bool canAnalyzeAgain = false,
 }) => MaterialAnalysisStatus(
   materialId: _material.id,
   processingMode: AnalysisProcessingMode.recommended,
@@ -420,6 +513,7 @@ MaterialAnalysisStatus _status({
   completedPages: completedPages,
   confirmationRequired: confirmationRequired,
   canRetry: false,
+  canAnalyzeAgain: canAnalyzeAgain,
   retryAfterSeconds: null,
   warnings: const [],
   summarySchemaVersion: summary == null ? null : 1,

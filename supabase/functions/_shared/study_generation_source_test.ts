@@ -2,6 +2,7 @@ import {
   canonicalStudySource,
   StudySourceError,
 } from "./study_generation_source.ts";
+import { validateLatexLegacyV2 } from "./material_analysis/validators.ts";
 
 Deno.test("canonical source preserves the existing extracted-text path", () => {
   const source = canonicalStudySource({
@@ -24,6 +25,24 @@ Deno.test("completed validated structured summary is study-ready with empty text
   assert(!source.text.includes("raw_provider"));
 });
 
+Deno.test("legacy v2 and current v3 summaries remain independently readable", () => {
+  const legacy = validSummaryRow();
+  (legacy.summary_payload as any).equations[0].latex =
+    "https://example.com/equation";
+  equal(
+    validateLatexLegacyV2("https://example.com/equation"),
+    { valid: true, errors: [] },
+  );
+  equal(canonicalStudySource(legacy).kind, "structured_summary");
+
+  const current = validSummaryRow();
+  current.summary_validation_version = "phase-c-validator-v3";
+  equal(canonicalStudySource(current).kind, "structured_summary");
+  (current.summary_payload as any).equations[0].latex =
+    "https://example.com/equation";
+  throwsStudySource(() => canonicalStudySource(current));
+});
+
 Deno.test("pending legacy processing status does not block a valid summary", () => {
   const row = validSummaryRow();
   row.processing_status = "pending";
@@ -34,6 +53,8 @@ Deno.test("invalid version, provenance, markdown, or latex is rejected", () => {
   for (
     const mutate of [
       (row: Record<string, unknown>) => row.summary_schema_version = 2,
+      (row: Record<string, unknown>) =>
+        row.summary_validation_hash = "not-a-contract-hash",
       (row: Record<string, unknown>) => row.analysis_status = "processing",
       (row: Record<string, unknown>) => {
         (row.summary_payload as any).sections[0].source_pages = [2];

@@ -7,10 +7,16 @@ import {
   validateStructuredOutputSubset,
   validateSummarySemantics,
 } from "./schemas.ts";
+import { Equation, StructuredSummary } from "./contracts.ts";
+import { validateLatex } from "./validators.ts";
+import { canonicalizePageBatchResult } from "./page_result_canonicalization.ts";
+export { canonicalizePageBatchResult } from "./page_result_canonicalization.ts";
 import {
   diagnoseFinalSummaryResponse,
+  diagnosePageBatchResult,
   diagnosePageResponse,
   DiagnosticOutcome,
+  PageBatchDiagnosticMetadata,
 } from "./response_diagnostics.ts";
 
 export type AnalysisOperation =
@@ -30,6 +36,7 @@ export type ProviderRequest = {
   input: ProviderInput;
   expectedPages: number[];
   allowedEquationIds?: string[];
+  authoritativeEquations?: Equation[];
   pageCount: number;
   idempotencyKey: string;
 };
@@ -37,6 +44,14 @@ export type ProviderRequest = {
 export type ProviderResult = {
   responseId: string;
   result: unknown;
+  equationComparison?: FinalSummaryEquationComparison;
+};
+
+export type FinalSummaryEquationComparison = {
+  authoritativeEquationCount: number;
+  providerEquationCount: number;
+  orphanReferencesAdded: number;
+  equationFieldsReplaced: boolean;
 };
 
 export type FinalSummaryPartitionComparison = {
@@ -54,6 +69,10 @@ export type FinalSummaryPartitionComparison = {
     partial: number;
     missing: number;
   };
+  authoritativeEquationCount?: number;
+  providerEquationCount?: number;
+  orphanReferencesAdded?: number;
+  equationFieldsReplaced?: boolean;
 };
 
 export type OpenAiAdapterOptions = {
@@ -145,11 +164,16 @@ export class TrustedOpenAiAdapter {
     try {
       requireCompletedResponse(response);
       parsed = parseOutputJson(response);
-      parsed = validateProviderOutput(request, parsed);
+      const validated = validateProviderOutputWithMetadata(request, parsed);
+      parsed = validated.result;
+      return {
+        responseId,
+        result: parsed,
+        equationComparison: validated.equationComparison,
+      };
     } catch (error) {
       throw boundaryWithResponseId(error, responseId);
     }
-    return { responseId, result: parsed };
   }
 
   async retrieve(input: {
@@ -164,6 +188,8 @@ export class TrustedOpenAiAdapter {
         | "incomplete"
         | "invalid";
       result?: unknown;
+      diagnostic?: PageBatchDiagnosticMetadata;
+      equationComparison?: FinalSummaryEquationComparison;
     }
   > {
     validateProviderRequest(input.request);
@@ -183,13 +209,22 @@ export class TrustedOpenAiAdapter {
     if (response.status !== "completed") return { status: "failed" };
     try {
       requireCompletedResponse(response);
-      const parsed = validateProviderOutput(
+      const validated = validateProviderOutputWithMetadata(
         input.request,
         parseOutputJson(response),
       );
-      return { status: "completed", result: parsed };
-    } catch (_) {
-      return { status: "invalid" };
+      return {
+        status: "completed",
+        result: validated.result,
+        equationComparison: validated.equationComparison,
+      };
+    } catch (error) {
+      return {
+        status: "invalid",
+        diagnostic: error instanceof ProviderBoundaryError
+          ? error.diagnostic
+          : undefined,
+      };
     }
   }
 
@@ -360,12 +395,14 @@ export class ProviderBoundaryError extends Error {
   readonly responseId?: string;
   readonly retryAfterSeconds?: number;
   readonly dispatched: boolean;
+  readonly diagnostic?: PageBatchDiagnosticMetadata;
   constructor(input: {
     kind: ProviderBoundaryError["kind"];
     status?: number;
     responseId?: string;
     retryAfterSeconds?: number;
     dispatched: boolean;
+    diagnostic?: PageBatchDiagnosticMetadata;
   }) {
     super("provider_boundary_failure");
     Object.assign(this, input);
@@ -378,22 +415,37 @@ export function validateProviderOutput(
   request: ProviderRequest,
   result: unknown,
 ): unknown {
+  return validateProviderOutputWithMetadata(request, result).result;
+}
+
+export function validateProviderOutputWithMetadata(
+  request: ProviderRequest,
+  result: unknown,
+): {
+  result: unknown;
+  equationComparison?: FinalSummaryEquationComparison;
+} {
   if (
     request.operation === "page_text" || request.operation === "page_visual" ||
     request.operation === "page_recovery"
   ) {
-    const validation = validatePageBatchResult(
+    const canonical = canonicalizePageBatchResult(
       result,
       request.expectedPages,
       request.pageCount,
     );
-    if (!validation.valid) {
+    if (!canonical.valid) {
       throw new ProviderBoundaryError({
         kind: "invalid_response",
         dispatched: true,
+        diagnostic: diagnosePageBatchResult(
+          result,
+          request.expectedPages,
+          request.pageCount,
+        ) ?? undefined,
       });
     }
-    return result;
+    return { result: canonical.result };
   }
   if (request.operation === "reduction") {
     const validation = validateReductionResult(
@@ -407,9 +459,19 @@ export function validateProviderOutput(
         dispatched: true,
       });
     }
-    return result;
+    return { result };
   }
-  const canonical = canonicalizeFinalSummaryPartition(request, result);
+  const equationsCanonical = canonicalizeFinalSummaryEquations(request, result);
+  if (!equationsCanonical.valid) {
+    throw new ProviderBoundaryError({
+      kind: "invalid_response",
+      dispatched: true,
+    });
+  }
+  const canonical = canonicalizeFinalSummaryPartition(
+    request,
+    equationsCanonical.result,
+  );
   const validation = validateSummarySemantics(
     canonical.result,
     request.pageCount,
@@ -420,7 +482,97 @@ export function validateProviderOutput(
       dispatched: true,
     });
   }
-  return canonical.result;
+  return {
+    result: canonical.result,
+    equationComparison: equationsCanonical.comparison,
+  };
+}
+
+export function canonicalizeFinalSummaryEquations(
+  request: ProviderRequest,
+  result: unknown,
+): {
+  valid: boolean;
+  result: unknown;
+  comparison: FinalSummaryEquationComparison;
+} {
+  const authoritative = new Map(
+    (request.authoritativeEquations ?? []).map((equation) => [
+      equation.id,
+      equation,
+    ]),
+  );
+  const comparison = {
+    authoritativeEquationCount: authoritative.size,
+    providerEquationCount: 0,
+    orphanReferencesAdded: 0,
+    equationFieldsReplaced: false,
+  };
+  if (
+    request.operation !== "final_summary" || !isRecord(result) ||
+    !Array.isArray(result.equations) || !Array.isArray(result.sections)
+  ) {
+    return { valid: false, result, comparison };
+  }
+  const providerIds: string[] = [];
+  for (const equation of result.equations) {
+    if (
+      !isRecord(equation) ||
+      Object.keys(equation).sort().join() !==
+        "confidence,display,explanation_markdown,id,latex,source_page,uncertainty" ||
+      typeof equation.id !== "string" ||
+      !authoritative.has(equation.id)
+    ) {
+      return { valid: false, result, comparison };
+    }
+    providerIds.push(equation.id);
+    const trusted = authoritative.get(equation.id)!;
+    if (JSON.stringify(equation) !== JSON.stringify(trusted)) {
+      comparison.equationFieldsReplaced = true;
+    }
+  }
+  if (new Set(providerIds).size !== providerIds.length) {
+    return { valid: false, result, comparison };
+  }
+  comparison.providerEquationCount = providerIds.length;
+  const equations = providerIds.map((id) => ({ ...authoritative.get(id)! }));
+  const sections = result.sections.map((section) => {
+    if (!isRecord(section) || !Array.isArray(section.blocks)) return section;
+    return { ...section, blocks: [...section.blocks] };
+  });
+  const references = new Set<string>();
+  for (const section of sections) {
+    if (!isRecord(section) || !Array.isArray(section.blocks)) continue;
+    for (const block of section.blocks) {
+      if (
+        isRecord(block) && block.kind === "equation" &&
+        typeof block.equation_id === "string"
+      ) references.add(block.equation_id);
+    }
+  }
+  for (const equation of equations) {
+    if (references.has(equation.id)) continue;
+    const matches = sections.flatMap((section, index) =>
+      isRecord(section) && Array.isArray(section.source_pages) &&
+        section.source_pages.includes(equation.source_page)
+        ? [index]
+        : []
+    );
+    if (matches.length !== 1) return { valid: false, result, comparison };
+    const section = sections[matches[0]] as Record<string, unknown>;
+    (section.blocks as unknown[]).push({
+      kind: "equation",
+      equation_id: equation.id,
+      display: equation.display,
+    });
+    references.add(equation.id);
+    comparison.orphanReferencesAdded++;
+  }
+  return {
+    valid: true,
+    result: { ...result, equations, sections },
+    comparison,
+  };
 }
 
 export function canonicalizeFinalSummaryPartition(
@@ -632,9 +784,11 @@ function validateFinalSummaryRequest(request: ProviderRequest) {
   if (
     !isRecord(payload) ||
     Object.keys(payload).sort().join() !==
-      "manifest,operation,validated_reduction" ||
+      "authoritative_equations,manifest,operation,validated_reduction" ||
     payload.operation !== "final_summary" ||
     !Array.isArray(payload.manifest) ||
+    !Array.isArray(payload.authoritative_equations) ||
+    payload.authoritative_equations.length > 100 ||
     payload.manifest.length !== request.pageCount
   ) throw new Error("invalid_final_summary_request");
   const authoritativePages: number[] = [];
@@ -658,6 +812,35 @@ function validateFinalSummaryRequest(request: ProviderRequest) {
       authoritativePages,
       request.allowedEquationIds ?? [],
     ).valid
+  ) {
+    throw new Error("invalid_final_summary_request");
+  }
+  const equations = payload.authoritative_equations;
+  const ids = equations.flatMap((equation) =>
+    isRecord(equation) && typeof equation.id === "string" ? [equation.id] : []
+  );
+  if (
+    ids.length !== equations.length || new Set(ids).size !== ids.length ||
+    equations.some((equation) =>
+      !isRecord(equation) ||
+      Object.keys(equation).sort().join() !==
+        "confidence,display,explanation_markdown,id,latex,source_page,uncertainty" ||
+      typeof equation.id !== "string" ||
+      !/^eq_[a-z0-9_-]{1,60}$/.test(equation.id) ||
+      typeof equation.latex !== "string" ||
+      !validateLatex(equation.latex).valid ||
+      typeof equation.explanation_markdown !== "string" ||
+      !Number.isInteger(equation.source_page) ||
+      !authoritativePages.includes(equation.source_page as number) ||
+      !["inline", "block"].includes(String(equation.display)) ||
+      typeof equation.confidence !== "number" ||
+      equation.confidence < 0 || equation.confidence > 1 ||
+      typeof equation.uncertainty !== "boolean"
+    ) ||
+    ids.some((id) => !(request.allowedEquationIds ?? []).includes(id)) ||
+    (request.allowedEquationIds ?? []).some((id) => !ids.includes(id)) ||
+    JSON.stringify(request.authoritativeEquations ?? []) !==
+      JSON.stringify(equations)
   ) {
     throw new Error("invalid_final_summary_request");
   }
@@ -688,7 +871,9 @@ function schemaFor(operation: AnalysisOperation) {
 }
 
 function schemaName(operation: AnalysisOperation) {
-  return `phase_c_${operation}_v2`;
+  return `phase_c_${operation}_v${
+    operation === "reduction" ? "2" : "3"
+  }`;
 }
 
 function promptFor(request: ProviderRequest) {
@@ -699,7 +884,7 @@ function promptFor(request: ProviderRequest) {
   if (request.operation === "reduction") {
     return `Reduce only the validated grounded content for source pages ${pages}; exclude missing-page content while preserving its warnings and provenance. Preserve every authoritative source page and use only supplied equation IDs. Use approved hardened Markdown only, with no raw HTML, links, images, URLs, embedded media, or dollar-delimited mathematics. Put source code only in fenced Markdown code blocks and source fragments only in inline code. Mathematical expressions belong only in validated equations referenced by supplied equation IDs; omit equation references when no valid mathematical equation exists. Do not invent provenance or warning codes and do not return unchecked provider fields.`;
   }
-  return "Create the final structured study summary only from validated grounded reductions and the page manifest. In partial_extraction, classify each manifest page exactly once: completed pages belong only in analyzed_pages, partial pages belong only in partial_pages, and missing pages belong only in missing_pages; keep all three arrays sorted. Exclude missing-page content while preserving all partial or missing warnings and provenance. Use approved hardened Markdown only, with no raw HTML, links, images, URLs, embedded media, or dollar-delimited mathematics. Put source code only in fenced Markdown code blocks and source fragments only in inline code. Include an equation object and its equation block only for a validated mathematical expression with non-empty LaTeX; omit both when no valid mathematical equation exists. Never place source code, prose, placeholders, or null values in LaTeX. Never invent a formula, provenance, or warning code, and do not return unchecked provider fields.";
+  return "Create the final structured study summary only from validated grounded reductions, the page manifest, and authoritative_equations. Include an equation object and its equation block only for a validated mathematical expression; omit both when no valid mathematical equation exists. Equation IDs must be a subset of authoritative_equations. Copy a selected equation object exactly and reference it exactly once; never reconstruct or alter its LaTeX, source_page, confidence, uncertainty, display, or explanation. Never place source code, prose, placeholders, or null values in LaTeX. In partial_extraction, classify each manifest page exactly once: completed pages belong only in analyzed_pages, partial pages belong only in partial_pages, and missing pages belong only in missing_pages; keep all three arrays sorted. Exclude missing-page content while preserving all partial or missing warnings and provenance. Use approved hardened Markdown only, with no raw HTML, links, images, URLs, embedded media, or dollar-delimited mathematics. Put source code only in fenced Markdown code blocks and source fragments only in inline code. Never invent a formula, provenance, or warning code, and do not return unchecked provider fields.";
 }
 
 function providerPrompt(request: ProviderRequest) {
@@ -802,6 +987,7 @@ function boundaryWithResponseId(error: unknown, responseId: string) {
       responseId,
       retryAfterSeconds: error.retryAfterSeconds,
       dispatched: true,
+      diagnostic: error.diagnostic,
     });
   }
   return new ProviderBoundaryError({

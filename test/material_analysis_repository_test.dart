@@ -25,8 +25,28 @@ void main() {
       'confirm_large_document': true,
     });
   });
+  test(
+    'Analyze again creates a new generation without an upload body',
+    () async {
+      final source = _Source(_status());
+      final repo = SupabaseMaterialAnalysisRepository(source);
+      await repo.analyzeAgain(
+        user: user,
+        materialId: id,
+        mode: AnalysisProcessingMode.recommended,
+      );
+      expect(source.function, 'prepare-material-analysis');
+      expect(source.body, {
+        'material_id': id,
+        'processing_mode': 'recommended',
+        'confirm_large_document': false,
+        'analyze_again': true,
+      });
+      expect(source.body!.keys, isNot(contains('storage_path')));
+    },
+  );
   test('advance retry and status use exact material id only', () async {
-    final source = _Source(_status());
+    final source = _Source(_status(), statusResult: _statusRpcV2());
     final repo = SupabaseMaterialAnalysisRepository(source);
     await repo.advance(user: user, materialId: id);
     expect(source.body, {'material_id': id});
@@ -34,6 +54,75 @@ void main() {
     expect(source.body, {'material_id': id});
     await repo.fetchStatus(user: user, materialId: id);
     expect(source.statusId, id);
+  });
+  test('new client uses the v2 RPC when migration 031 is present', () async {
+    final source = _RolloutSource(v2Result: _statusRpcV2()
+      ..['can_analyze_again'] = true);
+    final status = await SupabaseMaterialAnalysisRepository(
+      source,
+    ).fetchStatus(user: user, materialId: id);
+    expect(status.canAnalyzeAgain, isTrue);
+    expect(source.v2Calls, 1);
+    expect(source.v1Calls, 0);
+  });
+  test('new client falls back exactly for a missing v2 RPC', () async {
+    final source = _RolloutSource(
+      v2Error: const supabase.PostgrestException(
+        message:
+            'Could not find the function public.get_material_analysis_status_v2',
+        code: 'PGRST202',
+      ),
+      v1Result: _statusRpcV1(),
+    );
+    final status = await SupabaseMaterialAnalysisRepository(
+      source,
+    ).fetchStatus(user: user, materialId: id);
+    expect(status.canAnalyzeAgain, isFalse);
+    expect(source.v2Calls, 1);
+    expect(source.v1Calls, 1);
+  });
+  test('v2 RPC fallback never masks other database errors', () async {
+    for (final error in [
+      const supabase.PostgrestException(message: 'denied', code: '42501'),
+      const supabase.PostgrestException(
+        message: 'Could not find a different function',
+        code: 'PGRST202',
+      ),
+    ]) {
+      final source = _RolloutSource(
+        v2Error: error,
+        v1Result: _statusRpcV1(),
+      );
+      await expectLater(
+        SupabaseMaterialAnalysisRepository(
+          source,
+        ).fetchStatus(user: user, materialId: id),
+        throwsA(
+          isA<MaterialAnalysisException>().having(
+            (value) => value.code,
+            'code',
+            AnalysisErrorCode.network,
+          ),
+        ),
+      );
+      expect(source.v1Calls, 0);
+    }
+  });
+  test('v1 and v2 decoders reject the other RPC contract', () {
+    expect(
+      () => decodeMaterialAnalysisStatusV1Rpc(
+        _statusRpcV2(),
+        expectedMaterialId: id,
+      ),
+      throwsA(isA<MaterialAnalysisException>()),
+    );
+    expect(
+      () => decodeMaterialAnalysisStatusV2Rpc(
+        _statusRpcV1(),
+        expectedMaterialId: id,
+      ),
+      throwsA(isA<MaterialAnalysisException>()),
+    );
   });
   test('malformed public status is a safe typed error', () async {
     final source = _Source({'detail': 'secret'});
@@ -142,24 +231,24 @@ void main() {
   test(
     'safe failure and active reduction are decoded without internal data',
     () {
-      final failed = _status()
+      final failed = _statusRpcV2()
         ..['state'] = 'failed'
         ..['safe_error_code'] = 'structured_output_invalid'
         ..['active_operation'] = null;
       expect(
-        decodeMaterialAnalysisStatus(
+        decodeMaterialAnalysisStatusV2Rpc(
           failed,
           expectedMaterialId: id,
         ).safeErrorCode,
         'structured_output_invalid',
       );
 
-      final reducing = _status()
+      final reducing = _statusRpcV2()
         ..['public_stage'] = 'creating_summary'
         ..['safe_error_code'] = null
         ..['active_operation'] = 'reduction';
       expect(
-        decodeMaterialAnalysisStatus(
+        decodeMaterialAnalysisStatusV2Rpc(
           reducing,
           expectedMaterialId: id,
         ).publicStage,
@@ -264,8 +353,9 @@ void main() {
 }
 
 class _Source implements MaterialAnalysisDataSource {
-  _Source(this.result);
+  _Source(this.result, {this.statusResult});
   final Object? result;
+  final Object? statusResult;
   String? function, statusId;
   Map<String, Object?>? body;
   @override
@@ -276,10 +366,14 @@ class _Source implements MaterialAnalysisDataSource {
   }
 
   @override
-  Future<Object?> fetchStatus(String materialId) async {
+  Future<Object?> fetchStatusV2(String materialId) async {
     statusId = materialId;
-    return result;
+    return statusResult ?? result;
   }
+
+  @override
+  Future<Object?> fetchStatusV1(String materialId) async =>
+      throw StateError('unexpected v1 fallback');
 }
 
 class _ThrowingSource implements MaterialAnalysisDataSource {
@@ -287,10 +381,35 @@ class _ThrowingSource implements MaterialAnalysisDataSource {
 
   final Object error;
   @override
-  Future<Object?> fetchStatus(String materialId) => Future.error(error);
+  Future<Object?> fetchStatusV2(String materialId) => Future.error(error);
+  @override
+  Future<Object?> fetchStatusV1(String materialId) => Future.error(error);
   @override
   Future<Object?> invoke(String function, Map<String, Object?> body) =>
       Future.error(error);
+}
+
+class _RolloutSource implements MaterialAnalysisDataSource {
+  _RolloutSource({this.v2Result, this.v1Result, this.v2Error});
+  final Object? v2Result, v1Result, v2Error;
+  int v1Calls = 0, v2Calls = 0;
+
+  @override
+  Future<Object?> fetchStatusV2(String materialId) async {
+    v2Calls++;
+    if (v2Error != null) throw v2Error!;
+    return v2Result;
+  }
+
+  @override
+  Future<Object?> fetchStatusV1(String materialId) async {
+    v1Calls++;
+    return v1Result;
+  }
+
+  @override
+  Future<Object?> invoke(String function, Map<String, Object?> body) =>
+      throw StateError('unexpected Edge Function call');
 }
 
 Map<String, Object?> _status() => {
@@ -302,11 +421,23 @@ Map<String, Object?> _status() => {
   'completed_pages': 0,
   'confirmation_required': false,
   'can_retry': false,
+  'can_analyze_again': false,
   'retry_after_seconds': null,
   'warnings': <Object?>[],
   'summary_schema_version': null,
   'summary_payload': null,
 };
+
+Map<String, Object?> _statusRpcV2() => {
+  ..._status(),
+  'safe_error_code': null,
+  'active_operation': null,
+};
+
+Map<String, Object?> _statusRpcV1() {
+  final value = _statusRpcV2()..remove('can_analyze_again');
+  return value;
+}
 
 Map<String, Object?> _summary() => {
   'language': 'en',

@@ -1,9 +1,13 @@
 import {
-  approvedAnalysisWarningCodes,
+  downstreamAnalysisWarningCodes,
+  providerPageWarningCodes,
+  validateDownstreamPageBatchResult,
   validatePageBatchResult,
+  validatePageBatchStructure,
   validateSummarySemantics,
 } from "./schemas.ts";
 import { validateLatex, validateSafeMarkdown } from "./validators.ts";
+import { canonicalizePageBatchResult } from "./page_result_canonicalization.ts";
 
 export const diagnosticVersion = 1;
 
@@ -78,6 +82,209 @@ export type DiagnosticMetadata = {
   concept_count?: number;
   validator_stage?: ValidatorStage;
 };
+
+export type PageBatchDiagnosticMetadata = {
+  expected_page_numbers: number[];
+  first_failing_page_number?: number;
+  field_path: string;
+  validator_stage: ValidatorStage;
+  validator_code: string;
+  equation_index?: number;
+  equation_id_present?: boolean;
+  warning_code?: string;
+  batch_result_count: number;
+};
+
+export function diagnosePageBatchResult(
+  result: unknown,
+  expectedPages: number[],
+  pageCount: number,
+): PageBatchDiagnosticMetadata | null {
+  const base = {
+    expected_page_numbers: expectedPages.slice(0, 5),
+    batch_result_count: isRecord(result) && Array.isArray(result.pages)
+      ? Math.min(result.pages.length, 10)
+      : 0,
+  };
+  if (
+    !isRecord(result) || Object.keys(result).join() !== "pages" ||
+    !Array.isArray(result.pages) ||
+    !validatePageBatchStructure(result, expectedPages.length).valid
+  ) {
+    if (isRecord(result) && Array.isArray(result.pages)) {
+      for (let index = 0; index < result.pages.length; index++) {
+        const metadata: DiagnosticMetadata = {};
+        const structural = validatePageSchema(
+          { pages: [result.pages[index]] },
+          metadata,
+        );
+        if (structural && !structural.ok) {
+          const page = result.pages[index];
+          return {
+            ...base,
+            first_failing_page_number: isRecord(page) &&
+                Number.isInteger(page.page_number)
+              ? page.page_number as number
+              : expectedPages[index],
+            field_path: `pages.${index}`,
+            validator_stage: "validatePageSchema",
+            validator_code: structural.code,
+          };
+        }
+      }
+    }
+    return {
+      ...base,
+      field_path: "pages",
+      validator_stage: "validatePageSchema",
+      validator_code: "page_batch_shape",
+    };
+  }
+
+  for (let index = 0; index < result.pages.length; index++) {
+    const metadata: DiagnosticMetadata = {};
+    const structural = validatePageSchema(
+      { pages: [result.pages[index]] },
+      metadata,
+    );
+    if (structural && !structural.ok) {
+      return {
+        ...base,
+        first_failing_page_number: expectedPages[index],
+        field_path: `pages.${index}`,
+        validator_stage: "validatePageSchema",
+        validator_code: structural.code,
+      };
+    }
+  }
+
+  const canonical = canonicalizePageBatchResult(
+    result,
+    expectedPages,
+    pageCount,
+  );
+  if (canonical.providerWarningViolation) {
+    const violation = canonical.providerWarningViolation;
+    const page = result.pages[violation.pageIndex];
+    return {
+      ...base,
+      first_failing_page_number: isRecord(page) &&
+          Number.isInteger(page.page_number)
+        ? page.page_number as number
+        : expectedPages[violation.pageIndex],
+      field_path:
+        `pages.${violation.pageIndex}.warnings.${violation.warningIndex}.code`,
+      validator_stage: "validatePageSemantics",
+      validator_code: "page_warning_code_not_allowed",
+      ...(/^[a-z0-9_]{1,64}$/.test(violation.code)
+        ? { warning_code: violation.code }
+        : {}),
+    };
+  }
+  const diagnosedResult = isRecord(canonical.result) &&
+      Array.isArray(canonical.result.pages)
+    ? canonical.result
+    : result;
+  for (let index = 0; index < diagnosedResult.pages.length; index++) {
+    const page = diagnosedResult.pages[index];
+    const expectedPage = expectedPages[index] ?? expectedPages.at(-1) ?? 1;
+    const single = { pages: [page] };
+    const metadata: DiagnosticMetadata = {};
+    let failure = validatePageSemantics(
+      single,
+      metadata,
+      downstreamAnalysisWarningCodes,
+    );
+    if (!failure && isRecord(page)) {
+      failure = validatePageMarkdown(single, metadata);
+    }
+    if (!failure && isRecord(page)) {
+      failure = validatePageLatex(single, metadata);
+    }
+    if (!failure && isRecord(page)) {
+      failure = validatePageProvenance(
+        single,
+        expectedPage,
+        pageCount,
+        metadata,
+      );
+    }
+    if (!failure || failure.ok) continue;
+    const warningIndex = isRecord(page) && Array.isArray(page.warnings)
+      ? page.warnings.findIndex((warning) =>
+        isRecord(warning) &&
+        (typeof warning.code !== "string" ||
+          !providerPageWarningCodes.includes(
+            warning.code as typeof providerPageWarningCodes[number],
+          ))
+      )
+      : -1;
+    const equationIndex = failure.code === "page_latex_failed" &&
+        isRecord(page) && Array.isArray(page.equations)
+      ? page.equations.findIndex((equation) =>
+        !isRecord(equation) || typeof equation.latex !== "string" ||
+        !validateLatex(equation.latex).valid
+      )
+      : -1;
+    const warning = warningIndex >= 0 && isRecord(page)
+      ? (page.warnings as unknown[])[warningIndex]
+      : undefined;
+    const equation = equationIndex >= 0 && isRecord(page)
+      ? (page.equations as unknown[])[equationIndex]
+      : undefined;
+    const latexCode = isRecord(equation) && typeof equation.latex === "string"
+      ? validateLatex(equation.latex).errors[0]
+      : undefined;
+    const returnedPage = isRecord(page) &&
+        Number.isInteger(page.page_number) &&
+        (page.page_number as number) >= 1 &&
+        (page.page_number as number) <= pageCount
+      ? page.page_number as number
+      : expectedPage;
+    return {
+      ...base,
+      first_failing_page_number: returnedPage,
+      field_path: warningIndex >= 0
+        ? `pages.${index}.warnings.${warningIndex}.code`
+        : equationIndex >= 0
+        ? `pages.${index}.equations.${equationIndex}.latex`
+        : failure.code === "page_number_mismatch"
+        ? `pages.${index}.page_number`
+        : `pages.${index}`,
+      validator_stage: failure.metadata.validator_stage ??
+        "validatePageSemantics",
+      validator_code: warningIndex >= 0
+        ? "page_warning_code_not_allowed"
+        : latexCode ?? failure.code,
+      ...(equationIndex >= 0
+        ? {
+          equation_index: equationIndex,
+          equation_id_present: isRecord(equation) &&
+            typeof equation.id === "string",
+        }
+        : {}),
+      ...(isRecord(warning) && typeof warning.code === "string" &&
+          /^[a-z0-9_]{1,64}$/.test(warning.code)
+        ? { warning_code: warning.code }
+        : {}),
+    };
+  }
+  const validation = validateDownstreamPageBatchResult(
+    diagnosedResult,
+    expectedPages,
+    pageCount,
+  );
+  if (!validation.valid) {
+    return {
+      ...base,
+      first_failing_page_number: expectedPages[0],
+      field_path: "pages",
+      validator_stage: "validatePageProvenance",
+      validator_code: validation.errors[0] ?? "page_batch_provenance",
+    };
+  }
+  return null;
+}
 
 export type DiagnosticResult =
   | { ok: true; result: unknown; metadata: DiagnosticMetadata }
@@ -656,6 +863,7 @@ export function validatePageSchema(
 export function validatePageSemantics(
   result: unknown,
   metadata: DiagnosticMetadata,
+  allowedWarningCodes: readonly string[] = providerPageWarningCodes,
 ): DiagnosticResult | null {
   const page = pageRecord(result)!;
   const status = String(page.content_status);
@@ -704,9 +912,7 @@ export function validatePageSemantics(
   if (
     warnings.some((warning) =>
       typeof warning.code !== "string" ||
-      !approvedAnalysisWarningCodes.includes(
-        warning.code as typeof approvedAnalysisWarningCodes[number],
-      ) ||
+      !allowedWarningCodes.includes(warning.code) ||
       typeof warning.detail !== "string" || warning.detail.length < 1 ||
       warning.detail.length > 500 || !Array.isArray(warning.source_pages) ||
       warning.source_pages.length > 100 ||

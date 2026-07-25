@@ -15,13 +15,13 @@ import { routerVersion } from "./contracts.ts";
 import { miniPdfVersion } from "./mini_pdf.ts";
 import { validatePublicStatus, validateSummarySemantics } from "./schemas.ts";
 
-export const analysisValidatorVersion = "phase-c-validator-v2";
-export const analysisPromptVersion = "phase-c-prompts-v2";
-export const analysisConfigurationVersion = "phase-c-server-v1";
+export const analysisValidatorVersion = "phase-c-validator-v3";
+export const analysisPromptVersion = "phase-c-prompts-v3";
+export const analysisConfigurationVersion = "phase-c-server-v2";
 export const analysisFingerprintVersion = "phase-c-fingerprint-v2";
-export const pageSchemaVersion = "phase-c-page-schema-v2";
+export const pageSchemaVersion = "phase-c-page-schema-v3";
 export const reductionSchemaVersion = "phase-c-reduction-schema-v2";
-export const finalSummarySchemaVersion = "phase-c-final-schema-v2";
+export const finalSummarySchemaVersion = "phase-c-final-schema-v3";
 export const maximumPdfBytes = 40 * 1024 * 1024;
 export const maximumImageBytes = 8 * 1024 * 1024;
 export const maximumPages = 100;
@@ -35,6 +35,7 @@ export type PublicRequest = {
   material_id: string;
   processing_mode?: ProcessingMode;
   confirm_large_document?: boolean;
+  analyze_again?: boolean;
 };
 
 export type SourceMaterial = {
@@ -100,11 +101,19 @@ export async function buildProcessingVersionContract(input: {
 
 export function parsePrepareRequest(value: unknown): Required<PublicRequest> {
   if (
-    !isRecord(value) || !exactKeys(value, [
-      "material_id",
-      "processing_mode",
-      "confirm_large_document",
-    ]) || !isUuid(value.material_id) ||
+    !isRecord(value) ||
+    ![
+      ["material_id", "processing_mode", "confirm_large_document"],
+      [
+        "material_id",
+        "processing_mode",
+        "confirm_large_document",
+        "analyze_again",
+      ],
+    ].some((keys) => exactKeys(value, keys)) ||
+    (Object.hasOwn(value, "analyze_again") &&
+      typeof value.analyze_again !== "boolean") ||
+    !isUuid(value.material_id) ||
     !["recommended", "economy"].includes(value.processing_mode as string) ||
     typeof value.confirm_large_document !== "boolean"
   ) {
@@ -114,6 +123,7 @@ export function parsePrepareRequest(value: unknown): Required<PublicRequest> {
     material_id: (value.material_id as string).toLowerCase(),
     processing_mode: value.processing_mode as ProcessingMode,
     confirm_large_document: value.confirm_large_document,
+    analyze_again: value.analyze_again === true,
   };
 }
 
@@ -416,6 +426,7 @@ export function sanitizePublicStatus(value: unknown): MaterialAnalysisStatus {
     "completed_pages",
     "confirmation_required",
     "can_retry",
+    "can_analyze_again",
     "retry_after_seconds",
     "warnings",
     "summary_schema_version",
@@ -457,6 +468,12 @@ export function analysisLog(
       "warning_count",
       "equation_count",
       "source_page_count",
+      "first_failing_page_number",
+      "equation_index",
+      "batch_result_count",
+      "authoritative_equation_count",
+      "provider_equation_count",
+      "orphan_references_added",
     ]
   ) {
     const value = details[key];
@@ -472,6 +489,9 @@ export function analysisLog(
       "operation_kind",
       "response_status",
       "validator_stage",
+      "validator_code",
+      "field_path",
+      "warning_code",
     ]
   ) {
     const value = details[key];
@@ -486,16 +506,40 @@ export function analysisLog(
       "validatePageLatex",
       "validatePageProvenance",
       "persistValidatedPage",
+      "validateVersionContract",
+      "canonicalizeFinalSummaryEquations",
+      "validateAuthoritativeEquations",
     ].includes(value);
     if (
       typeof value === "string" &&
-      (safeValidatorStage || /^[a-z0-9_-]{1,64}$/.test(value))
+      (safeValidatorStage ||
+        (key === "field_path" &&
+          /^pages(?:\.[0-9]+(?:\.(?:page_number|warnings\.[0-9]+\.code|equations\.[0-9]+\.latex))?)?$/
+            .test(value)) ||
+        (key === "validator_code" && /^[a-z0-9_:-]{1,96}$/.test(value)) ||
+        /^[a-z0-9_-]{1,64}$/.test(value))
     ) {
       safe[key] = value;
     }
   }
-  for (const key of ["error_present", "incomplete_details_present"]) {
+  for (
+    const key of [
+      "error_present",
+      "incomplete_details_present",
+      "equation_id_present",
+      "equation_fields_replaced",
+    ]
+  ) {
     if (typeof details[key] === "boolean") safe[key] = details[key];
+  }
+  if (
+    Array.isArray(details.expected_page_numbers) &&
+    details.expected_page_numbers.length <= 5 &&
+    details.expected_page_numbers.every((page) =>
+      Number.isInteger(page) && page >= 1 && page <= 100
+    )
+  ) {
+    safe.expected_page_numbers = details.expected_page_numbers;
   }
   write(JSON.stringify(safe));
 }

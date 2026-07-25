@@ -24,7 +24,7 @@ import {
   ProviderRequest,
   TrustedOpenAiAdapter,
 } from "./openai_adapter.ts";
-import { StructuredSummary } from "./contracts.ts";
+import { Equation, StructuredSummary } from "./contracts.ts";
 import {
   DiagnosticCode,
   DiagnosticMetadata,
@@ -69,6 +69,7 @@ export type InternalWorkUnit = {
   temporary_file_id?: string;
   artifact_id?: string;
   mime_type?: string;
+  validation_version?: string;
 };
 
 export type AnalysisDependencies = {
@@ -81,6 +82,7 @@ export type AnalysisDependencies = {
     material_id: string;
     processing_mode: string;
     confirm_large_document: boolean;
+    analyze_again: boolean;
     page_count: number;
     source_hash: string;
     version_contract: Record<string, unknown>;
@@ -215,6 +217,7 @@ export function createPrepareMaterialAnalysisHandler(
         material_id: material.id,
         processing_mode: body.processing_mode,
         confirm_large_document: false,
+        analyze_again: body.analyze_again,
         page_count: inspected.pageCount,
         source_hash: inspected.sourceHash,
         version_contract: version.contract,
@@ -234,6 +237,7 @@ export function createPrepareMaterialAnalysisHandler(
       material_id: material.id,
       processing_mode: body.processing_mode,
       confirm_large_document: body.confirm_large_document,
+      analyze_again: body.analyze_again,
       page_count: inspected.pageCount,
       source_hash: inspected.sourceHash,
       version_contract: version.contract,
@@ -396,14 +400,28 @@ async function executeOneWorkUnit(
     return;
   }
   const required = requireWorkIds(work);
+  if (work.validation_version !== analysisValidatorVersion) {
+    analysisLog("advance", "structured_output_invalid", {
+      reason: "legacy_validator_version",
+      validator_stage: "validateVersionContract",
+      validator_code: "validator_version_mismatch",
+    });
+    await deps.failOperation({
+      batch_id: required.batchId,
+      lease_token: required.leaseToken,
+      failure_class: "terminal_structured_output_invalid",
+    });
+    return;
+  }
   if (work.kind === "reconciliation") {
     if (!work.response_id) throw new SafeAnalysisError("work_unavailable", 500);
-    const request = await providerRequest(
+    const request = await providerRequestOrTerminalize(
       deps,
       work,
       material,
       required.idempotencyKey,
     );
+    if (!request) return;
     const retrieved = await deps.provider.retrieve({
       responseId: work.response_id,
       request,
@@ -433,6 +451,12 @@ async function executeOneWorkUnit(
       return;
     }
     if (retrieved.status === "invalid" || retrieved.result === undefined) {
+      if (retrieved.diagnostic) {
+        analysisLog("advance", "structured_output_invalid", {
+          reason: "structured_output_invalid",
+          ...retrieved.diagnostic,
+        });
+      }
       await deps.failOperation({
         batch_id: required.batchId,
         lease_token: required.leaseToken,
@@ -440,6 +464,7 @@ async function executeOneWorkUnit(
       });
       return;
     }
+    logEquationComparison(retrieved.equationComparison);
     await deps.completeOperation({
       batch_id: required.batchId,
       lease_token: required.leaseToken,
@@ -454,7 +479,13 @@ async function executeOneWorkUnit(
     return;
   }
 
-  const request = await providerRequest(deps, work, material, "0".repeat(64));
+  const request = await providerRequestOrTerminalize(
+    deps,
+    work,
+    material,
+    "0".repeat(64),
+  );
+  if (!request) return;
   let temporaryFileId: string | undefined;
   let artifactId: string | undefined;
   try {
@@ -509,6 +540,7 @@ async function executeOneWorkUnit(
       response_id: provider.responseId,
       temporary_file_id: temporaryFileId,
     });
+    logEquationComparison(provider.equationComparison);
     const summaryMarkdown = work.kind === "final_summary"
       ? projectSummaryToSafeMarkdown(provider.result as StructuredSummary)
       : undefined;
@@ -523,6 +555,12 @@ async function executeOneWorkUnit(
     });
   } catch (error) {
     if (!(error instanceof ProviderBoundaryError)) throw error;
+    if (error.diagnostic) {
+      analysisLog("advance", "structured_output_invalid", {
+        reason: "structured_output_invalid",
+        ...error.diagnostic,
+      });
+    }
     if (error.responseId) {
       await persistResponseKnown(deps, {
         batch_id: required.batchId,
@@ -570,6 +608,30 @@ async function executeOneWorkUnit(
   }
 }
 
+function logEquationComparison(
+  comparison:
+    | {
+      authoritativeEquationCount: number;
+      providerEquationCount: number;
+      orphanReferencesAdded: number;
+      equationFieldsReplaced: boolean;
+    }
+    | undefined,
+) {
+  if (!comparison) return;
+  analysisLog("advance", "equation_canonicalization", {
+    validator_stage: "canonicalizeFinalSummaryEquations",
+    validator_code: comparison.orphanReferencesAdded > 0 ||
+        comparison.equationFieldsReplaced
+      ? "equation_canonicalized"
+      : "equation_unchanged",
+    authoritative_equation_count: comparison.authoritativeEquationCount,
+    provider_equation_count: comparison.providerEquationCount,
+    orphan_references_added: comparison.orphanReferencesAdded,
+    equation_fields_replaced: comparison.equationFieldsReplaced,
+  });
+}
+
 async function persistResponseKnown(
   deps: AnalysisDependencies,
   input: Parameters<AnalysisDependencies["markResponseKnown"]>[0],
@@ -614,14 +676,43 @@ async function providerRequest(
   } else {
     input = { kind: "text", text: JSON.stringify(work.input_payload ?? {}) };
   }
+  const authoritative = authoritativeEquations(work.input_payload);
   return {
     operation: operation as ProviderRequest["operation"],
     input,
     expectedPages: pages,
-    allowedEquationIds: equationIds(work.input_payload),
+    allowedEquationIds: authoritative?.map((equation) => equation.id) ??
+      equationIds(work.input_payload),
+    authoritativeEquations: authoritative,
     pageCount: work.page_count ?? Math.max(...pages),
     idempotencyKey,
   };
+}
+
+async function providerRequestOrTerminalize(
+  deps: AnalysisDependencies,
+  work: InternalWorkUnit,
+  material: SourceMaterial,
+  idempotencyKey: string,
+): Promise<ProviderRequest | null> {
+  try {
+    return await providerRequest(deps, work, material, idempotencyKey);
+  } catch (error) {
+    if (!(error instanceof DuplicateEquationIdError)) throw error;
+    const required = requireWorkIds(work);
+    analysisLog("advance", "structured_output_invalid", {
+      reason: "duplicate_authoritative_equation_id",
+      validator_stage: "validateAuthoritativeEquations",
+      validator_code: "duplicate_authoritative_equation_id",
+      equation_id_present: true,
+    });
+    await deps.failOperation({
+      batch_id: required.batchId,
+      lease_token: required.leaseToken,
+      failure_class: "terminal_structured_output_invalid",
+    });
+    return null;
+  }
 }
 
 function createPublicHandler(
@@ -694,29 +785,46 @@ function selectablePages(metadata: Record<string, unknown> | undefined) {
 }
 
 function equationIds(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.equation_ids)) return [];
   const ids = new Set<string>();
+  let duplicate = false;
   const visit = (item: unknown) => {
     if (Array.isArray(item)) {
       item.forEach(visit);
+      return;
+    }
+    if (typeof item === "string" && /^eq_[a-z0-9_-]{1,60}$/.test(item)) {
+      if (ids.has(item)) duplicate = true;
+      ids.add(item);
       return;
     }
     if (!isRecord(item)) return;
     if (
       typeof item.id === "string" &&
       /^eq_[a-z0-9_-]{1,60}$/.test(item.id)
-    ) ids.add(item.id);
-    if (Array.isArray(item.equation_ids)) {
-      item.equation_ids.forEach((id) => {
-        if (
-          typeof id === "string" && /^eq_[a-z0-9_-]{1,60}$/.test(id)
-        ) ids.add(id);
-      });
+    ) {
+      if (ids.has(item.id)) duplicate = true;
+      ids.add(item.id);
     }
-    Object.values(item).forEach(visit);
   };
-  visit(value);
+  visit(value.equation_ids);
+  if (duplicate) throw new DuplicateEquationIdError();
   return [...ids].sort();
 }
+
+function authoritativeEquations(value: unknown): Equation[] | undefined {
+  if (!isRecord(value) || !Array.isArray(value.authoritative_equations)) {
+    return undefined;
+  }
+  const equations = value.authoritative_equations.map((equation) => ({
+    ...(equation as Equation),
+  }));
+  const ids = equations.map((equation) => equation.id);
+  if (new Set(ids).size !== ids.length) throw new DuplicateEquationIdError();
+  return equations;
+}
+
+class DuplicateEquationIdError extends Error {}
 
 function resolveWorkOperation(work: InternalWorkUnit): AnalysisOperation {
   const nestedOperation = isRecord(work.input_payload) &&

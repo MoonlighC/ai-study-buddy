@@ -65,6 +65,7 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
         p_version_contract: input.version_contract,
         p_version_fingerprint: input.version_fingerprint,
         p_page_plans: input.page_plans,
+        p_analyze_again: input.analyze_again,
       });
     },
     async claimNext(input) {
@@ -229,13 +230,64 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
       });
     },
     async getStatus(_principalId, materialId) {
-      return await rpcOne(authenticated, "get_material_analysis_status", {
-        p_material_id: materialId,
-      });
+      return await rpcStatusWithV1Fallback(authenticated, materialId);
     },
     provider: new TrustedOpenAiAdapter({ apiKey: openAiKey, model }),
     jitter: Math.random,
   };
+}
+
+export async function rpcStatusWithV1Fallback(
+  client: RpcClient,
+  materialId: string,
+): Promise<unknown> {
+  const args = { p_material_id: materialId };
+  const v2 = await client.rpc("get_material_analysis_status_v2", args);
+  if (!v2.error) return normalizeStatusRpcResult(v2.data, 2);
+  if (!isMissingStatusV2(v2.error)) throw new Error("trusted_rpc_failed");
+  const v1 = await client.rpc("get_material_analysis_status", args);
+  if (v1.error) throw new Error("trusted_rpc_failed");
+  const value = normalizeStatusRpcResult(v1.data, 1) as Record<
+    string,
+    unknown
+  >;
+  return { ...value, can_analyze_again: false };
+}
+
+function normalizeStatusRpcResult(value: unknown, version: 1 | 2) {
+  const row = Array.isArray(value) && value.length === 1 ? value[0] : value;
+  const expected = [
+    "active_operation",
+    ...(version === 2 ? ["can_analyze_again"] : []),
+    "can_retry",
+    "completed_pages",
+    "confirmation_required",
+    "material_id",
+    "page_count",
+    "processing_mode",
+    "public_stage",
+    "retry_after_seconds",
+    "safe_error_code",
+    "state",
+    "summary_payload",
+    "summary_schema_version",
+    "warnings",
+  ].sort();
+  if (
+    !isRecord(row) ||
+    Object.keys(row).sort().join() !== expected.join()
+  ) throw new Error("trusted_rpc_shape");
+  return row;
+}
+
+function isMissingStatusV2(value: unknown) {
+  return isRecord(value) && value.code === "PGRST202" &&
+    typeof value.message === "string" &&
+    value.message.includes("get_material_analysis_status_v2");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function constantTimeEqual(left: string, right: string) {

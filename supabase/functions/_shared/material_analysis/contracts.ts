@@ -76,6 +76,7 @@ export interface MaterialAnalysisStatus {
   completed_pages: number;
   confirmation_required: boolean;
   can_retry: boolean;
+  can_analyze_again: boolean;
   retry_after_seconds: number | null;
   warnings: SafeWarning[];
   summary_schema_version: number | null;

@@ -270,4 +270,10 @@ class _BlockingAnalysis implements MaterialAnalysisRepository {
     required AuthUser user,
     required String materialId,
   }) => throw UnimplementedError();
+  @override
+  Future<MaterialAnalysisStatus> analyzeAgain({
+    required AuthUser user,
+    required String materialId,
+    required AnalysisProcessingMode mode,
+  }) => throw UnimplementedError();
 }

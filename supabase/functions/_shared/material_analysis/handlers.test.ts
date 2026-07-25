@@ -7,7 +7,7 @@ import {
   createRetryMaterialAnalysisHandler,
   InternalWorkUnit,
 } from "./handlers.ts";
-import { SafeAnalysisError } from "./engine.ts";
+import { analysisValidatorVersion, SafeAnalysisError } from "./engine.ts";
 import { TrustedOpenAiAdapter } from "./openai_adapter.ts";
 import { buildSyntheticPdf } from "./synthetic_pdf_fixtures.ts";
 
@@ -42,6 +42,28 @@ Deno.test("C2 prepare owner succeeds with exact 1..P manifest", async () => {
     ),
     [1, 2],
   );
+  equal(fake.providerRequests, 0);
+});
+
+Deno.test("50-page Analyze again requires confirmation before any POST", async () => {
+  const pdf = await buildSyntheticPdf(Array(50).fill("text"));
+  const fake = fakeDependencies(pdf);
+  fake.status.state = "awaiting_confirmation";
+  fake.status.confirmation_required = true;
+  const response = await createPrepareMaterialAnalysisHandler(fake.deps)(
+    request({
+      material_id: materialId,
+      processing_mode: "recommended",
+      confirm_large_document: false,
+      analyze_again: true,
+    }),
+  );
+  equal(response.status, 200);
+  equal(fake.preparations.length, 1);
+  equal(fake.preparations[0].analyze_again, true);
+  equal(fake.preparations[0].page_count, 50);
+  equal(fake.preparations[0].confirm_large_document, false);
+  equal((await response.json()).confirmation_required, true);
   equal(fake.providerRequests, 0);
 });
 
@@ -296,6 +318,7 @@ Deno.test("C2 advance performs one bounded operation with exact original image b
     lease_token: leaseId,
     page_count: 1,
     page_numbers: [1],
+    validation_version: analysisValidatorVersion,
   };
   const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
     request({ material_id: materialId }),
@@ -336,6 +359,64 @@ Deno.test("C2 another worker lease returns status without provider request", asy
   equal(response.status, 200);
   equal(fake.claims, 1);
   equal(fake.providerRequests, 0);
+});
+
+Deno.test("claimed v2 work terminalizes before any provider request", async () => {
+  const fake = fakeDependencies(pngBytes(), "image");
+  fake.work = { ...workUnit(), validation_version: "phase-c-validator-v2" };
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+  equal(response.status, 200);
+  equal(fake.providerRequests, 0);
+  equal(fake.submissions, 0);
+  equal(fake.failures[0].failure_class, "terminal_structured_output_invalid");
+});
+
+Deno.test("cross-page duplicate equation IDs fail before provider POST", async () => {
+  const fake = fakeDependencies(pngBytes(), "image");
+  const work = finalSummaryWorkUnit();
+  const equation = {
+    id: "eq_duplicate",
+    latex: "x",
+    explanation_markdown: "",
+    source_page: 1,
+    display: "block",
+    confidence: 0.9,
+    uncertainty: false,
+  };
+  (work.input_payload as Record<string, unknown>).authoritative_equations = [
+    equation,
+    { ...equation, source_page: 2 },
+  ];
+  fake.work = work;
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+  equal(response.status, 200);
+  equal(fake.providerRequests, 0);
+  equal(fake.submissions, 0);
+  equal(fake.failures[0].failure_class, "terminal_structured_output_invalid");
+});
+
+Deno.test("duplicate equation IDs fail before reduction persistence", async () => {
+  const fake = fakeDependencies(pngBytes(), "image");
+  fake.work = {
+    ...workUnit(),
+    kind: "reduction",
+    input_payload: {
+      inputs: [pageBatch().pages[0]],
+      equation_ids: ["eq_duplicate", "eq_duplicate"],
+    },
+  };
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+  equal(response.status, 200);
+  equal(fake.providerRequests, 0);
+  equal(fake.submissions, 0);
+  equal(fake.completions, 0);
+  equal(fake.failures[0].failure_class, "terminal_structured_output_invalid");
 });
 
 Deno.test("C2 after-dispatch failure without response ID requires explicit user retry", async () => {
@@ -407,6 +488,38 @@ Deno.test("valid final summary persists exactly once with one provider POST", as
   equal(fake.providerMethods, ["POST"]);
   equal(fake.submissions, 1);
   equal(fake.completions, 1);
+});
+
+Deno.test("runtime logs safe equation comparison metadata", async () => {
+  const cases = [
+    ["final_equation_replaced", true, 0],
+    ["final_equation_orphan", false, 1],
+    ["final_equation_unchanged", false, 0],
+  ] as const;
+  for (const [mode, replaced, orphanCount] of cases) {
+    const fake = fakeDependencies(pngBytes(), "image", mode);
+    fake.work = finalSummaryEquationWorkUnit();
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (line: unknown) => lines.push(String(line));
+    try {
+      const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+        request({ material_id: materialId }),
+      );
+      equal(response.status, 200);
+    } finally {
+      console.log = original;
+    }
+    const metadata = lines.map((line) => JSON.parse(line)).find((line) =>
+      line.stage === "equation_canonicalization"
+    );
+    equal(metadata.authoritative_equation_count, 1);
+    equal(metadata.provider_equation_count, 1);
+    equal(metadata.orphan_references_added, orphanCount);
+    equal(metadata.equation_fields_replaced, replaced);
+    equal(JSON.stringify(metadata).includes("eq_runtime"), false);
+    equal(JSON.stringify(metadata).includes("x+y"), false);
+  }
 });
 
 Deno.test("repeated final-summary reconciliation persists once with zero POSTs", async () => {
@@ -682,6 +795,9 @@ function fakeDependencies(
     | "retrieval_invalid"
     | "retrieval_final_success"
     | "retrieval_reduction_success"
+    | "final_equation_replaced"
+    | "final_equation_orphan"
+    | "final_equation_unchanged"
     | "http_429" = "success",
 ) {
   const state = {
@@ -811,10 +927,19 @@ function fakeDependencies(
           headers: { "Content-Type": "application/json", "Retry-After": "17" },
         });
       }
+      const finalOperation =
+        body.text?.format?.name === "phase_c_final_summary_v3";
+      const equationMode = providerMode === "final_equation_replaced" ||
+          providerMode === "final_equation_orphan" ||
+          providerMode === "final_equation_unchanged"
+        ? providerMode
+        : null;
       return new Response(
         JSON.stringify(completedResponse(
-          body.text?.format?.name === "phase_c_final_summary_v2"
-            ? finalSummary()
+          finalOperation
+            ? equationMode
+              ? finalSummaryWithEquation(equationMode)
+              : finalSummary()
             : pageBatch(),
         )),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -935,6 +1060,7 @@ function workUnit(): InternalWorkUnit {
     lease_token: leaseId,
     page_count: 1,
     page_numbers: [1],
+    validation_version: analysisValidatorVersion,
   };
 }
 
@@ -958,7 +1084,23 @@ function finalSummaryWorkUnit(): InternalWorkUnit {
     lease_token: leaseId,
     page_count: 1,
     page_numbers: [1],
+    validation_version: analysisValidatorVersion,
     input_payload: finalSummaryInputPayload(),
+  };
+}
+
+function finalSummaryEquationWorkUnit(): InternalWorkUnit {
+  const equation = runtimeEquation();
+  return {
+    ...finalSummaryWorkUnit(),
+    input_payload: {
+      ...finalSummaryInputPayload(),
+      authoritative_equations: [equation],
+      validated_reduction: {
+        ...finalSummaryInputPayload().validated_reduction,
+        equation_ids: [equation.id],
+      },
+    },
   };
 }
 
@@ -984,6 +1126,7 @@ function reductionReconciliationWorkUnit(): InternalWorkUnit {
     idempotency_key: "a".repeat(64),
     page_count: 1,
     page_numbers: [1],
+    validation_version: analysisValidatorVersion,
     input_payload: {
       inputs: [pageBatch().pages[0]],
       equation_ids: [],
@@ -1003,6 +1146,7 @@ function pageTextReconciliationWorkUnit(): InternalWorkUnit {
     idempotency_key: "a".repeat(64),
     page_count: 1,
     page_numbers: [1],
+    validation_version: analysisValidatorVersion,
     input_payload: {
       pages: [{ page_number: 1, normalized_text: "Selectable text." }],
     },
@@ -1012,6 +1156,7 @@ function pageTextReconciliationWorkUnit(): InternalWorkUnit {
 function finalSummaryInputPayload() {
   return {
     operation: "final_summary",
+    authoritative_equations: [],
     validated_reduction: {
       source_pages: [1],
       summary_markdown: "Validated reduction.",
@@ -1082,6 +1227,52 @@ function finalSummary() {
   };
 }
 
+function runtimeEquation() {
+  return {
+    id: "eq_runtime",
+    latex: "x+y",
+    explanation_markdown: "Canonical equation.",
+    source_page: 1,
+    display: "block" as const,
+    confidence: 0.9,
+    uncertainty: false,
+  };
+}
+
+function finalSummaryWithEquation(
+  mode:
+    | "final_equation_replaced"
+    | "final_equation_orphan"
+    | "final_equation_unchanged",
+) {
+  const authoritative = runtimeEquation();
+  const providerEquation = mode === "final_equation_replaced"
+    ? {
+      ...authoritative,
+      latex: "z",
+      explanation_markdown: "Provider replacement.",
+      display: "inline" as const,
+      confidence: 0.4,
+      uncertainty: true,
+    }
+    : authoritative;
+  const summary = finalSummary();
+  return {
+    ...summary,
+    sections: [{
+      ...summary.sections[0],
+      blocks: mode === "final_equation_orphan"
+        ? summary.sections[0].blocks
+        : [{
+          kind: "equation" as const,
+          equation_id: authoritative.id,
+          display: "block" as const,
+        }],
+    }],
+    equations: [providerEquation],
+  };
+}
+
 function completedResponse(value: unknown) {
   return {
     id: "resp_12345678",
@@ -1106,6 +1297,7 @@ function publicStatus() {
     completed_pages: 0,
     confirmation_required: false,
     can_retry: false,
+    can_analyze_again: false,
     retry_after_seconds: null,
     warnings: [],
     summary_schema_version: null,

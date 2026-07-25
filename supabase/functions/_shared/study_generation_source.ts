@@ -1,12 +1,19 @@
 import { StructuredSummary } from "./material_analysis/contracts.ts";
-import { validateSummarySemantics } from "./material_analysis/schemas.ts";
+import {
+  validateSummarySemantics,
+  validateSummarySemanticsLegacyV2,
+} from "./material_analysis/schemas.ts";
 import {
   validateLatex,
+  validateLatexLegacyV2,
   validateSafeMarkdown,
 } from "./material_analysis/validators.ts";
 
 export const studySummarySchemaVersion = 1;
-export const studySummaryValidatorVersion = "phase-c-validator-v2";
+export const studySummaryValidatorVersions = [
+  "phase-c-validator-v2",
+  "phase-c-validator-v3",
+] as const;
 
 export type CanonicalStudySource = {
   kind: "extracted_text" | "structured_summary";
@@ -29,11 +36,19 @@ export function canonicalStudySource(row: SourceRow): CanonicalStudySource {
     row.analysis_status !== "completed" &&
       row.analysis_status !== "completed_with_warnings" ||
     row.summary_schema_version !== studySummarySchemaVersion ||
-    row.summary_validation_version !== studySummaryValidatorVersion ||
+    !studySummaryValidatorVersions.includes(
+      row.summary_validation_version as typeof studySummaryValidatorVersions[number],
+    ) ||
     !isSha256(row.summary_validation_hash) ||
     pageCount < 1 ||
-    !validateSummarySemantics(summary, pageCount).valid ||
-    !safeSummaryContent(summary as unknown as StructuredSummary)
+    !(row.summary_validation_version === "phase-c-validator-v2"
+      ? validateSummarySemanticsLegacyV2(summary, pageCount)
+      : validateSummarySemantics(summary, pageCount)).valid ||
+    !safeSummaryContent(
+      summary as unknown as StructuredSummary,
+      row.summary_validation_version as
+        typeof studySummaryValidatorVersions[number],
+    )
   ) {
     throw new StudySourceError("material_not_study_ready");
   }
@@ -50,7 +65,13 @@ export class StudySourceError extends Error {
   }
 }
 
-function safeSummaryContent(summary: StructuredSummary) {
+function safeSummaryContent(
+  summary: StructuredSummary,
+  validationVersion: typeof studySummaryValidatorVersions[number],
+) {
+  const validateEquation = validationVersion === "phase-c-validator-v2"
+    ? validateLatexLegacyV2
+    : validateLatex;
   return summary.sections.every((section) =>
     section.blocks.every((block) =>
       block.kind === "equation" || validateSafeMarkdown(block.markdown).valid
@@ -60,7 +81,7 @@ function safeSummaryContent(summary: StructuredSummary) {
       validateSafeMarkdown(concept.explanation_markdown).valid
     ) &&
     summary.equations.every((equation) =>
-      validateLatex(equation.latex).valid &&
+      validateEquation(equation.latex).valid &&
       (equation.explanation_markdown.length === 0 ||
         validateSafeMarkdown(equation.explanation_markdown).valid)
     ) && summary.warnings.every((warning) =>

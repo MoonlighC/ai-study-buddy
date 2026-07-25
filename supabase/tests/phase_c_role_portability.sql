@@ -28,8 +28,7 @@ with phase_c_table(relation) as (
     'public.material_processing_artifacts'::regclass,
     'public.material_processing_attempts'::regclass,
     'public.material_processing_pages'::regclass,
-    'public.material_processing_retry_authorizations'::regclass,
-    'public.material_analysis_diagnostic_correlations'::regclass
+    'public.material_processing_retry_authorizations'::regclass
   ])
 )
 select pg_temp.assert_role_portability(
@@ -49,7 +48,7 @@ select pg_temp.assert_role_portability(
           and privilege.privilege_type in ('SELECT','INSERT','UPDATE','DELETE')
       )
   ),
-  'all seven tables keep RLS and FORCE RLS with no direct API-role or PUBLIC DML'
+  'all six current tables keep RLS and FORCE RLS with no direct API-role or PUBLIC DML'
 );
 
 with expected(signature) as (
@@ -68,6 +67,7 @@ with expected(signature) as (
     'public.request_material_processing_retry_internal(uuid,uuid)'::regprocedure,
     'public.finalize_material_processing_job_internal(uuid,uuid,jsonb,text,text,text)'::regprocedure,
     'public.load_material_analysis_source_internal(uuid)'::regprocedure,
+    'public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb,text,jsonb,boolean)'::regprocedure,
     'public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb,text,jsonb)'::regprocedure,
     'public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb)'::regprocedure,
     'public.material_analysis_work_payload(uuid,uuid)'::regprocedure,
@@ -82,13 +82,11 @@ with expected(signature) as (
     'public.complete_material_analysis_cleanup_internal(uuid,uuid,text,boolean)'::regprocedure,
     'public.load_material_analysis_diagnostic_target_internal(uuid)'::regprocedure,
     'public.record_material_analysis_diagnostic_internal(uuid,text,jsonb,integer)'::regprocedure,
-    'public.attach_material_analysis_diagnostic_job_internal()'::regprocedure,
-    'public.attach_material_analysis_diagnostic_final_batch_internal()'::regprocedure,
-    'public.select_material_analysis_diagnostic_target_internal()'::regprocedure,
-    'public.record_correlated_material_analysis_diagnostic_internal(text,jsonb,integer)'::regprocedure,
+    'public.terminalize_material_analysis_operation_internal(uuid,uuid,text)'::regprocedure,
     'public.confirm_material_analysis(uuid)'::regprocedure,
     'public.authorize_material_analysis_retry(uuid)'::regprocedure,
-    'public.get_material_analysis_status(uuid)'::regprocedure
+    'public.get_material_analysis_status(uuid)'::regprocedure,
+    'public.get_material_analysis_status_v2(uuid)'::regprocedure
   ])
 ), actual(signature) as (
   select procedure.oid::regprocedure
@@ -98,10 +96,10 @@ with expected(signature) as (
     and procedure.oid::regprocedure in (select signature from expected)
 )
 select pg_temp.assert_role_portability(
-  (select count(*)=35 from expected) and
+  (select count(*)=34 from expected) and
   not exists(select signature from expected except select signature from actual) and
   not exists(select signature from actual except select signature from expected),
-  'postgres owns exactly the 32 internal and three public Phase C definers'
+  'postgres owns exactly the 30 internal and four public Phase C definers'
 );
 
 with phase_c_helper(signature) as (
@@ -149,7 +147,7 @@ with phase_c_definer as (
       or procedure.proname like '%material_analysis%')
 )
 select pg_temp.assert_role_portability(
-  (select count(*)=35 from phase_c_definer)
+  (select count(*)=34 from phase_c_definer)
   and not exists (
     select 1 from phase_c_definer
     where pg_catalog.pg_get_userbyid(proowner)<>'postgres'
@@ -175,6 +173,7 @@ with internal(signature) as (
     'public.request_material_processing_retry_internal(uuid,uuid)'::regprocedure,
     'public.finalize_material_processing_job_internal(uuid,uuid,jsonb,text,text,text)'::regprocedure,
     'public.load_material_analysis_source_internal(uuid)'::regprocedure,
+    'public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb,text,jsonb,boolean)'::regprocedure,
     'public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb,text,jsonb)'::regprocedure,
     'public.prepare_material_analysis_internal(uuid,text,boolean,integer,text,jsonb)'::regprocedure,
     'public.material_analysis_work_payload(uuid,uuid)'::regprocedure,
@@ -188,9 +187,8 @@ with internal(signature) as (
     'public.fail_material_analysis_operation_internal(uuid,uuid,text,integer,text,boolean)'::regprocedure,
     'public.complete_material_analysis_cleanup_internal(uuid,uuid,text,boolean)'::regprocedure,
     'public.load_material_analysis_diagnostic_target_internal(uuid)'::regprocedure,
-    'public.record_material_analysis_diagnostic_internal(uuid,text,jsonb,integer)'::regprocedure
-    ,'public.select_material_analysis_diagnostic_target_internal()'::regprocedure
-    ,'public.record_correlated_material_analysis_diagnostic_internal(text,jsonb,integer)'::regprocedure
+    'public.record_material_analysis_diagnostic_internal(uuid,text,jsonb,integer)'::regprocedure,
+    'public.terminalize_material_analysis_operation_internal(uuid,uuid,text)'::regprocedure
   ])
 )
 select pg_temp.assert_role_portability(
@@ -203,27 +201,12 @@ select pg_temp.assert_role_portability(
   'only service_role can execute every internal Phase C function'
 );
 
-with trigger_helper(signature) as (
-  select unnest(array[
-    'public.attach_material_analysis_diagnostic_job_internal()'::regprocedure,
-    'public.attach_material_analysis_diagnostic_final_batch_internal()'::regprocedure
-  ])
-)
-select pg_temp.assert_role_portability(
-  not exists (
-    select 1 from trigger_helper
-    where pg_catalog.has_function_privilege('service_role',signature,'execute')
-      or pg_catalog.has_function_privilege('authenticated',signature,'execute')
-      or pg_catalog.has_function_privilege('anon',signature,'execute')
-  ),
-  'temporary attachment trigger helpers are not directly executable'
-);
-
 with public_rpc(signature) as (
   select unnest(array[
     'public.confirm_material_analysis(uuid)'::regprocedure,
     'public.authorize_material_analysis_retry(uuid)'::regprocedure,
-    'public.get_material_analysis_status(uuid)'::regprocedure
+    'public.get_material_analysis_status(uuid)'::regprocedure,
+    'public.get_material_analysis_status_v2(uuid)'::regprocedure
   ])
 )
 select pg_temp.assert_role_portability(
@@ -241,7 +224,7 @@ select pg_temp.assert_role_portability(
     ) privilege
     where privilege.grantee=0 and privilege.privilege_type='EXECUTE'
   ),
-  'authenticated alone receives the three public RPC grants and PUBLIC receives none'
+  'authenticated alone receives the four public RPC grants and PUBLIC receives none'
 );
 
 select 'PHASE_C_ROLE_PORTABILITY_OK' as result;

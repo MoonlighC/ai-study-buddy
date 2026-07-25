@@ -90,7 +90,7 @@ Deno.test("visual STEM page request states the strict Markdown and LaTeX contrac
       const body = JSON.parse(String(init?.body));
       const content = body.input[0].content;
       const prompt = content[0].text as string;
-      equal(body.text.format.name, "phase_c_page_visual_v2");
+      equal(body.text.format.name, "phase_c_page_visual_v3");
       equal(prompt.includes("hardened Markdown"), true);
       equal(prompt.includes("dollar-delimited mathematics"), true);
       equal(prompt.includes("control-spacing commands"), true);
@@ -165,7 +165,7 @@ Deno.test("final summary accepts bounded 20 21 22 and 100 page hierarchies", asy
     const adapter = adapterWith((_input, init) => {
       calls++;
       const body = JSON.parse(String(init?.body));
-      equal(body.text.format.name, "phase_c_final_summary_v2");
+      equal(body.text.format.name, "phase_c_final_summary_v3");
       equal(
         body.text.format.schema.properties.equations.items.properties.latex,
         { type: "string", pattern: "\\S" },
@@ -721,6 +721,7 @@ function finalSummaryRequest(
 ): ProviderRequest & { input: { kind: "text"; text: string } } {
   const payload = {
     operation: "final_summary",
+    authoritative_equations: [],
     validated_reduction: {
       source_pages: pages,
       summary_markdown: "Validated reduction.",
@@ -741,6 +742,7 @@ function finalSummaryRequest(
     input: { kind: "text", text: JSON.stringify(payload) },
     expectedPages: pages,
     allowedEquationIds: [],
+    authoritativeEquations: [],
     pageCount: pages.length,
     idempotencyKey: "b".repeat(64),
   };

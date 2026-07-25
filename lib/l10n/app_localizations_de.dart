@@ -2525,6 +2525,14 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String analysisPagesProcessed(Object completed, Object pageCount) {
+    return 'Verarbeitete Seiten: $completed von $pageCount';
+  }
+
+  @override
+  String get analysisFormulaStageTitle => 'Formeln und Diagramme erkennen';
+
+  @override
   String analysisFormulaProgress(Object completed, Object pageCount) {
     return 'Formeln und Diagramme werden auf $completed von $pageCount Seiten erkannt';
   }
@@ -2558,6 +2566,13 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get analysisRetryProcessing => 'Verarbeitung wiederholen';
+
+  @override
+  String get analysisAnalyzeAgain => 'Erneut analysieren';
+
+  @override
+  String get analysisAnalyzeAgainFailed =>
+      'Eine neue Analyse konnte nicht gestartet werden. Versuche es erneut.';
 
   @override
   String get analysisRetryAvailableLater => 'Später erneut verfügbar';
@@ -2600,7 +2615,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get analysisStructuredOutputInvalid =>
-      'Die Analyse ist abgeschlossen, aber das Ergebnis konnte nicht verarbeitet werden. Du kannst es erneut versuchen.';
+      'Die Analyse ist abgeschlossen, aber das Ergebnis konnte nicht verarbeitet werden. Starte mit der gespeicherten Datei eine neue Analyse.';
 
   @override
   String analysisEquationSemantics(String description, int page) {
@@ -2634,4 +2649,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String analysisProgressSemantics(int completed, int pageCount) {
     return '$completed von $pageCount Seiten analysiert';
   }
+
+  @override
+  String get analysisStructuredOutputUnavailable =>
+      'Die Analyse ist abgeschlossen, aber das Ergebnis konnte nicht verarbeitet werden. Eine neue Analyse ist derzeit nicht verfügbar.';
 }

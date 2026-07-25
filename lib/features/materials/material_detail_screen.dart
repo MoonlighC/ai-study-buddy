@@ -1339,16 +1339,27 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
     if (status.state == AnalysisState.failed) {
       return MaterialStatusPanel(
         title: l.materialFailedStatus,
-        message:
-            !status.canRetry &&
-                status.safeErrorCode == 'structured_output_invalid'
-            ? l.uploadTerminalFailureNoRetry
+        message: status.safeErrorCode == 'structured_output_invalid'
+            ? status.canAnalyzeAgain
+                  ? error != null
+                        ? l.analysisAnalyzeAgainFailed
+                        : l.analysisStructuredOutputInvalid
+                  : l.analysisStructuredOutputUnavailable
             : _safeFailureMessage(l, status.safeErrorCode),
         icon: Icons.error_outline,
         warning: true,
-        actionLabel: status.canRetry ? l.analysisRetryProcessing : null,
+        actionLabel: status.canRetry
+            ? l.analysisRetryProcessing
+            : status.canAnalyzeAgain
+            ? l.analysisAnalyzeAgain
+            : null,
         onAction: status.canRetry && !actionInFlight
             ? () => state.retryMaterialAnalysis(
+                AuthScope.read(context).user,
+                widget.material.id,
+              )
+            : status.canAnalyzeAgain && !actionInFlight
+            ? () => state.analyzeMaterialAgain(
                 AuthScope.read(context).user,
                 widget.material.id,
               )
@@ -1393,6 +1404,12 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
               ? l.analysisCompleted
               : status.publicStage == AnalysisPublicStage.analyzingPages
               ? l.analysisPageProgress(status.completedPages, status.pageCount)
+              : status.publicStage ==
+                    AnalysisPublicStage.recognizingFormulasAndDiagrams
+              ? l.analysisPagesProcessed(
+                  status.completedPages,
+                  status.pageCount,
+                )
               : _stage(l, status),
           icon: status.state == AnalysisState.completed
               ? Icons.check_circle_outline
@@ -1436,7 +1453,7 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
       s.pageCount,
     ),
     AnalysisPublicStage.recognizingFormulasAndDiagrams =>
-      l.analysisFormulaProgress(s.completedPages, s.pageCount),
+      l.analysisFormulaStageTitle,
     AnalysisPublicStage.combiningResults => l.analysisCombiningResults,
     AnalysisPublicStage.creatingSummary => l.analysisCreatingSummary,
   };
@@ -1457,7 +1474,7 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
   String _safeFailureMessage(dynamic l, String? code) => switch (code) {
     'unable_to_extract_content' => l.analysisUnableToExtractContent,
     'provider_temporarily_unavailable' => l.analysisProviderUnavailable,
-    'structured_output_invalid' => l.analysisStructuredOutputInvalid,
+    'structured_output_invalid' => l.analysisStructuredOutputUnavailable,
     _ => l.analysisInvalidDocumentMessage,
   };
 

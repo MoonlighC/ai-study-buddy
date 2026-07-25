@@ -26,7 +26,11 @@ Deno.test("C2 public DTOs reject every client-controlled internal field", () => 
     processing_mode: "recommended",
     confirm_large_document: false,
   };
-  equal(parsePrepareRequest(prepare), prepare);
+  equal(parsePrepareRequest(prepare), { ...prepare, analyze_again: false });
+  equal(
+    parsePrepareRequest({ ...prepare, analyze_again: true }).analyze_again,
+    true,
+  );
   for (
     const extra of [
       "user_id",
@@ -359,6 +363,7 @@ function publicStatus() {
     completed_pages: 0,
     confirmation_required: false,
     can_retry: false,
+    can_analyze_again: false,
     retry_after_seconds: null,
     warnings: [],
     summary_schema_version: null,

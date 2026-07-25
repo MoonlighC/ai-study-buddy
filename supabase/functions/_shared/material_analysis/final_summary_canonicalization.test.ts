@@ -98,6 +98,7 @@ function requestForManifest(
       kind: "text",
       text: JSON.stringify({
         operation: "final_summary",
+        authoritative_equations: [],
         validated_reduction: {
           source_pages: expectedPages,
           summary_markdown: "Sanitized grounded reduction.",
@@ -111,6 +112,7 @@ function requestForManifest(
     },
     expectedPages,
     allowedEquationIds: [],
+    authoritativeEquations: [],
     pageCount,
     idempotencyKey: "c".repeat(64),
   };

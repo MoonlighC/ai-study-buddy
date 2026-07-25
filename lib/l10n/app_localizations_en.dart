@@ -2482,6 +2482,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String analysisPagesProcessed(Object completed, Object pageCount) {
+    return 'Pages processed: $completed of $pageCount';
+  }
+
+  @override
+  String get analysisFormulaStageTitle => 'Recognizing formulas and diagrams';
+
+  @override
   String analysisFormulaProgress(Object completed, Object pageCount) {
     return 'Recognizing formulas and diagrams $completed of $pageCount';
   }
@@ -2515,6 +2523,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get analysisRetryProcessing => 'Retry processing';
+
+  @override
+  String get analysisAnalyzeAgain => 'Analyze again';
+
+  @override
+  String get analysisAnalyzeAgainFailed =>
+      'A new analysis could not be started. Try again.';
 
   @override
   String get analysisRetryAvailableLater => 'Retry available later';
@@ -2557,7 +2572,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get analysisStructuredOutputInvalid =>
-      'The analysis finished, but the result could not be processed. You can retry.';
+      'The analysis finished, but the result could not be processed. Analyze again to create a new analysis from the stored file.';
 
   @override
   String analysisEquationSemantics(String description, int page) {
@@ -2590,4 +2605,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String analysisProgressSemantics(int completed, int pageCount) {
     return 'Analyzed $completed of $pageCount pages';
   }
+
+  @override
+  String get analysisStructuredOutputUnavailable =>
+      'The analysis finished, but the result could not be processed. A new analysis is currently unavailable.';
 }

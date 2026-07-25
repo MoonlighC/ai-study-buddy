@@ -58,6 +58,7 @@ class MaterialAnalysisStatus {
     required this.completedPages,
     required this.confirmationRequired,
     required this.canRetry,
+    this.canAnalyzeAgain = false,
     required this.retryAfterSeconds,
     required this.warnings,
     required this.summarySchemaVersion,
@@ -71,6 +72,7 @@ class MaterialAnalysisStatus {
   final AnalysisPublicStage publicStage;
   final int pageCount, completedPages;
   final bool confirmationRequired, canRetry;
+  final bool canAnalyzeAgain;
   final int? retryAfterSeconds, summarySchemaVersion;
   final List<AnalysisWarning> warnings;
   final StructuredSummary? summary;
@@ -105,6 +107,11 @@ abstract class MaterialAnalysisRepository {
     required AuthUser user,
     required String materialId,
   });
+  Future<MaterialAnalysisStatus> analyzeAgain({
+    required AuthUser user,
+    required String materialId,
+    required AnalysisProcessingMode mode,
+  });
   Future<MaterialAnalysisStatus> fetchStatus({
     required AuthUser user,
     required String materialId,
@@ -113,7 +120,8 @@ abstract class MaterialAnalysisRepository {
 
 abstract class MaterialAnalysisDataSource {
   Future<Object?> invoke(String function, Map<String, Object?> body);
-  Future<Object?> fetchStatus(String materialId);
+  Future<Object?> fetchStatusV2(String materialId);
+  Future<Object?> fetchStatusV1(String materialId);
 }
 
 class SupabaseMaterialAnalysisDataSource implements MaterialAnalysisDataSource {
@@ -123,7 +131,12 @@ class SupabaseMaterialAnalysisDataSource implements MaterialAnalysisDataSource {
   Future<Object?> invoke(String f, Map<String, Object?> b) async =>
       (await client.functions.invoke(f, body: b)).data;
   @override
-  Future<Object?> fetchStatus(String id) =>
+  Future<Object?> fetchStatusV2(String id) => client.rpc(
+    'get_material_analysis_status_v2',
+    params: {'p_material_id': id},
+  );
+  @override
+  Future<Object?> fetchStatusV1(String id) =>
       client.rpc('get_material_analysis_status', params: {'p_material_id': id});
 }
 
@@ -151,18 +164,44 @@ class SupabaseMaterialAnalysisRepository implements MaterialAnalysisRepository {
     required String materialId,
   }) => _call('retry-material-analysis', user, materialId, {});
   @override
+  Future<MaterialAnalysisStatus> analyzeAgain({
+    required AuthUser user,
+    required String materialId,
+    required AnalysisProcessingMode mode,
+  }) => _call('prepare-material-analysis', user, materialId, {
+    'processing_mode': mode.name,
+    'confirm_large_document': false,
+    'analyze_again': true,
+  });
+  @override
   Future<MaterialAnalysisStatus> fetchStatus({
     required AuthUser user,
     required String materialId,
   }) async {
     _auth(user, materialId);
     try {
-      var r = await source.fetchStatus(materialId);
+      Object? r;
+      var v2 = true;
+      try {
+        r = await source.fetchStatusV2(materialId);
+      } on supabase.PostgrestException catch (error) {
+        if (!_isMissingStatusV2(error)) rethrow;
+        v2 = false;
+        r = await source.fetchStatusV1(materialId);
+      }
       if (r is List && r.isEmpty) {
         throw const MaterialAnalysisException(AnalysisErrorCode.statusNotFound);
       }
       if (r is List && r.length == 1) r = r.single;
-      return decodeMaterialAnalysisStatus(r, expectedMaterialId: materialId);
+      return v2
+          ? decodeMaterialAnalysisStatusV2Rpc(
+              r,
+              expectedMaterialId: materialId,
+            )
+          : decodeMaterialAnalysisStatusV1Rpc(
+              r,
+              expectedMaterialId: materialId,
+            );
     } on MaterialAnalysisException {
       rethrow;
     } catch (_) {
@@ -178,10 +217,10 @@ class SupabaseMaterialAnalysisRepository implements MaterialAnalysisRepository {
   ) async {
     _auth(u, id);
     try {
-      return decodeMaterialAnalysisStatus(
-        await source.invoke(f, {'material_id': id, ...extra}),
-        expectedMaterialId: id,
-      );
+      final response = await source.invoke(f, {'material_id': id, ...extra});
+      return _hasAnalyzeAgainField(response)
+          ? decodeMaterialAnalysisStatus(response, expectedMaterialId: id)
+          : decodeMaterialAnalysisStatusV1(response, expectedMaterialId: id);
     } on MaterialAnalysisException {
       rethrow;
     } on supabase.FunctionException catch (e) {
@@ -206,6 +245,12 @@ class EmptyMaterialAnalysisRepository implements MaterialAnalysisRepository {
   Future<MaterialAnalysisStatus> advance({
     required AuthUser user,
     required String materialId,
+  }) => _n();
+  @override
+  Future<MaterialAnalysisStatus> analyzeAgain({
+    required AuthUser user,
+    required String materialId,
+    required AnalysisProcessingMode mode,
   }) => _n();
   @override
   Future<MaterialAnalysisStatus> fetchStatus({
@@ -233,6 +278,48 @@ final _uuid = RegExp(
 MaterialAnalysisStatus decodeMaterialAnalysisStatus(
   Object? v, {
   required String expectedMaterialId,
+}) => _decodeMaterialAnalysisStatus(
+  v,
+  expectedMaterialId: expectedMaterialId,
+  version: 2,
+  rpcShape: false,
+);
+
+MaterialAnalysisStatus decodeMaterialAnalysisStatusV1(
+  Object? v, {
+  required String expectedMaterialId,
+}) => _decodeMaterialAnalysisStatus(
+  v,
+  expectedMaterialId: expectedMaterialId,
+  version: 1,
+  rpcShape: false,
+);
+
+MaterialAnalysisStatus decodeMaterialAnalysisStatusV2Rpc(
+  Object? v, {
+  required String expectedMaterialId,
+}) => _decodeMaterialAnalysisStatus(
+  v,
+  expectedMaterialId: expectedMaterialId,
+  version: 2,
+  rpcShape: true,
+);
+
+MaterialAnalysisStatus decodeMaterialAnalysisStatusV1Rpc(
+  Object? v, {
+  required String expectedMaterialId,
+}) => _decodeMaterialAnalysisStatus(
+  v,
+  expectedMaterialId: expectedMaterialId,
+  version: 1,
+  rpcShape: true,
+);
+
+MaterialAnalysisStatus _decodeMaterialAnalysisStatus(
+  Object? v, {
+  required String expectedMaterialId,
+  required int version,
+  required bool rpcShape,
 }) {
   if (v is! Map) {
     throw const MaterialAnalysisException(AnalysisErrorCode.invalidResponse);
@@ -243,7 +330,7 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
   } catch (_) {
     throw const MaterialAnalysisException(AnalysisErrorCode.invalidResponse);
   }
-  final requiredKeys = {
+  final expectedKeys = {
     'material_id',
     'processing_mode',
     'state',
@@ -256,10 +343,12 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
     'warnings',
     'summary_schema_version',
     'summary_payload',
+    if (version == 2) 'can_analyze_again',
+    if (rpcShape) 'safe_error_code',
+    if (rpcShape) 'active_operation',
   };
-  final allowedKeys = {...requiredKeys, 'safe_error_code', 'active_operation'};
-  if (!m.keys.toSet().containsAll(requiredKeys) ||
-      !allowedKeys.containsAll(m.keys) ||
+  if (m.keys.toSet().length != expectedKeys.length ||
+      !m.keys.toSet().containsAll(expectedKeys) ||
       m['material_id'] != expectedMaterialId ||
       !_uuid.hasMatch(expectedMaterialId)) {
     throw const MaterialAnalysisException(AnalysisErrorCode.invalidResponse);
@@ -324,6 +413,7 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
         c > p ||
         m['confirmation_required'] is! bool ||
         m['can_retry'] is! bool ||
+        (version == 2 && m['can_analyze_again'] is! bool) ||
         (r != null && (r is! int || r < 0 || r > 900)) ||
         (s != null && (s is! int || s < 1))) {
       throw const FormatException();
@@ -353,6 +443,9 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
       completedPages: c,
       confirmationRequired: m['confirmation_required'] as bool,
       canRetry: m['can_retry'] as bool,
+      canAnalyzeAgain: version == 2
+          ? m['can_analyze_again'] as bool
+          : false,
       retryAfterSeconds: r as int?,
       warnings: warnings,
       summarySchemaVersion: s as int?,
@@ -364,6 +457,15 @@ MaterialAnalysisStatus decodeMaterialAnalysisStatus(
     throw const MaterialAnalysisException(AnalysisErrorCode.invalidResponse);
   }
 }
+
+bool _hasAnalyzeAgainField(Object? value) {
+  final candidate = value is List && value.length == 1 ? value.single : value;
+  return candidate is Map && candidate.containsKey('can_analyze_again');
+}
+
+bool _isMissingStatusV2(supabase.PostgrestException error) =>
+    error.code == 'PGRST202' &&
+    error.message.contains('get_material_analysis_status_v2');
 
 AnalysisErrorCode _functionErrorCode(supabase.FunctionException exception) {
   final status = exception.status;

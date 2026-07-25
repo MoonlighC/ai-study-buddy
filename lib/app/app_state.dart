@@ -44,7 +44,7 @@ import '../features/usage/usage_status_repository.dart';
 import '../mock/mock_ai_service.dart';
 import '../mock/mock_data.dart';
 
-enum AnalysisExplicitAction { preflight, confirmation, retry }
+enum AnalysisExplicitAction { preflight, confirmation, retry, analyzeAgain }
 
 enum StudyGenerationStatus { idle, generating, reconciling, completed, failed }
 
@@ -664,6 +664,27 @@ class AppState extends ChangeNotifier {
       id,
       AnalysisExplicitAction.retry,
       () => materialAnalysisRepository.retry(user: user, materialId: id),
+    );
+  }
+
+  Future<bool> analyzeMaterialAgain(AuthUser? user, String id) async {
+    final s = _analysisStatuses[id];
+    if (user == null ||
+        s == null ||
+        s.state != AnalysisState.failed ||
+        s.safeErrorCode != 'structured_output_invalid' ||
+        !s.canAnalyzeAgain) {
+      return false;
+    }
+    return _action(
+      user,
+      id,
+      AnalysisExplicitAction.analyzeAgain,
+      () => materialAnalysisRepository.analyzeAgain(
+        user: user,
+        materialId: id,
+        mode: s.processingMode,
+      ),
     );
   }
 

@@ -323,7 +323,26 @@ await runSql(
   "study_generation_reconciliation_tester_usage.sql",
 );
 
-console.log("PHASE_DE_DATABASE_TESTS_OK migrations=30 sql_suites=20");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "031_material_analysis_real_output_reliability.sql",
+  ),
+  "migration 031_",
+);
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "phase_c_real_output_reliability.sql",
+  ),
+  "phase_c_real_output_reliability.sql",
+);
+
+console.log("PHASE_DE_DATABASE_TESTS_OK migrations=31 sql_suites=21");
 await database.close();
 
 async function runSql(file, label) {

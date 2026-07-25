@@ -78,6 +78,7 @@ void main() {
       'completed_pages': 2,
       'confirmation_required': false,
       'can_retry': false,
+      'can_analyze_again': false,
       'retry_after_seconds': null,
       'warnings': <Object?>[],
       'summary_schema_version': 1,

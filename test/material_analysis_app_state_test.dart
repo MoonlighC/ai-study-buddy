@@ -105,6 +105,33 @@ void main() {
   );
 
   test(
+    'Analyze again is explicit, guarded, and starts one new generation',
+    () async {
+      final analyze = Completer<MaterialAnalysisStatus>();
+      final repo = _Repo(
+        onFetch: (id) async => _status(
+          id,
+          state: AnalysisState.failed,
+          canAnalyzeAgain: true,
+          safeErrorCode: 'structured_output_invalid',
+        ),
+        onAnalyzeAgain: (_) => analyze.future,
+      );
+      final state = AppState(materialAnalysisRepository: repo);
+      await state.observeMaterialAnalysis(_user, _ids.first);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(repo.advances, 0);
+      final first = state.analyzeMaterialAgain(_user, _ids.first);
+      final duplicate = state.analyzeMaterialAgain(_user, _ids.first);
+      expect(repo.analysesAgain, 1);
+      expect(await duplicate, isFalse);
+      analyze.complete(_status(_ids.first));
+      expect(await first, isTrue);
+      expect(state.materialAnalysisActionFor(_ids.first), isNull);
+    },
+  );
+
+  test(
     'confirmation double tap sends one request and failure releases guard',
     () async {
       final firstPrepare = Completer<MaterialAnalysisStatus>();
@@ -856,6 +883,7 @@ class _Repo implements MaterialAnalysisRepository {
     this.onAdvance,
     this.onPrepare,
     this.onRetry,
+    this.onAnalyzeAgain,
   });
 
   final Future<MaterialAnalysisStatus> Function(String)? onFetch;
@@ -865,7 +893,8 @@ class _Repo implements MaterialAnalysisRepository {
   final Future<MaterialAnalysisStatus> Function(String, AuthUser, bool)?
   onPrepare;
   final Future<MaterialAnalysisStatus> Function(String)? onRetry;
-  int fetches = 0, advances = 0, prepares = 0, retries = 0;
+  final Future<MaterialAnalysisStatus> Function(String)? onAnalyzeAgain;
+  int fetches = 0, advances = 0, prepares = 0, retries = 0, analysesAgain = 0;
   final advanceIds = <String>[];
 
   @override
@@ -910,6 +939,17 @@ class _Repo implements MaterialAnalysisRepository {
     prepares += 1;
     return onPrepare?.call(materialId, user, confirmLargeDocument) ??
         Future.value(_status(materialId, state: AnalysisState.completed));
+  }
+
+  @override
+  Future<MaterialAnalysisStatus> analyzeAgain({
+    required AuthUser user,
+    required String materialId,
+    required AnalysisProcessingMode mode,
+  }) {
+    analysesAgain += 1;
+    return onAnalyzeAgain?.call(materialId) ??
+        Future.value(_status(materialId, state: AnalysisState.processing));
   }
 }
 
@@ -977,6 +1017,8 @@ MaterialAnalysisStatus _status(
   int pageCount = 1,
   bool confirmationRequired = false,
   bool canRetry = false,
+  bool canAnalyzeAgain = false,
+  String? safeErrorCode,
   AnalysisPublicStage? publicStage,
   StructuredSummary? summary,
 }) => MaterialAnalysisStatus(
@@ -992,11 +1034,13 @@ MaterialAnalysisStatus _status(
   completedPages: state == AnalysisState.completed ? pageCount : 0,
   confirmationRequired: confirmationRequired,
   canRetry: canRetry,
+  canAnalyzeAgain: canAnalyzeAgain,
   retryAfterSeconds: null,
   warnings: const [],
   summarySchemaVersion: summary == null ? null : 1,
   summary: summary,
   structuredSummaryMalformed: false,
+  safeErrorCode: safeErrorCode,
 );
 
 Future<void> _waitFor(bool Function() condition) async {

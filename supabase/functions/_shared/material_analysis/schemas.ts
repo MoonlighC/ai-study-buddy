@@ -6,6 +6,7 @@ import {
 } from "./contracts.ts";
 import {
   validateLatex,
+  validateLatexLegacyV2,
   validateSafeMarkdown,
   ValidationResult,
 } from "./validators.ts";
@@ -13,15 +14,24 @@ import {
 const page = { type: "integer", minimum: 1, maximum: 100 } as const;
 const confidence = { type: "number", minimum: 0, maximum: 1 } as const;
 const pageArray = { type: "array", items: page, maxItems: 100 } as const;
-export const approvedAnalysisWarningCodes = [
+export const providerPageWarningCodes = [
   "page_content_partial",
   "page_content_missing",
   "source_metadata_omitted",
+] as const;
+export const downstreamAnalysisWarningCodes = [
+  ...providerPageWarningCodes,
   "page_missing",
   "invalid_equation_latex",
 ] as const;
-const warningSchema = closed({
-  code: { type: "string", enum: [...approvedAnalysisWarningCodes] },
+export const approvedAnalysisWarningCodes = downstreamAnalysisWarningCodes;
+const providerPageWarningSchema = closed({
+  code: { type: "string", enum: [...providerPageWarningCodes] },
+  detail: { type: "string" },
+  source_pages: pageArray,
+});
+const downstreamWarningSchema = closed({
+  code: { type: "string", enum: [...downstreamAnalysisWarningCodes] },
   detail: { type: "string" },
   source_pages: pageArray,
 });
@@ -58,7 +68,7 @@ export const pageAnalysisResultSchema = closed({
   key_concepts: { type: "array", items: { type: "string" }, maxItems: 50 },
   equations: { type: "array", items: pageEquationSchema, maxItems: 100 },
   confidence,
-  warnings: { type: "array", items: warningSchema, maxItems: 100 },
+  warnings: { type: "array", items: providerPageWarningSchema, maxItems: 100 },
   trustworthy: { type: "boolean" },
 });
 
@@ -80,7 +90,7 @@ export const reductionResultSchema = closed({
     items: { type: "string", pattern: "^eq_[a-z0-9_-]{1,60}$" },
     maxItems: 100,
   },
-  warnings: { type: "array", items: warningSchema, maxItems: 100 },
+  warnings: { type: "array", items: downstreamWarningSchema, maxItems: 100 },
   confidence,
 });
 
@@ -128,7 +138,7 @@ export const structuredSummarySchema = closed({
     maxItems: 100,
     items: finalSummaryEquationSchema,
   },
-  warnings: { type: "array", maxItems: 100, items: warningSchema },
+  warnings: { type: "array", maxItems: 100, items: downstreamWarningSchema },
   partial_extraction: closed({
     is_partial: { type: "boolean" },
     analyzed_pages: pageArray,
@@ -174,10 +184,11 @@ export const publicStatusSchema = closed({
   completed_pages: { type: "integer", minimum: 0, maximum: 100 },
   confirmation_required: { type: "boolean" },
   can_retry: { type: "boolean" },
+  can_analyze_again: { type: "boolean" },
   retry_after_seconds: {
     anyOf: [{ type: "integer", minimum: 0, maximum: 900 }, { type: "null" }],
   },
-  warnings: { type: "array", maxItems: 100, items: warningSchema },
+  warnings: { type: "array", maxItems: 100, items: downstreamWarningSchema },
   summary_schema_version: {
     anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }],
   },
@@ -244,11 +255,32 @@ export function validateSummarySemantics(
   input: unknown,
   pageCount: number,
 ): ValidationResult {
+  return validateSummarySemanticsWithLatex(input, pageCount, validateLatex);
+}
+
+export function validateSummarySemanticsLegacyV2(
+  input: unknown,
+  pageCount: number,
+): ValidationResult {
+  return validateSummarySemanticsWithLatex(
+    input,
+    pageCount,
+    validateLatexLegacyV2,
+  );
+}
+
+function validateSummarySemanticsWithLatex(
+  input: unknown,
+  pageCount: number,
+  latexValidator: typeof validateLatex,
+): ValidationResult {
   const errors: string[] = [];
   if (!Number.isInteger(pageCount) || pageCount < 1 || pageCount > 100) {
     return finish(["page_count"]);
   }
-  if (!isStructuredSummary(input, errors)) return finish(errors);
+  if (!isStructuredSummary(input, errors, latexValidator)) {
+    return finish(errors);
+  }
   const summary = input as StructuredSummary;
   const expected = range(pageCount);
   const extraction = summary.partial_extraction;
@@ -323,21 +355,150 @@ export function validatePageResult(
   expectedPage: number,
   pageCount = expectedPage,
 ): ValidationResult {
+  return validatePageResultForWarningCodes(
+    input,
+    expectedPage,
+    pageCount,
+    providerPageWarningCodes,
+  );
+}
+
+export function validatePageBatchStructure(
+  input: unknown,
+  expectedResultCount: number,
+): ValidationResult {
   const errors: string[] = [];
-  if (!isPageAnalysisResult(input, errors, pageCount)) return finish(errors);
+  if (
+    !exactRecord(input, ["pages"], errors, "page_batch") ||
+    !boundedArray(input.pages, 1, 10) ||
+    input.pages.length !== expectedResultCount
+  ) return finish(errors.length ? errors : ["page_batch_count"]);
+  input.pages.forEach((page, index) => {
+    const validation = validatePageStructure(page);
+    errors.push(
+      ...validation.errors.map((error) => `pages.${index}:${error}`),
+    );
+  });
+  return finish(errors);
+}
+
+export function validatePageStructure(input: unknown): ValidationResult {
+  const errors: string[] = [];
+  if (
+    !exactRecord(
+      input,
+      [
+        "page_number",
+        "content_status",
+        "summary_markdown",
+        "key_concepts",
+        "equations",
+        "confidence",
+        "warnings",
+        "trustworthy",
+      ],
+      errors,
+      "page_result",
+    )
+  ) return finish(errors);
+  if (!Number.isInteger(input.page_number)) errors.push("page_number");
+  if (
+    !["completed", "partial", "missing"].includes(
+      input.content_status as string,
+    )
+  ) errors.push("content_status");
+  if (typeof input.summary_markdown !== "string") {
+    errors.push("summary_markdown");
+  }
+  if (
+    !boundedArray(input.key_concepts, 0, 50) ||
+    !input.key_concepts.every((item) => typeof item === "string")
+  ) errors.push("key_concepts");
+  if (!boundedArray(input.equations, 0, 100)) {
+    errors.push("equations");
+  } else {
+    input.equations.forEach((equation, index) => {
+      if (
+        !exactRecord(
+          equation,
+          [
+            "id",
+            "latex",
+            "explanation_markdown",
+            "source_page",
+            "display",
+            "confidence",
+            "uncertainty",
+          ],
+          errors,
+          `equations.${index}`,
+        )
+      ) return;
+      if (
+        typeof equation.id !== "string" ||
+        typeof equation.latex !== "string" ||
+        typeof equation.explanation_markdown !== "string" ||
+        !Number.isInteger(equation.source_page) ||
+        typeof equation.display !== "string" ||
+        typeof equation.confidence !== "number" ||
+        typeof equation.uncertainty !== "boolean"
+      ) errors.push(`equations.${index}:type`);
+    });
+  }
+  if (typeof input.confidence !== "number") errors.push("confidence");
+  if (!boundedArray(input.warnings, 0, 100)) {
+    errors.push("warnings");
+  } else {
+    input.warnings.forEach((warning, index) => {
+      if (
+        !exactRecord(
+          warning,
+          ["code", "detail", "source_pages"],
+          errors,
+          `warnings.${index}`,
+        )
+      ) return;
+      if (
+        typeof warning.code !== "string" ||
+        typeof warning.detail !== "string" ||
+        !Array.isArray(warning.source_pages)
+      ) errors.push(`warnings.${index}:type`);
+    });
+  }
+  if (typeof input.trustworthy !== "boolean") errors.push("trustworthy");
+  return finish(errors);
+}
+
+export function validateDownstreamPageResult(
+  input: unknown,
+  expectedPage: number,
+  pageCount = expectedPage,
+): ValidationResult {
+  return validatePageResultForWarningCodes(
+    input,
+    expectedPage,
+    pageCount,
+    downstreamAnalysisWarningCodes,
+  );
+}
+
+function validatePageResultForWarningCodes(
+  input: unknown,
+  expectedPage: number,
+  pageCount: number,
+  allowedWarningCodes: readonly string[],
+): ValidationResult {
+  const errors: string[] = [];
+  if (
+    !isPageAnalysisResult(input, errors, pageCount, allowedWarningCodes)
+  ) return finish(errors);
   const pageResult = input as PageAnalysisResult;
   if (pageResult.page_number !== expectedPage) errors.push("page_number");
   if (!pageResult.trustworthy) errors.push("trustworthy_content_required");
   const warningCodes = pageResult.warnings.map((warning) => warning.code);
-  if (
-    warningCodes.some((code) =>
-      ![
-        "page_content_partial",
-        "page_content_missing",
-        "source_metadata_omitted",
-      ].includes(code)
-    )
-  ) errors.push("page_warning_code_not_allowed");
+  if (warningCodes.some((code) => !allowedWarningCodes.includes(code))) {
+    errors.push("page_warning_code_not_allowed");
+  }
   if (
     pageResult.content_status === "completed" &&
     warningCodes.some((code) =>
@@ -403,6 +564,34 @@ export function validatePageBatchResult(
   return finish(errors);
 }
 
+export function validateDownstreamPageBatchResult(
+  input: unknown,
+  expectedPages: number[],
+  pageCount = Math.max(...expectedPages),
+): ValidationResult {
+  const errors: string[] = [];
+  if (
+    !exactRecord(input, ["pages"], errors, "page_batch") ||
+    !boundedArray(input.pages, 1, 10)
+  ) return finish(errors);
+  const actualPages: number[] = [];
+  for (const item of input.pages) {
+    const pageNumber = isRecord(item) && Number.isInteger(item.page_number)
+      ? item.page_number as number
+      : -1;
+    actualPages.push(pageNumber);
+    const result = validateDownstreamPageResult(item, pageNumber, pageCount);
+    errors.push(...result.errors.map((error) => `page_${pageNumber}:${error}`));
+  }
+  if (
+    !sameNumbers(actualPages, expectedPages) ||
+    new Set(actualPages).size !== actualPages.length
+  ) {
+    errors.push("page_batch_provenance");
+  }
+  return finish(errors);
+}
+
 export function validateReductionResult(
   input: unknown,
   allowedPages: number[],
@@ -452,6 +641,7 @@ export function validatePublicStatus(
 function isStructuredSummary(
   value: unknown,
   errors: string[],
+  latexValidator: typeof validateLatex = validateLatex,
 ): value is StructuredSummary {
   if (
     !exactRecord(
@@ -479,7 +669,12 @@ function isStructuredSummary(
     );}
   if (!boundedArray(value.equations, 0, 100)) errors.push("equations");
   else {value.equations.forEach((equation, index) =>
-      validateEquation(equation, errors, `equations.${index}`)
+      validateEquation(
+        equation,
+        errors,
+        `equations.${index}`,
+        latexValidator,
+      )
     );}
   validateWarnings(value.warnings, errors, 100);
   if (
@@ -525,6 +720,7 @@ function isPageAnalysisResult(
   value: unknown,
   errors: string[],
   pageCount: number,
+  allowedWarningCodes: readonly string[],
 ): value is PageAnalysisResult {
   if (
     !exactRecord(
@@ -577,7 +773,13 @@ function isPageAnalysisResult(
     if (new Set(ids).size !== ids.length) errors.push("duplicate_equation_id");
   }
   if (!validConfidence(value.confidence)) errors.push("confidence");
-  validateWarnings(value.warnings, errors, 100, pageCount);
+  validateWarnings(
+    value.warnings,
+    errors,
+    100,
+    pageCount,
+    allowedWarningCodes,
+  );
   if (typeof value.trustworthy !== "boolean") errors.push("trustworthy");
   return errors.length === 0;
 }
@@ -711,7 +913,12 @@ function validateConcept(value: unknown, errors: string[], index: number) {
   }
 }
 
-function validateEquation(value: unknown, errors: string[], path: string) {
+function validateEquation(
+  value: unknown,
+  errors: string[],
+  path: string,
+  latexValidator: typeof validateLatex = validateLatex,
+) {
   if (
     !exactRecord(
       value,
@@ -732,7 +939,7 @@ function validateEquation(value: unknown, errors: string[], path: string) {
     errors.push(`${path}.id`);
   }
   const latexValidation = typeof value.latex === "string"
-    ? validateLatex(value.latex)
+    ? latexValidator(value.latex)
     : { valid: false, errors: ["latex_length"] };
   if (!boundedString(value.latex, 1, 512) || !latexValidation.valid) {
     errors.push(`${path}.latex`);
@@ -761,6 +968,7 @@ function validateWarnings(
   errors: string[],
   limit: number,
   pageCount = 100,
+  allowedCodes: readonly string[] = downstreamAnalysisWarningCodes,
 ) {
   if (!boundedArray(value, 0, limit)) {
     errors.push("warnings");
@@ -777,10 +985,14 @@ function validateWarnings(
     ) return;
     if (
       typeof warning.code !== "string" ||
-      !approvedAnalysisWarningCodes.includes(
-        warning.code as typeof approvedAnalysisWarningCodes[number],
-      )
-    ) errors.push(`warnings.${index}.code`);
+      !allowedCodes.includes(warning.code)
+    ) {
+      errors.push(
+        allowedCodes === providerPageWarningCodes
+          ? "page_warning_code_not_allowed"
+          : `warnings.${index}.code`,
+      );
+    }
     if (!boundedString(warning.detail, 1, 500)) {
       errors.push(`warnings.${index}.detail`);
     }
