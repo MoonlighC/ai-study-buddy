@@ -475,6 +475,15 @@ export function analysisLog(
       "provider_equation_count",
       "referenced_equation_objects_added",
       "orphan_references_added",
+      "expected_page_count",
+      "returned_page_count",
+      "synthesized_missing_page_count",
+      "missing_page_numbers_count",
+      "provider_key_concept_count",
+      "accepted_key_concept_count",
+      "dropped_key_concept_count",
+      "duplicate_key_concept_count",
+      "capped_key_concept_count",
     ]
   ) {
     const value = details[key];
@@ -508,6 +517,8 @@ export function analysisLog(
       "validatePageProvenance",
       "persistValidatedPage",
       "validateVersionContract",
+      "canonicalizePageBatchResult",
+      "canonicalizeReductionKeyConcepts",
       "canonicalizeFinalSummaryEquations",
       "validateAuthoritativeEquations",
     ].includes(value);

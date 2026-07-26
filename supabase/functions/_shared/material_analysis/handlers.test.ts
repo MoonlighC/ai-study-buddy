@@ -551,6 +551,66 @@ Deno.test("runtime logs referenced authoritative equation object recovery", asyn
   equal(JSON.stringify(metadata).includes("x+y"), false);
 });
 
+Deno.test("runtime logs page omission synthesis counts only", async () => {
+  const fake = fakeDependencies(
+    pngBytes(),
+    "image",
+    "page_missing_synthesized",
+  );
+  fake.work = pageTextOmissionWorkUnit();
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (line: unknown) => lines.push(String(line));
+  try {
+    const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+      request({ material_id: materialId }),
+    );
+    equal(response.status, 200);
+  } finally {
+    console.log = original;
+  }
+  const metadata = lines.map((line) => JSON.parse(line)).find((line) =>
+    line.stage === "page_batch_canonicalization"
+  );
+  equal(metadata.expected_page_count, 2);
+  equal(metadata.returned_page_count, 1);
+  equal(metadata.synthesized_missing_page_count, 1);
+  equal(metadata.missing_page_numbers_count, 1);
+  equal("expected_page_numbers" in metadata, false);
+  equal("missing_page_numbers" in metadata, false);
+  equal(JSON.stringify(metadata).includes("Safe summary"), false);
+});
+
+Deno.test("runtime logs reduction concept canonicalization counts only", async () => {
+  const fake = fakeDependencies(
+    pngBytes(),
+    "image",
+    "reduction_concept_canonicalized",
+  );
+  fake.work = reductionWorkUnit();
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (line: unknown) => lines.push(String(line));
+  try {
+    const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+      request({ material_id: materialId }),
+    );
+    equal(response.status, 200);
+  } finally {
+    console.log = original;
+  }
+  const metadata = lines.map((line) => JSON.parse(line)).find((line) =>
+    line.stage === "reduction_key_concept_canonicalization"
+  );
+  equal(metadata.provider_key_concept_count, 2);
+  equal(metadata.accepted_key_concept_count, 1);
+  equal(metadata.dropped_key_concept_count, 1);
+  equal(metadata.duplicate_key_concept_count, 0);
+  equal(metadata.capped_key_concept_count, 0);
+  equal(JSON.stringify(metadata).includes("private concept"), false);
+  equal(JSON.stringify(metadata).includes("Safe concept"), false);
+});
+
 Deno.test("repeated final-summary reconciliation persists once with zero POSTs", async () => {
   const fake = fakeDependencies(
     pngBytes(),
@@ -824,6 +884,8 @@ function fakeDependencies(
     | "retrieval_invalid"
     | "retrieval_final_success"
     | "retrieval_reduction_success"
+    | "page_missing_synthesized"
+    | "reduction_concept_canonicalized"
     | "final_equation_replaced"
     | "final_equation_orphan"
     | "final_equation_referenced_only"
@@ -959,6 +1021,8 @@ function fakeDependencies(
       }
       const finalOperation =
         body.text?.format?.name === "phase_c_final_summary_v3";
+      const reductionOperation =
+        body.text?.format?.name === "phase_c_reduction_v2";
       const equationMode = providerMode === "final_equation_replaced" ||
           providerMode === "final_equation_orphan" ||
           providerMode === "final_equation_referenced_only" ||
@@ -971,6 +1035,10 @@ function fakeDependencies(
             ? equationMode
               ? finalSummaryWithEquation(equationMode)
               : finalSummary()
+            : reductionOperation
+            ? providerMode === "reduction_concept_canonicalized"
+              ? malformedReductionResult()
+              : reductionResult()
             : pageBatch(),
         )),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -1165,6 +1233,42 @@ function reductionReconciliationWorkUnit(): InternalWorkUnit {
   };
 }
 
+function pageTextOmissionWorkUnit(): InternalWorkUnit {
+  return {
+    kind: "page_text",
+    material_id: materialId,
+    job_id: jobId,
+    batch_id: batchId,
+    lease_token: leaseId,
+    page_count: 2,
+    page_numbers: [1, 2],
+    validation_version: analysisValidatorVersion,
+    input_payload: {
+      pages: [1, 2].map((pageNumber) => ({
+        page_number: pageNumber,
+        normalized_text: `Sanitized page ${pageNumber}.`,
+      })),
+    },
+  };
+}
+
+function reductionWorkUnit(): InternalWorkUnit {
+  return {
+    kind: "reduction",
+    material_id: materialId,
+    job_id: jobId,
+    batch_id: batchId,
+    lease_token: leaseId,
+    page_count: 1,
+    page_numbers: [1],
+    validation_version: analysisValidatorVersion,
+    input_payload: {
+      inputs: [pageBatch().pages[0]],
+      equation_ids: [],
+    },
+  };
+}
+
 function pageTextReconciliationWorkUnit(): InternalWorkUnit {
   return {
     kind: "reconciliation",
@@ -1228,6 +1332,16 @@ function reductionResult() {
     equation_ids: [],
     warnings: [],
     confidence: 0.9,
+  };
+}
+
+function malformedReductionResult() {
+  return {
+    ...reductionResult(),
+    key_concepts: [
+      "Safe concept",
+      "private concept','second concept',".repeat(20),
+    ],
   };
 }
 

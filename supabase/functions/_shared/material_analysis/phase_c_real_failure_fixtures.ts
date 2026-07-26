@@ -77,6 +77,39 @@ export const gti7Pages26To30 = {
   ],
 };
 
+export const ss24Pages6To9 = {
+  pages: [
+    page(6),
+    page(7),
+    page(8),
+    page(9, [], [{
+      code: "source_metadata_omitted",
+      detail: "Optional source metadata was not included.",
+      source_pages: [9],
+    }]),
+  ],
+};
+
+const serializedReductionConcept =
+  "zero-output condition','boolean algebra laws','switch algebra',".repeat(10);
+
+export const gti6FinalReductionRaw = {
+  source_pages: [41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
+  summary_markdown: "Sanitized grounded final reduction.",
+  key_concepts: [
+    "Nullausgabebedingung",
+    serializedReductionConcept,
+    "Boolean algebra laws",
+  ],
+  equation_ids: ["eq_page41_1"],
+  warnings: [{
+    code: "source_metadata_omitted",
+    detail: "Optional source metadata was not included.",
+    source_pages: [41],
+  }],
+  confidence: 0.9,
+};
+
 export const grumciReduction = {
   source_pages: [1, 2, 3, 4],
   summary_markdown: "Sanitized grounded reduction.",

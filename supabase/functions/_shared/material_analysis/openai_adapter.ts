@@ -9,8 +9,18 @@ import {
 } from "./schemas.ts";
 import { Equation, StructuredSummary } from "./contracts.ts";
 import { validateLatex } from "./validators.ts";
-import { canonicalizePageBatchResult } from "./page_result_canonicalization.ts";
+import {
+  canonicalizePageBatchResult,
+  PageBatchCanonicalizationComparison,
+} from "./page_result_canonicalization.ts";
 export { canonicalizePageBatchResult } from "./page_result_canonicalization.ts";
+import {
+  canonicalizeReductionResult,
+  ReductionKeyConceptComparison,
+} from "./reduction_result_canonicalization.ts";
+export {
+  canonicalizeReductionResult,
+} from "./reduction_result_canonicalization.ts";
 import {
   diagnoseFinalSummaryResponse,
   diagnosePageBatchResult,
@@ -44,6 +54,8 @@ export type ProviderRequest = {
 export type ProviderResult = {
   responseId: string;
   result: unknown;
+  pageBatchComparison?: PageBatchCanonicalizationComparison;
+  reductionKeyConceptComparison?: ReductionKeyConceptComparison;
   equationComparison?: FinalSummaryEquationComparison;
 };
 
@@ -171,6 +183,8 @@ export class TrustedOpenAiAdapter {
       return {
         responseId,
         result: parsed,
+        pageBatchComparison: validated.pageBatchComparison,
+        reductionKeyConceptComparison: validated.reductionKeyConceptComparison,
         equationComparison: validated.equationComparison,
       };
     } catch (error) {
@@ -191,6 +205,8 @@ export class TrustedOpenAiAdapter {
         | "invalid";
       result?: unknown;
       diagnostic?: PageBatchDiagnosticMetadata;
+      pageBatchComparison?: PageBatchCanonicalizationComparison;
+      reductionKeyConceptComparison?: ReductionKeyConceptComparison;
       equationComparison?: FinalSummaryEquationComparison;
     }
   > {
@@ -218,6 +234,8 @@ export class TrustedOpenAiAdapter {
       return {
         status: "completed",
         result: validated.result,
+        pageBatchComparison: validated.pageBatchComparison,
+        reductionKeyConceptComparison: validated.reductionKeyConceptComparison,
         equationComparison: validated.equationComparison,
       };
     } catch (error) {
@@ -425,6 +443,8 @@ export function validateProviderOutputWithMetadata(
   result: unknown,
 ): {
   result: unknown;
+  pageBatchComparison?: PageBatchCanonicalizationComparison;
+  reductionKeyConceptComparison?: ReductionKeyConceptComparison;
   equationComparison?: FinalSummaryEquationComparison;
 } {
   if (
@@ -447,21 +467,27 @@ export function validateProviderOutputWithMetadata(
         ) ?? undefined,
       });
     }
-    return { result: canonical.result };
+    return {
+      result: canonical.result,
+      pageBatchComparison: canonical.comparison,
+    };
   }
   if (request.operation === "reduction") {
-    const validation = validateReductionResult(
+    const canonical = canonicalizeReductionResult(
       result,
       request.expectedPages,
       request.allowedEquationIds ?? [],
     );
-    if (!validation.valid) {
+    if (!canonical.valid) {
       throw new ProviderBoundaryError({
         kind: "invalid_response",
         dispatched: true,
       });
     }
-    return { result };
+    return {
+      result: canonical.result,
+      reductionKeyConceptComparison: canonical.comparison,
+    };
   }
   const equationsCanonical = canonicalizeFinalSummaryEquations(request, result);
   if (!equationsCanonical.valid) {

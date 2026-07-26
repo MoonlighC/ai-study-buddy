@@ -464,6 +464,10 @@ async function executeOneWorkUnit(
       });
       return;
     }
+    logPageBatchComparison(retrieved.pageBatchComparison);
+    logReductionKeyConceptComparison(
+      retrieved.reductionKeyConceptComparison,
+    );
     logEquationComparison(retrieved.equationComparison);
     await deps.completeOperation({
       batch_id: required.batchId,
@@ -540,6 +544,10 @@ async function executeOneWorkUnit(
       response_id: provider.responseId,
       temporary_file_id: temporaryFileId,
     });
+    logPageBatchComparison(provider.pageBatchComparison);
+    logReductionKeyConceptComparison(
+      provider.reductionKeyConceptComparison,
+    );
     logEquationComparison(provider.equationComparison);
     const summaryMarkdown = work.kind === "final_summary"
       ? projectSummaryToSafeMarkdown(provider.result as StructuredSummary)
@@ -606,6 +614,56 @@ async function executeOneWorkUnit(
       cleanup_complete: !temporaryFileId,
     });
   }
+}
+
+function logPageBatchComparison(
+  comparison:
+    | {
+      expectedPageCount: number;
+      returnedPageCount: number;
+      synthesizedMissingPageCount: number;
+      missingPageNumbersCount: number;
+    }
+    | undefined,
+) {
+  if (!comparison) return;
+  analysisLog("advance", "page_batch_canonicalization", {
+    validator_stage: "canonicalizePageBatchResult",
+    validator_code: comparison.synthesizedMissingPageCount > 0
+      ? "missing_pages_synthesized"
+      : "page_batch_unchanged",
+    expected_page_count: comparison.expectedPageCount,
+    returned_page_count: comparison.returnedPageCount,
+    synthesized_missing_page_count: comparison.synthesizedMissingPageCount,
+    missing_page_numbers_count: comparison.missingPageNumbersCount,
+  });
+}
+
+function logReductionKeyConceptComparison(
+  comparison:
+    | {
+      providerKeyConceptCount: number;
+      acceptedKeyConceptCount: number;
+      droppedKeyConceptCount: number;
+      duplicateKeyConceptCount: number;
+      cappedKeyConceptCount: number;
+    }
+    | undefined,
+) {
+  if (!comparison) return;
+  analysisLog("advance", "reduction_key_concept_canonicalization", {
+    validator_stage: "canonicalizeReductionKeyConcepts",
+    validator_code: comparison.droppedKeyConceptCount > 0 ||
+        comparison.duplicateKeyConceptCount > 0 ||
+        comparison.cappedKeyConceptCount > 0
+      ? "reduction_key_concepts_canonicalized"
+      : "reduction_key_concepts_unchanged",
+    provider_key_concept_count: comparison.providerKeyConceptCount,
+    accepted_key_concept_count: comparison.acceptedKeyConceptCount,
+    dropped_key_concept_count: comparison.droppedKeyConceptCount,
+    duplicate_key_concept_count: comparison.duplicateKeyConceptCount,
+    capped_key_concept_count: comparison.cappedKeyConceptCount,
+  });
 }
 
 function logEquationComparison(

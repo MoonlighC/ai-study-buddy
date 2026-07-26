@@ -1,6 +1,7 @@
 import {
   canonicalizeFinalSummaryEquations,
   canonicalizePageBatchResult,
+  canonicalizeReductionResult,
   ProviderRequest,
   validateProviderOutput,
   validateProviderOutputWithMetadata,
@@ -15,10 +16,12 @@ import {
   grumciAuthoritativeEquation,
   grumciFinalSummary,
   grumciReduction,
+  gti6FinalReductionRaw,
   gti6Pages11To15Provider,
   gti6Pages11To15Raw,
   gti7Pages21To25,
   gti7Pages26To30,
+  ss24Pages6To9,
 } from "./phase_c_real_failure_fixtures.ts";
 
 Deno.test("gti6 raw page warning fails at the exact provider contract", () => {
@@ -119,6 +122,264 @@ Deno.test("invalid equation degrades only its page and preserves its batch", () 
   equal(
     [result.pages[0], result.pages[1], result.pages[3], result.pages[4]],
     [fixture.pages[0], fixture.pages[1], fixture.pages[3], fixture.pages[4]],
+  );
+});
+
+Deno.test("ss24 pages 6-10 synthesize only the omitted missing page", () => {
+  const expectedPages = [6, 7, 8, 9, 10];
+  const raw = validatePageBatchResult(ss24Pages6To9, expectedPages, 13);
+  equal(raw.valid, false);
+  includes(raw.errors, "page_batch_provenance");
+
+  const canonical = canonicalizePageBatchResult(
+    ss24Pages6To9,
+    expectedPages,
+    13,
+  );
+  equal(canonical.valid, true);
+  equal(canonical.comparison, {
+    expectedPageCount: 5,
+    returnedPageCount: 4,
+    synthesizedMissingPageCount: 1,
+    missingPageNumbersCount: 1,
+  });
+  const result = canonical.result as any;
+  equal(
+    result.pages.slice(0, 4),
+    ss24Pages6To9.pages,
+  );
+  equal(
+    result.pages.map((page: any) => page.page_number),
+    expectedPages,
+  );
+  equal(result.pages[4], {
+    page_number: 10,
+    content_status: "missing",
+    summary_markdown: "",
+    key_concepts: [],
+    equations: [],
+    confidence: 0,
+    warnings: [{
+      code: "page_missing",
+      detail: "This page could not be analyzed.",
+      source_pages: [10],
+    }, {
+      code: "page_content_missing",
+      detail: "No usable grounded content was available.",
+      source_pages: [10],
+    }],
+    trustworthy: true,
+  });
+  equal(
+    validateDownstreamPageBatchResult(result, expectedPages, 13).valid,
+    true,
+  );
+});
+
+Deno.test("page omission repair remains strict for provider output", () => {
+  const expectedPages = [6, 7, 8, 9, 10];
+  const duplicate = clone(ss24Pages6To9);
+  duplicate.pages[3].page_number = 8;
+  equal(
+    canonicalizePageBatchResult(duplicate, expectedPages, 13).valid,
+    false,
+  );
+
+  const unexpected = clone(ss24Pages6To9);
+  unexpected.pages[3].page_number = 11;
+  equal(
+    canonicalizePageBatchResult(unexpected, expectedPages, 13).valid,
+    false,
+  );
+
+  const substitution = clone(ss24Pages6To9);
+  substitution.pages[3].page_number = 10;
+  equal(
+    canonicalizePageBatchResult(substitution, expectedPages, 13).valid,
+    false,
+  );
+
+  const malformed = clone(ss24Pages6To9) as any;
+  malformed.pages[2].unexpected = true;
+  equal(
+    canonicalizePageBatchResult(malformed, expectedPages, 13).valid,
+    false,
+  );
+
+  const providerMissingWarning = clone(ss24Pages6To9) as any;
+  providerMissingWarning.pages[0].warnings = [{
+    code: "page_missing",
+    detail: "Provider must not emit this downstream warning.",
+    source_pages: [6],
+  }];
+  const forbidden = canonicalizePageBatchResult(
+    providerMissingWarning,
+    expectedPages,
+    13,
+  );
+  equal(forbidden.valid, false);
+  equal(forbidden.providerWarningViolation?.code, "page_missing");
+});
+
+Deno.test("page omission repair supports multiple absent expected pages", () => {
+  const provider = {
+    pages: [ss24Pages6To9.pages[0], ss24Pages6To9.pages[2]],
+  };
+  const canonical = canonicalizePageBatchResult(
+    provider,
+    [6, 7, 8, 9, 10],
+    13,
+  );
+  equal(canonical.valid, true);
+  const result = canonical.result as any;
+  equal(
+    result.pages.map((page: any) => page.page_number),
+    [6, 7, 8, 9, 10],
+  );
+  equal(
+    result.pages.filter((page: any) => page.content_status === "missing")
+      .length,
+    3,
+  );
+  equal(canonical.comparison.synthesizedMissingPageCount, 3);
+});
+
+Deno.test("gti6 final reduction drops one serialized-list concept only", () => {
+  const allowedPages = gti6FinalReductionRaw.source_pages;
+  const allowedEquationIds = ["eq_page41_1"];
+  equal(
+    validateReductionResult(
+      gti6FinalReductionRaw,
+      allowedPages,
+      allowedEquationIds,
+    ).valid,
+    false,
+  );
+  const canonical = canonicalizeReductionResult(
+    gti6FinalReductionRaw,
+    allowedPages,
+    allowedEquationIds,
+  );
+  equal(canonical.valid, true);
+  equal(canonical.comparison, {
+    providerKeyConceptCount: 3,
+    acceptedKeyConceptCount: 2,
+    droppedKeyConceptCount: 1,
+    duplicateKeyConceptCount: 0,
+    cappedKeyConceptCount: 0,
+  });
+  const result = canonical.result as any;
+  equal(result.key_concepts, [
+    "Nullausgabebedingung",
+    "Boolean algebra laws",
+  ]);
+  equal(
+    result.key_concepts.some((concept: string) =>
+      concept.includes("switch algebra")
+    ),
+    false,
+  );
+  for (
+    const field of [
+      "summary_markdown",
+      "source_pages",
+      "equation_ids",
+      "warnings",
+      "confidence",
+    ]
+  ) {
+    equal(result[field], (gti6FinalReductionRaw as any)[field]);
+  }
+  equal(
+    validateReductionResult(result, allowedPages, allowedEquationIds).valid,
+    true,
+  );
+});
+
+Deno.test("reduction key concepts reject structure without reconstruction", () => {
+  const fixture = {
+    ...clone(grumciReduction),
+    key_concepts: [
+      "Sichere deutsche Erklärung",
+      "Safe English concept",
+      "Safe   English\u00a0concept",
+      "https://example.test/private",
+      "portal.example.ai/private",
+      "**Markdown**",
+      "<strong>HTML</strong>",
+      "first line\nsecond line",
+      "one','two",
+      '["one","two"]',
+      '{"one":"two"}',
+      "control\u0007value",
+      " ",
+    ],
+  };
+  const canonical = canonicalizeReductionResult(
+    fixture,
+    [1, 2, 3, 4],
+    ["eq_page1_1"],
+  );
+  equal(canonical.valid, true);
+  const result = canonical.result as any;
+  equal(result.key_concepts, [
+    "Sichere deutsche Erklärung",
+    "Safe English concept",
+  ]);
+  equal(canonical.comparison, {
+    providerKeyConceptCount: 13,
+    acceptedKeyConceptCount: 2,
+    droppedKeyConceptCount: 10,
+    duplicateKeyConceptCount: 1,
+    cappedKeyConceptCount: 0,
+  });
+  equal(result.summary_markdown, fixture.summary_markdown);
+  equal(result.equation_ids, fixture.equation_ids);
+});
+
+Deno.test("reduction canonicalization caps safely and cannot mask bad provenance", () => {
+  const many = {
+    ...clone(grumciReduction),
+    key_concepts: Array.from(
+      { length: 102 },
+      (_, index) => `Safe concept ${index + 1}`,
+    ),
+  };
+  const capped = canonicalizeReductionResult(
+    many,
+    [1, 2, 3, 4],
+    ["eq_page1_1"],
+  );
+  equal(capped.valid, true);
+  equal((capped.result as any).key_concepts.length, 100);
+  equal(capped.comparison.cappedKeyConceptCount, 2);
+
+  const wrongEquation = {
+    ...clone(grumciReduction),
+    equation_ids: ["eq_unknown"],
+    key_concepts: ["Valid concept", "one','two"],
+  };
+  equal(
+    canonicalizeReductionResult(
+      wrongEquation,
+      [1, 2, 3, 4],
+      ["eq_page1_1"],
+    ).valid,
+    false,
+  );
+
+  const wrongProvenance = {
+    ...clone(grumciReduction),
+    source_pages: [1, 2, 3],
+    key_concepts: ["Valid concept", "one','two"],
+  };
+  equal(
+    canonicalizeReductionResult(
+      wrongProvenance,
+      [1, 2, 3, 4],
+      ["eq_page1_1"],
+    ).valid,
+    false,
   );
 });
 
