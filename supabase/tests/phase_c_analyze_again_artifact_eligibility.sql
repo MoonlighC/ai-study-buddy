@@ -68,6 +68,17 @@ select pg_temp.assert_analyze_again(
       'execute'),
   'status, preparation, and helper grants remain least privilege');
 
+select pg_temp.assert_analyze_again(
+  (
+    select format_type(attribute.atttypid,attribute.atttypmod)='text'
+    from pg_attribute attribute
+    where attribute.attrelid='storage.objects'::regclass
+      and attribute.attname='owner_id'
+      and attribute.attnum>0
+      and not attribute.attisdropped
+  ),
+  'storage owner fixture matches hosted text type');
+
 insert into auth.users(id,email) values
   ('32323232-3232-4232-8232-323232323231','owner@example.test'),
   ('32323232-3232-4232-8232-323232323239','other@example.test');
@@ -338,7 +349,7 @@ begin
     (select can_analyze_again
       from public.get_material_analysis_status_v2(
         '32323232-3232-4232-8232-323232323232')),
-    'cleanup_pending provider artifact does not block');
+    'matching text owner permits cleanup_pending provider artifact');
   perform pg_temp.assert_analyze_again(
     (select can_analyze_again
       from public.get_material_analysis_status_v2(
@@ -369,6 +380,28 @@ begin
       from public.get_material_analysis_status_v2(
         '32323232-3232-4232-8232-323232323238')),
     'durable-source cleanup blocks Analyze Again');
+
+  update storage.objects
+  set owner_id='32323232-3232-4232-8232-323232323239'
+  where id='72727272-7272-4272-8272-727272727232';
+  perform pg_temp.assert_analyze_again(
+    not (select can_analyze_again
+      from public.get_material_analysis_status_v2(
+        '32323232-3232-4232-8232-323232323232')),
+    'different text storage owner blocks Analyze Again');
+
+  update storage.objects
+  set owner_id='malformed-non-uuid-owner'
+  where id='72727272-7272-4272-8272-727272727232';
+  perform pg_temp.assert_analyze_again(
+    not (select can_analyze_again
+      from public.get_material_analysis_status_v2(
+        '32323232-3232-4232-8232-323232323232')),
+    'malformed text storage owner is rejected without a cast exception');
+
+  update storage.objects
+  set owner_id='32323232-3232-4232-8232-323232323231'
+  where id='72727272-7272-4272-8272-727272727232';
 
   perform set_config(
     'request.jwt.claim.sub','32323232-3232-4232-8232-323232323239',false);

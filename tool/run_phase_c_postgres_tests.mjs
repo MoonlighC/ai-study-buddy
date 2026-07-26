@@ -37,7 +37,7 @@ await database.exec(`
   );
   create table storage.objects(
     id uuid primary key,bucket_id text not null,
-    name text not null,owner_id uuid,created_at timestamptz not null default now()
+    name text not null,owner_id text,created_at timestamptz not null default now()
   );
   alter table storage.objects enable row level security;
   create or replace function storage.foldername(value text) returns text[]

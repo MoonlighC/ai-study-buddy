@@ -45,7 +45,7 @@ as $$
         from storage.objects source
         where source.bucket_id=m.storage_bucket
           and source.name=m.storage_path
-          and source.owner_id=m.user_id
+          and source.owner_id=m.user_id::text
       )
       and j.generation=(
         select pg_catalog.max(latest.generation)
