@@ -9,6 +9,7 @@ import {
 import {
   validateDownstreamPageBatchResult,
   validatePageBatchResult,
+  validatePageResult,
   validateReductionResult,
   validateSummarySemantics,
 } from "./schemas.ts";
@@ -21,6 +22,9 @@ import {
   gti6Pages11To15Raw,
   gti7Pages21To25,
   gti7Pages26To30,
+  ss24Pages11To13WithStray10,
+  ss24Pages1To5MissingUntrustworthy,
+  ss24Pages6To10MissingUntrustworthy,
   ss24Pages6To9,
 } from "./phase_c_real_failure_fixtures.ts";
 
@@ -140,6 +144,8 @@ Deno.test("ss24 pages 6-10 synthesize only the omitted missing page", () => {
   equal(canonical.comparison, {
     expectedPageCount: 5,
     returnedPageCount: 4,
+    normalizedMissingTrustworthyCount: 0,
+    discardedStrayPageCount: 0,
     synthesizedMissingPageCount: 1,
     missingPageNumbersCount: 1,
   });
@@ -173,6 +179,223 @@ Deno.test("ss24 pages 6-10 synthesize only the omitted missing page", () => {
   equal(
     validateDownstreamPageBatchResult(result, expectedPages, 13).valid,
     true,
+  );
+});
+
+Deno.test("ss24 page 5 normalizes only missing trustworthy", () => {
+  const fixture = clone(ss24Pages1To5MissingUntrustworthy);
+  const raw = validatePageBatchResult(fixture, [1, 2, 3, 4, 5], 13);
+  equal(raw.valid, false);
+  includes(raw.errors, "page_5:trustworthy_content_required");
+
+  const canonical = canonicalizePageBatchResult(
+    fixture,
+    [1, 2, 3, 4, 5],
+    13,
+  );
+  equal(canonical.valid, true);
+  const expected = clone(fixture);
+  expected.pages[4].trustworthy = true;
+  equal(canonical.result, expected);
+  equal(canonical.comparison, {
+    expectedPageCount: 5,
+    returnedPageCount: 5,
+    normalizedMissingTrustworthyCount: 1,
+    discardedStrayPageCount: 0,
+    synthesizedMissingPageCount: 0,
+    missingPageNumbersCount: 0,
+  });
+  equal(
+    validateDownstreamPageBatchResult(
+      canonical.result,
+      [1, 2, 3, 4, 5],
+      13,
+    ).valid,
+    true,
+  );
+});
+
+Deno.test("ss24 page 10 normalizes only missing trustworthy", () => {
+  const fixture = clone(ss24Pages6To10MissingUntrustworthy);
+  const raw = validatePageBatchResult(fixture, [6, 7, 8, 9, 10], 13);
+  equal(raw.valid, false);
+  includes(raw.errors, "page_10:trustworthy_content_required");
+
+  const canonical = canonicalizePageBatchResult(
+    fixture,
+    [6, 7, 8, 9, 10],
+    13,
+  );
+  equal(canonical.valid, true);
+  const expected = clone(fixture);
+  expected.pages[4].trustworthy = true;
+  equal(canonical.result, expected);
+  equal(canonical.comparison.normalizedMissingTrustworthyCount, 1);
+  equal(canonical.comparison.discardedStrayPageCount, 0);
+  equal(canonical.comparison.synthesizedMissingPageCount, 0);
+  equal(
+    validateDownstreamPageBatchResult(
+      canonical.result,
+      [6, 7, 8, 9, 10],
+      13,
+    ).valid,
+    true,
+  );
+});
+
+Deno.test("ss24 stray page 10 is discarded and page 13 is synthesized", () => {
+  const fixture = clone(ss24Pages11To13WithStray10);
+  equal(validatePageResult(fixture.pages[2], 10, 13).valid, true);
+  const raw = validatePageBatchResult(fixture, [11, 12, 13], 13);
+  equal(raw.valid, false);
+  includes(raw.errors, "page_batch_provenance");
+
+  const canonical = canonicalizePageBatchResult(
+    fixture,
+    [11, 12, 13],
+    13,
+  );
+  equal(canonical.valid, true);
+  equal(canonical.comparison, {
+    expectedPageCount: 3,
+    returnedPageCount: 3,
+    normalizedMissingTrustworthyCount: 0,
+    discardedStrayPageCount: 1,
+    synthesizedMissingPageCount: 1,
+    missingPageNumbersCount: 1,
+  });
+  const result = canonical.result as any;
+  equal(
+    result.pages.map((page: any) => page.page_number),
+    [11, 12, 13],
+  );
+  equal(result.pages.slice(0, 2), fixture.pages.slice(0, 2));
+  equal(result.pages[2], {
+    page_number: 13,
+    content_status: "missing",
+    summary_markdown: "",
+    key_concepts: [],
+    equations: [],
+    confidence: 0,
+    warnings: [{
+      code: "page_missing",
+      detail: "This page could not be analyzed.",
+      source_pages: [13],
+    }, {
+      code: "page_content_missing",
+      detail: "No usable grounded content was available.",
+      source_pages: [13],
+    }],
+    trustworthy: true,
+  });
+  equal(JSON.stringify(result).includes("Stray page 10"), false);
+  equal(
+    validateDownstreamPageBatchResult(result, [11, 12, 13], 13).valid,
+    true,
+  );
+});
+
+Deno.test("missing trustworthy normalization remains fail closed", () => {
+  const nonEmpty = clone(ss24Pages1To5MissingUntrustworthy);
+  nonEmpty.pages[4].summary_markdown = "Must not be retained.";
+  equal(
+    canonicalizePageBatchResult(nonEmpty, [1, 2, 3, 4, 5], 13).valid,
+    false,
+  );
+
+  const noWarning = clone(ss24Pages1To5MissingUntrustworthy);
+  noWarning.pages[4].warnings = [];
+  equal(
+    canonicalizePageBatchResult(noWarning, [1, 2, 3, 4, 5], 13).valid,
+    false,
+  );
+
+  const wrongProvenance = clone(
+    ss24Pages1To5MissingUntrustworthy,
+  ) as any;
+  wrongProvenance.pages[4].warnings[0].source_pages = [4];
+  equal(
+    canonicalizePageBatchResult(
+      wrongProvenance,
+      [1, 2, 3, 4, 5],
+      13,
+    ).valid,
+    false,
+  );
+
+  const completed = clone(ss24Pages1To5MissingUntrustworthy);
+  completed.pages[4] = {
+    ...completed.pages[3],
+    page_number: 5,
+    trustworthy: false,
+  };
+  equal(
+    canonicalizePageBatchResult(completed, [1, 2, 3, 4, 5], 13).valid,
+    false,
+  );
+});
+
+Deno.test("stray page discard remains fail closed", () => {
+  const twoStrays = clone(ss24Pages11To13WithStray10) as any;
+  twoStrays.pages.push({
+    ...clone(twoStrays.pages[2]),
+    page_number: 9,
+    warnings: [{
+      ...clone(twoStrays.pages[2].warnings[0]),
+      source_pages: [9],
+    }],
+  });
+  equal(
+    canonicalizePageBatchResult(twoStrays, [11, 12, 13], 13).valid,
+    false,
+  );
+
+  const twoMissing = clone(ss24Pages11To13WithStray10);
+  twoMissing.pages.splice(1, 1);
+  equal(
+    canonicalizePageBatchResult(twoMissing, [11, 12, 13], 13).valid,
+    false,
+  );
+
+  const duplicateExpected = clone(ss24Pages11To13WithStray10);
+  duplicateExpected.pages[1] = clone(duplicateExpected.pages[0]);
+  equal(
+    canonicalizePageBatchResult(
+      duplicateExpected,
+      [11, 12, 13],
+      13,
+    ).valid,
+    false,
+  );
+
+  const mixedProvenance = clone(ss24Pages11To13WithStray10) as any;
+  mixedProvenance.pages[2].warnings[0].source_pages = [10, 11];
+  equal(
+    canonicalizePageBatchResult(
+      mixedProvenance,
+      [11, 12, 13],
+      13,
+    ).valid,
+    false,
+  );
+
+  const expectedEquation = clone(ss24Pages11To13WithStray10) as any;
+  expectedEquation.pages[2].equations = [{
+    id: "eq_stray_expected",
+    latex: "x + y",
+    explanation_markdown: "Sanitized equation.",
+    source_page: 11,
+    display: "block",
+    confidence: 0.9,
+    uncertainty: false,
+  }];
+  equal(
+    canonicalizePageBatchResult(
+      expectedEquation,
+      [11, 12, 13],
+      13,
+    ).valid,
+    false,
   );
 });
 

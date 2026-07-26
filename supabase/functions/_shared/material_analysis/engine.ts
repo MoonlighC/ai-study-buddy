@@ -477,6 +477,8 @@ export function analysisLog(
       "orphan_references_added",
       "expected_page_count",
       "returned_page_count",
+      "normalized_missing_trustworthy_count",
+      "discarded_stray_page_count",
       "synthesized_missing_page_count",
       "missing_page_numbers_count",
       "provider_key_concept_count",

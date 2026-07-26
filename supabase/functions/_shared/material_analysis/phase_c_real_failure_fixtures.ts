@@ -25,6 +25,21 @@ const page = (
   trustworthy: true,
 });
 
+const untrustworthyMissingPage = (pageNumber: number) => ({
+  page_number: pageNumber,
+  content_status: "missing",
+  summary_markdown: "",
+  key_concepts: [],
+  equations: [],
+  confidence: 0,
+  warnings: [{
+    code: "page_content_missing",
+    detail: "No usable grounded content was provided for this page.",
+    source_pages: [pageNumber],
+  }],
+  trustworthy: false,
+});
+
 export const gti6Pages11To15Raw = {
   pages: [
     page(11),
@@ -87,6 +102,47 @@ export const ss24Pages6To9 = {
       detail: "Optional source metadata was not included.",
       source_pages: [9],
     }]),
+  ],
+};
+
+export const ss24Pages1To5MissingUntrustworthy = {
+  pages: [
+    page(1),
+    page(2),
+    page(3),
+    page(4),
+    untrustworthyMissingPage(5),
+  ],
+};
+
+export const ss24Pages6To10MissingUntrustworthy = {
+  pages: [
+    page(6),
+    page(7),
+    page(8),
+    page(9),
+    untrustworthyMissingPage(10),
+  ],
+};
+
+export const ss24Pages11To13WithStray10 = {
+  pages: [
+    page(11),
+    page(12),
+    {
+      page_number: 10,
+      content_status: "partial",
+      summary_markdown: "Sanitized grounded page 10 content.",
+      key_concepts: ["Stray page 10 concept"],
+      equations: [],
+      confidence: 0.9,
+      warnings: [{
+        code: "page_content_partial",
+        detail: "Only part of page 10 was recoverable.",
+        source_pages: [10],
+      }],
+      trustworthy: true,
+    },
   ],
 };
 

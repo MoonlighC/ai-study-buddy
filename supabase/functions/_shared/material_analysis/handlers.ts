@@ -621,6 +621,8 @@ function logPageBatchComparison(
     | {
       expectedPageCount: number;
       returnedPageCount: number;
+      normalizedMissingTrustworthyCount: number;
+      discardedStrayPageCount: number;
       synthesizedMissingPageCount: number;
       missingPageNumbersCount: number;
     }
@@ -634,6 +636,9 @@ function logPageBatchComparison(
       : "page_batch_unchanged",
     expected_page_count: comparison.expectedPageCount,
     returned_page_count: comparison.returnedPageCount,
+    normalized_missing_trustworthy_count:
+      comparison.normalizedMissingTrustworthyCount,
+    discarded_stray_page_count: comparison.discardedStrayPageCount,
     synthesized_missing_page_count: comparison.synthesizedMissingPageCount,
     missing_page_numbers_count: comparison.missingPageNumbersCount,
   });

@@ -574,6 +574,8 @@ Deno.test("runtime logs page omission synthesis counts only", async () => {
   );
   equal(metadata.expected_page_count, 2);
   equal(metadata.returned_page_count, 1);
+  equal(metadata.normalized_missing_trustworthy_count, 0);
+  equal(metadata.discarded_stray_page_count, 0);
   equal(metadata.synthesized_missing_page_count, 1);
   equal(metadata.missing_page_numbers_count, 1);
   equal("expected_page_numbers" in metadata, false);

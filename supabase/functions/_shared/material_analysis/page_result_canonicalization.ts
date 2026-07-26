@@ -3,12 +3,15 @@ import {
   providerPageWarningCodes,
   validateDownstreamPageBatchResult,
   validatePageBatchStructure,
+  validatePageResult,
 } from "./schemas.ts";
 import { canonicalizeLatex, validateLatex } from "./validators.ts";
 
 export type PageBatchCanonicalizationComparison = {
   expectedPageCount: number;
   returnedPageCount: number;
+  normalizedMissingTrustworthyCount: number;
+  discardedStrayPageCount: number;
   synthesizedMissingPageCount: number;
   missingPageNumbersCount: number;
 };
@@ -33,6 +36,8 @@ export function canonicalizePageBatchResult(
     returnedPageCount: isRecord(result) && Array.isArray(result.pages)
       ? result.pages.length
       : 0,
+    normalizedMissingTrustworthyCount: 0,
+    discardedStrayPageCount: 0,
     synthesizedMissingPageCount: 0,
     missingPageNumbersCount: 0,
   };
@@ -91,14 +96,64 @@ export function canonicalizePageBatchResult(
   );
   const returnedPageSet = new Set(returnedPageNumbers);
   const expectedPageSet = new Set(expectedPages);
+  if (returnedPageSet.size !== returnedPageNumbers.length) {
+    return {
+      valid: false,
+      result,
+      degradedEquationIds: [],
+      comparison,
+      providerWarningViolation: null,
+    };
+  }
+  const normalizedPages = (result.pages as PageAnalysisResult[]).map((page) => {
+    if (
+      !expectedPageSet.has(page.page_number) ||
+      !canNormalizeMissingTrustworthy(page, pageCount)
+    ) {
+      return page;
+    }
+    comparison.normalizedMissingTrustworthyCount++;
+    return { ...page, trustworthy: true };
+  });
+  const missingExpectedPages = expectedPages.filter((page) =>
+    !returnedPageSet.has(page)
+  );
+  const strayPages = normalizedPages.filter((page) =>
+    !expectedPageSet.has(page.page_number)
+  );
+  let retainedPages = normalizedPages;
+  if (strayPages.length > 0) {
+    if (
+      strayPages.length !== 1 ||
+      missingExpectedPages.length !== 1 ||
+      !validatePageResult(
+        strayPages[0],
+        strayPages[0].page_number,
+        pageCount,
+      ).valid ||
+      !hasSelfConsistentStrayProvenance(strayPages[0], expectedPageSet)
+    ) {
+      return {
+        valid: false,
+        result,
+        degradedEquationIds: [],
+        comparison,
+        providerWarningViolation: null,
+      };
+    }
+    retainedPages = normalizedPages.filter((page) =>
+      expectedPageSet.has(page.page_number)
+    );
+    comparison.discardedStrayPageCount = 1;
+  }
+  const retainedPageNumbers = retainedPages.map((page) => page.page_number);
+  const retainedPageSet = new Set(retainedPageNumbers);
   const expectedReturnedOrder = expectedPages.filter((page) =>
-    returnedPageSet.has(page)
+    retainedPageSet.has(page)
   );
   if (
-    returnedPageSet.size !== returnedPageNumbers.length ||
-    returnedPageNumbers.some((page) => !expectedPageSet.has(page)) ||
     expectedReturnedOrder.some((page, index) =>
-      page !== returnedPageNumbers[index]
+      page !== retainedPageNumbers[index]
     )
   ) {
     return {
@@ -111,7 +166,7 @@ export function canonicalizePageBatchResult(
   }
   const degradedEquationIds: string[] = [];
   const returnedPages = new Map(
-    (result.pages as PageAnalysisResult[]).map((page) => {
+    retainedPages.map((page) => {
       const equations: Equation[] = [];
       for (const equation of page.equations) {
         const canonicalLatex = canonicalizeLatex(equation.latex);
@@ -201,6 +256,49 @@ function syntheticMissingPage(pageNumber: number): PageAnalysisResult {
     }],
     trustworthy: true,
   };
+}
+
+function canNormalizeMissingTrustworthy(
+  page: PageAnalysisResult,
+  pageCount: number,
+): boolean {
+  if (
+    page.content_status !== "missing" ||
+    page.summary_markdown !== "" ||
+    page.key_concepts.length !== 0 ||
+    page.equations.length !== 0 ||
+    page.confidence !== 0 ||
+    page.trustworthy !== false ||
+    !page.warnings.some((warning) => warning.code === "page_content_missing") ||
+    page.warnings.some((warning) =>
+      !providerPageWarningCodes.includes(
+        warning.code as typeof providerPageWarningCodes[number],
+      ) ||
+      warning.source_pages.length === 0 ||
+      warning.source_pages.some((sourcePage) => sourcePage !== page.page_number)
+    )
+  ) {
+    return false;
+  }
+  return validatePageResult(
+    { ...page, trustworthy: true },
+    page.page_number,
+    pageCount,
+  ).valid;
+}
+
+function hasSelfConsistentStrayProvenance(
+  page: PageAnalysisResult,
+  expectedPageSet: Set<number>,
+): boolean {
+  const warningPages = page.warnings.flatMap((warning) => warning.source_pages);
+  const equationPages = page.equations.map((equation) => equation.source_page);
+  return warningPages.every((sourcePage) =>
+    sourcePage === page.page_number && !expectedPageSet.has(sourcePage)
+  ) &&
+    equationPages.every((sourcePage) =>
+      sourcePage === page.page_number && !expectedPageSet.has(sourcePage)
+    );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -274,6 +274,9 @@ Deno.test("diagnostic logs retain only code and bounded non-content facts", () =
     reason: "page_latex_failed",
     validator_stage: "validatePageLatex",
     equation_count: 2,
+    normalized_missing_trustworthy_count: 1,
+    discarded_stray_page_count: 1,
+    synthesized_missing_page_count: 1,
     response_body: "private provider content",
     response_id: "resp_private",
     authorization: "Bearer private",
@@ -281,6 +284,9 @@ Deno.test("diagnostic logs retain only code and bounded non-content facts", () =
   equal(lines.length, 1);
   equal(lines[0].includes("page_latex_failed"), true);
   equal(lines[0].includes("validatePageLatex"), true);
+  equal(lines[0].includes('"normalized_missing_trustworthy_count":1'), true);
+  equal(lines[0].includes('"discarded_stray_page_count":1'), true);
+  equal(lines[0].includes('"synthesized_missing_page_count":1'), true);
   equal(lines[0].includes("private"), false);
   equal(lines[0].includes("response_id"), false);
   equal(lines[0].includes("authorization"), false);
