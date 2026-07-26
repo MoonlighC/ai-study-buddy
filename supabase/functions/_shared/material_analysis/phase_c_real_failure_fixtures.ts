@@ -166,6 +166,45 @@ export const gti6FinalReductionRaw = {
   confidence: 0.9,
 };
 
+// Sanitized structural reproduction of the rejected gti9 global reduction.
+// Counts and delimiter shape match the observed failure; document prose,
+// identifiers, and provider metadata are not retained.
+const gti9SerializedSeed =
+  "capture register','parallel loading','asynchronous reset','";
+const gti9SerializedConcept = [
+  ...(
+    gti9SerializedSeed +
+    "serialized item','".repeat(120)
+  ),
+].slice(0, 1900).join("");
+
+export const gti9AuthoritativeEquationIds = Array.from(
+  { length: 53 },
+  (_, index) => `eq_sanitized_${index + 1}`,
+);
+
+export const gti9GlobalReductionRaw = {
+  source_pages: Array.from({ length: 55 }, (_, index) => index + 1),
+  summary_markdown:
+    "Sanitized global lecture reduction covering all authoritative pages.",
+  key_concepts: [
+    "Finite-state machines",
+    gti9SerializedConcept,
+    "Mealy and Moore automata",
+    ...Array.from(
+      { length: 97 },
+      (_, index) => `Sanitized concept ${index + 1}`,
+    ),
+  ],
+  equation_ids: gti9AuthoritativeEquationIds,
+  warnings: Array.from({ length: 8 }, (_, index) => ({
+    code: "source_metadata_omitted",
+    detail: "Optional source metadata was omitted.",
+    source_pages: [index + 1],
+  })),
+  confidence: 0.9,
+};
+
 export const grumciReduction = {
   source_pages: [1, 2, 3, 4],
   summary_markdown: "Sanitized grounded reduction.",
@@ -183,6 +222,9 @@ export const grumciAuthoritativeEquation = equation(
 
 export const grumciFinalSummary = {
   language: "en",
+  overview_markdown:
+    "A compact overview of the validated material.\n\nIt connects the main grounded themes without page-by-page narration.",
+  topic_titles: ["Foundations", "Core relationships", "Applications"],
   sections: [{
     id: "section_page_1",
     title: "Sanitized section",

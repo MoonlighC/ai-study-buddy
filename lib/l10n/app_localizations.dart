@@ -4144,6 +4144,30 @@ abstract class AppLocalizations {
   /// **'Completed'**
   String get analysisCompleted;
 
+  /// No description provided for @analysisDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis details'**
+  String get analysisDetails;
+
+  /// No description provided for @analysisTopics.
+  ///
+  /// In en, this message translates to:
+  /// **'Topics'**
+  String get analysisTopics;
+
+  /// No description provided for @analysisCompletedPages.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed pages'**
+  String get analysisCompletedPages;
+
+  /// No description provided for @analysisConfidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Confidence: {value}'**
+  String analysisConfidence(String value);
+
   /// No description provided for @analysisPreparingDocument.
   ///
   /// In en, this message translates to:

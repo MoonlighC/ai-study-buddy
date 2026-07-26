@@ -47,6 +47,8 @@ const _pendingUpload = StudyMaterial(
 const _summary = StructuredSummary(
   schemaVersion: 1,
   language: 'en',
+  overviewMarkdown: 'Compact overview.\n\nSecond short paragraph.',
+  topicTitles: ['Overview', 'Foundations', 'Applications'],
   sections: [
     StructuredSection(
       id: 'overview',

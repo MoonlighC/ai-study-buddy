@@ -25,6 +25,23 @@ Deno.test("completed validated structured summary is study-ready with empty text
   assert(!source.text.includes("raw_provider"));
 });
 
+Deno.test("completed upload uses detailed analysis and never the display overview", () => {
+  const row = validSummaryRow();
+  row.content_text = "legacy extracted upload text";
+  row.summary_validation_version = "phase-c-validator-v3";
+  Object.assign(row.summary_payload as Record<string, unknown>, {
+    overview_markdown:
+      "DISPLAY ONLY compact overview.\n\nDISPLAY ONLY second paragraph.",
+    topic_titles: ["Foundations", "Equations", "Applications"],
+  });
+  const source = canonicalStudySource(row);
+  equal(source.kind, "structured_summary");
+  assert(source.text.includes("A safe explanation."));
+  assert(source.text.includes("Safe concept text."));
+  assert(!source.text.includes("DISPLAY ONLY"));
+  assert(!source.text.includes("legacy extracted upload text"));
+});
+
 Deno.test("legacy v2 and current v3 summaries remain independently readable", () => {
   const legacy = validSummaryRow();
   (legacy.summary_payload as any).equations[0].latex =

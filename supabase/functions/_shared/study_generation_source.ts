@@ -25,38 +25,51 @@ type SourceRow = Record<string, unknown>;
 /** Builds study input only from server-loaded, persisted authoritative data. */
 export function canonicalStudySource(row: SourceRow): CanonicalStudySource {
   const content = stringValue(row.content_text);
-  if (content && isEligibleExtractedText(row)) {
+  if (content && isEligibleManualText(row)) {
     return { kind: "extracted_text", text: content };
   }
 
   const summary = row.summary_payload;
   const pageCount = integerValue(row.analysis_page_count);
-  if (
-    !isRecord(summary) ||
-    row.analysis_status !== "completed" &&
-      row.analysis_status !== "completed_with_warnings" ||
-    row.summary_schema_version !== studySummarySchemaVersion ||
-    !studySummaryValidatorVersions.includes(
-      row.summary_validation_version as typeof studySummaryValidatorVersions[number],
-    ) ||
-    !isSha256(row.summary_validation_hash) ||
-    pageCount < 1 ||
-    !(row.summary_validation_version === "phase-c-validator-v2"
-      ? validateSummarySemanticsLegacyV2(summary, pageCount)
-      : validateSummarySemantics(summary, pageCount)).valid ||
-    !safeSummaryContent(
-      summary as unknown as StructuredSummary,
-      row.summary_validation_version as
-        typeof studySummaryValidatorVersions[number],
-    )
-  ) {
-    throw new StudySourceError("material_not_study_ready");
+  const terminalAnalysis = row.analysis_status === "completed" ||
+    row.analysis_status === "completed_with_warnings";
+  if (terminalAnalysis) {
+    if (
+      !isRecord(summary) ||
+      row.summary_schema_version !== studySummarySchemaVersion ||
+      !studySummaryValidatorVersions.includes(
+        row
+          .summary_validation_version as typeof studySummaryValidatorVersions[
+            number
+          ],
+      ) ||
+      !isSha256(row.summary_validation_hash) ||
+      pageCount < 1 ||
+      !(row.summary_validation_version === "phase-c-validator-v2"
+        ? validateSummarySemanticsLegacyV2(summary, pageCount)
+        : validateSummarySemantics(summary, pageCount)).valid ||
+      !safeSummaryContent(
+        summary as unknown as StructuredSummary,
+        row
+          .summary_validation_version as typeof studySummaryValidatorVersions[
+            number
+          ],
+      )
+    ) {
+      throw new StudySourceError("material_not_study_ready");
+    }
+
+    return {
+      kind: "structured_summary",
+      text: serializeSummary(summary as unknown as StructuredSummary),
+    };
   }
 
-  return {
-    kind: "structured_summary",
-    text: serializeSummary(summary as unknown as StructuredSummary),
-  };
+  if (content && isEligibleLegacyUploadText(row)) {
+    return { kind: "extracted_text", text: content };
+  }
+
+  throw new StudySourceError("material_not_study_ready");
 }
 
 export class StudySourceError extends Error {
@@ -72,11 +85,16 @@ function safeSummaryContent(
   const validateEquation = validationVersion === "phase-c-validator-v2"
     ? validateLatexLegacyV2
     : validateLatex;
-  return summary.sections.every((section) =>
-    section.blocks.every((block) =>
-      block.kind === "equation" || validateSafeMarkdown(block.markdown).valid
-    )
+  return (
+    !Object.hasOwn(summary, "overview_markdown") ||
+    typeof summary.overview_markdown === "string" &&
+      validateSafeMarkdown(summary.overview_markdown, 1_200).valid
   ) &&
+    summary.sections.every((section) =>
+      section.blocks.every((block) =>
+        block.kind === "equation" || validateSafeMarkdown(block.markdown).valid
+      )
+    ) &&
     summary.key_concepts.every((concept) =>
       validateSafeMarkdown(concept.explanation_markdown).valid
     ) &&
@@ -130,10 +148,13 @@ function serializeSummary(summary: StructuredSummary) {
   return lines.join("\n\n").trim();
 }
 
-function isEligibleExtractedText(row: SourceRow) {
-  return row.kind === "pasted_text" && row.source_kind === "manual" ||
-    (row.kind === "pdf" || row.kind === "image") &&
-      row.source_kind === "upload" && row.processing_status === "ready";
+function isEligibleManualText(row: SourceRow) {
+  return row.kind === "pasted_text" && row.source_kind === "manual";
+}
+
+function isEligibleLegacyUploadText(row: SourceRow) {
+  return (row.kind === "pdf" || row.kind === "image") &&
+    row.source_kind === "upload" && row.processing_status === "ready";
 }
 
 function stringValue(value: unknown) {

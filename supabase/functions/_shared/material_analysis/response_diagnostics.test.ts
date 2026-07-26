@@ -347,6 +347,9 @@ function pageBatch(): Record<string, any> {
 function finalSummary(): Record<string, any> {
   return {
     language: "en",
+    overview_markdown:
+      "A compact overview of the material.\n\nIt connects the grounded themes for study.",
+    topic_titles: ["Foundations", "Core ideas", "Applications"],
     sections: [{
       id: "section_1",
       title: "Summary",

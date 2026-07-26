@@ -23,102 +23,157 @@ class StructuredSummaryView extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = AuthScope.read(context).user;
     final canView = user != null && hasValidOriginalMetadata(material, user.id);
+    final completedPages = summary.partialExtraction.analyzedPages;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (summary.partialExtraction.partialPages.isNotEmpty)
-          _PageWarning(
-            icon: Icons.warning_amber_rounded,
-            label: context.l10n.analysisPartialPages,
-            pages: summary.partialExtraction.partialPages,
-          ),
-        if (summary.partialExtraction.missingPages.isNotEmpty)
-          _PageWarning(
-            icon: Icons.error_outline,
-            label: context.l10n.analysisMissingPages,
-            pages: summary.partialExtraction.missingPages,
-          ),
-        if (summary.equations.any((e) => e.uncertainty))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              context.l10n.analysisVerifyFormulas,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+        Text(
+          context.l10n.materialSummaryTitle,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        SummaryDocumentView(markdown: summary.overviewMarkdown),
+        if (summary.topicTitles.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Semantics(
+            label: context.l10n.analysisTopics,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final topic in summary.topicTitles)
+                  Chip(label: Text(topic)),
+              ],
             ),
           ),
-        for (final section in summary.sections) ...[
-          Text(section.title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          for (final block in section.blocks) ...[
-            _block(context, block, canView),
-            const SizedBox(height: 8),
-          ],
-          _MetadataRow(
-            confidence: section.confidence,
-            pages: section.sourcePages,
-            onPage: canView ? (page) => _openPage(context, page) : null,
-          ),
-          const SizedBox(height: 20),
         ],
-        if (summary.keyConcepts.isNotEmpty) ...[
-          for (final concept in summary.keyConcepts)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      concept.title,
-                      style: Theme.of(context).textTheme.titleMedium,
+        const SizedBox(height: 8),
+        ExpansionTile(
+          key: const ValueKey('analysis-details'),
+          tilePadding: EdgeInsets.zero,
+          title: Text(context.l10n.analysisDetails),
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (completedPages.isNotEmpty)
+                    _PageWarning(
+                      icon: Icons.check_circle_outline,
+                      label: context.l10n.analysisCompletedPages,
+                      pages: completedPages,
                     ),
-                    const SizedBox(height: 6),
-                    SummaryDocumentView(markdown: concept.explanationMarkdown),
-                    const SizedBox(height: 6),
+                  if (summary.partialExtraction.partialPages.isNotEmpty)
+                    _PageWarning(
+                      icon: Icons.warning_amber_rounded,
+                      label: context.l10n.analysisPartialPages,
+                      pages: summary.partialExtraction.partialPages,
+                    ),
+                  if (summary.partialExtraction.missingPages.isNotEmpty)
+                    _PageWarning(
+                      icon: Icons.error_outline,
+                      label: context.l10n.analysisMissingPages,
+                      pages: summary.partialExtraction.missingPages,
+                    ),
+                  if (summary.equations.any((e) => e.uncertainty))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        context.l10n.analysisVerifyFormulas,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  for (final section in summary.sections) ...[
+                    Text(
+                      section.title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    for (final block in section.blocks) ...[
+                      _block(context, block, canView),
+                      const SizedBox(height: 8),
+                    ],
                     _MetadataRow(
-                      confidence: concept.confidence,
-                      pages: concept.sourcePages,
+                      confidence: section.confidence,
+                      pages: section.sourcePages,
                       onPage: canView
                           ? (page) => _openPage(context, page)
                           : null,
                     ),
+                    const SizedBox(height: 20),
                   ],
-                ),
-              ),
-            ),
-        ],
-        for (final warning in summary.warnings)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.warning_amber_rounded),
-                    title: Text(warning.detail),
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      for (final page
-                          in warning.sourcePages.toSet().toList()..sort())
-                        ActionChip(
-                          label: Text(
-                            context.l10n.analysisWarningSourcePage(page),
+                  if (summary.keyConcepts.isNotEmpty) ...[
+                    for (final concept in summary.keyConcepts)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                concept.title,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 6),
+                              SummaryDocumentView(
+                                markdown: concept.explanationMarkdown,
+                              ),
+                              const SizedBox(height: 6),
+                              _MetadataRow(
+                                confidence: concept.confidence,
+                                pages: concept.sourcePages,
+                                onPage: canView
+                                    ? (page) => _openPage(context, page)
+                                    : null,
+                              ),
+                            ],
                           ),
-                          onPressed: canView
-                              ? () => _openPage(context, page)
-                              : null,
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
+                  for (final warning in summary.warnings)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.warning_amber_rounded),
+                              title: Text(warning.detail),
+                            ),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                for (final page
+                                    in warning.sourcePages.toSet().toList()
+                                      ..sort())
+                                  ActionChip(
+                                    label: Text(
+                                      context.l10n.analysisWarningSourcePage(
+                                        page,
+                                      ),
+                                    ),
+                                    onPressed: canView
+                                        ? () => _openPage(context, page)
+                                        : null,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-          ),
+          ],
+        ),
       ],
     );
   }
@@ -197,7 +252,9 @@ class _MetadataRow extends StatelessWidget {
       Chip(
         avatar: const Icon(Icons.verified_outlined, size: 16),
         label: Text(
-          LocalizedFormatters.percentage(context.l10n, confidence * 100),
+          context.l10n.analysisConfidence(
+            LocalizedFormatters.percentage(context.l10n, confidence * 100),
+          ),
         ),
       ),
       for (final page in pages)

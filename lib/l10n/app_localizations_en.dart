@@ -2474,6 +2474,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get analysisCompleted => 'Completed';
 
   @override
+  String get analysisDetails => 'Analysis details';
+
+  @override
+  String get analysisTopics => 'Topics';
+
+  @override
+  String get analysisCompletedPages => 'Completed pages';
+
+  @override
+  String analysisConfidence(String value) {
+    return 'Confidence: $value';
+  }
+
+  @override
   String get analysisPreparingDocument => 'Preparing document';
 
   @override

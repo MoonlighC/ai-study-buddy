@@ -5,6 +5,7 @@ import {
   ProviderRequest,
   validateProviderOutput,
   validateProviderOutputWithMetadata,
+  validateProviderRequest,
 } from "./openai_adapter.ts";
 import {
   validateDownstreamPageBatchResult,
@@ -22,6 +23,8 @@ import {
   gti6Pages11To15Raw,
   gti7Pages21To25,
   gti7Pages26To30,
+  gti9AuthoritativeEquationIds,
+  gti9GlobalReductionRaw,
   ss24Pages11To13WithStray10,
   ss24Pages1To5MissingUntrustworthy,
   ss24Pages6To10MissingUntrustworthy,
@@ -485,11 +488,12 @@ Deno.test("gti6 final reduction drops one serialized-list concept only", () => {
   );
   equal(canonical.valid, true);
   equal(canonical.comparison, {
-    providerKeyConceptCount: 3,
-    acceptedKeyConceptCount: 2,
-    droppedKeyConceptCount: 1,
-    duplicateKeyConceptCount: 0,
-    cappedKeyConceptCount: 0,
+    inputConceptCount: 3,
+    acceptedConceptCount: 2,
+    duplicateConceptCount: 0,
+    oversizedConceptCount: 1,
+    serializedListConceptCount: 1,
+    droppedConceptCount: 1,
   });
   const result = canonical.result as any;
   equal(result.key_concepts, [
@@ -550,11 +554,12 @@ Deno.test("reduction key concepts reject structure without reconstruction", () =
     "Safe English concept",
   ]);
   equal(canonical.comparison, {
-    providerKeyConceptCount: 13,
-    acceptedKeyConceptCount: 2,
-    droppedKeyConceptCount: 10,
-    duplicateKeyConceptCount: 1,
-    cappedKeyConceptCount: 0,
+    inputConceptCount: 13,
+    acceptedConceptCount: 2,
+    duplicateConceptCount: 1,
+    oversizedConceptCount: 0,
+    serializedListConceptCount: 2,
+    droppedConceptCount: 11,
   });
   equal(result.summary_markdown, fixture.summary_markdown);
   equal(result.equation_ids, fixture.equation_ids);
@@ -574,8 +579,8 @@ Deno.test("reduction canonicalization caps safely and cannot mask bad provenance
     ["eq_page1_1"],
   );
   equal(capped.valid, true);
-  equal((capped.result as any).key_concepts.length, 100);
-  equal(capped.comparison.cappedKeyConceptCount, 2);
+  equal((capped.result as any).key_concepts.length, 24);
+  equal(capped.comparison.droppedConceptCount, 78);
 
   const wrongEquation = {
     ...clone(grumciReduction),
@@ -604,6 +609,82 @@ Deno.test("reduction canonicalization caps safely and cannot mask bad provenance
     ).valid,
     false,
   );
+});
+
+Deno.test("gti9 global reduction drops the exact bare serialized list and prepares final summary", () => {
+  equal(gti9GlobalReductionRaw.key_concepts.length, 100);
+  equal([...gti9GlobalReductionRaw.key_concepts[1]].length, 1900);
+  const canonical = canonicalizeReductionResult(
+    gti9GlobalReductionRaw,
+    gti9GlobalReductionRaw.source_pages,
+    gti9AuthoritativeEquationIds,
+  );
+  equal(canonical.valid, true);
+  equal(canonical.comparison, {
+    inputConceptCount: 100,
+    acceptedConceptCount: 24,
+    duplicateConceptCount: 0,
+    oversizedConceptCount: 1,
+    serializedListConceptCount: 1,
+    droppedConceptCount: 76,
+  });
+  const repaired = canonical.result as any;
+  equal(repaired.key_concepts.length, 24);
+  equal(repaired.key_concepts[0], "Finite-state machines");
+  equal(repaired.key_concepts[1], "Mealy and Moore automata");
+  equal(
+    repaired.key_concepts.some((concept: string) =>
+      concept.includes("capture register','parallel loading")
+    ),
+    false,
+  );
+  for (
+    const field of [
+      "summary_markdown",
+      "source_pages",
+      "equation_ids",
+      "warnings",
+      "confidence",
+    ]
+  ) {
+    equal(repaired[field], (gti9GlobalReductionRaw as any)[field]);
+  }
+
+  const authoritativeEquations = gti9AuthoritativeEquationIds.map(
+    (id, index) => ({
+      id,
+      latex: `x_${index + 1}`,
+      explanation_markdown: "Sanitized grounded equation.",
+      source_page: index + 1,
+      display: "block" as const,
+      confidence: 0.9,
+      uncertainty: false,
+    }),
+  );
+  validateProviderRequest({
+    operation: "final_summary",
+    input: {
+      kind: "text",
+      text: JSON.stringify({
+        operation: "final_summary",
+        validated_reduction: repaired,
+        authoritative_equations: authoritativeEquations,
+        manifest: gti9GlobalReductionRaw.source_pages.map((page) => ({
+          page_number: page,
+          status: "completed",
+          route: "visual",
+          warnings: page <= 8
+            ? [gti9GlobalReductionRaw.warnings[page - 1]]
+            : [],
+        })),
+      }),
+    },
+    expectedPages: gti9GlobalReductionRaw.source_pages,
+    allowedEquationIds: gti9AuthoritativeEquationIds,
+    authoritativeEquations,
+    pageCount: 55,
+    idempotencyKey: "e".repeat(64),
+  });
 });
 
 Deno.test("GruMCI reduction remains valid", () => {

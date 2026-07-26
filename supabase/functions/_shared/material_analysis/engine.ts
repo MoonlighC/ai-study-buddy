@@ -374,6 +374,12 @@ export function projectSummaryToSafeMarkdown(
     summary.partial_extraction.page_modes.length,
   );
   if (!semantic.valid) throw new Error("invalid_summary_projection");
+  if (
+    typeof summary.overview_markdown === "string" &&
+    summary.overview_markdown.length > 0
+  ) {
+    return summary.overview_markdown;
+  }
   const equations = new Map(
     summary.equations.map((equation) => [equation.id, equation]),
   );
@@ -484,11 +490,12 @@ export function analysisLog(
       "discarded_stray_page_count",
       "synthesized_missing_page_count",
       "missing_page_numbers_count",
-      "provider_key_concept_count",
-      "accepted_key_concept_count",
-      "dropped_key_concept_count",
-      "duplicate_key_concept_count",
-      "capped_key_concept_count",
+      "input_concept_count",
+      "accepted_concept_count",
+      "duplicate_concept_count",
+      "oversized_concept_count",
+      "serialized_list_concept_count",
+      "dropped_concept_count",
       "recovery_candidate_count",
       "recovery_submitted_count",
       "recovery_completed_count",

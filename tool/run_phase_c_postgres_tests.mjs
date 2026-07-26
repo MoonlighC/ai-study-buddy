@@ -375,7 +375,26 @@ await runSql(
   "phase_c_page_recovery_pass.sql",
 );
 
-console.log("PHASE_DE_DATABASE_TESTS_OK migrations=33 sql_suites=23");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "034_material_analysis_compact_summary_contract.sql",
+  ),
+  "migration 034_",
+);
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "material_analysis_compact_summary_contract.sql",
+  ),
+  "material_analysis_compact_summary_contract.sql",
+);
+
+console.log("PHASE_DE_DATABASE_TESTS_OK migrations=34 sql_suites=24");
 await database.close();
 
 async function runSql(file, label) {

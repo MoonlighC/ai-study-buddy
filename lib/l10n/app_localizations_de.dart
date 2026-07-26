@@ -2517,6 +2517,20 @@ class AppLocalizationsDe extends AppLocalizations {
   String get analysisCompleted => 'Abgeschlossen';
 
   @override
+  String get analysisDetails => 'Analysedetails';
+
+  @override
+  String get analysisTopics => 'Themen';
+
+  @override
+  String get analysisCompletedPages => 'Vollständig analysierte Seiten';
+
+  @override
+  String analysisConfidence(String value) {
+    return 'Konfidenz: $value';
+  }
+
+  @override
   String get analysisPreparingDocument => 'Dokument wird vorbereitet';
 
   @override

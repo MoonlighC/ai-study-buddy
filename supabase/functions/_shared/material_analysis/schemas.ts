@@ -111,10 +111,17 @@ const blockSchema = {
 
 export const structuredSummarySchema = closed({
   language: { type: "string" },
+  overview_markdown: { type: "string" },
+  topic_titles: {
+    type: "array",
+    minItems: 3,
+    maxItems: 8,
+    items: { type: "string" },
+  },
   sections: {
     type: "array",
     minItems: 1,
-    maxItems: 24,
+    maxItems: 6,
     items: closed({
       id: { type: "string", pattern: "^[a-z0-9][a-z0-9_-]{0,63}$" },
       title: { type: "string" },
@@ -125,7 +132,7 @@ export const structuredSummarySchema = closed({
   },
   key_concepts: {
     type: "array",
-    maxItems: 50,
+    maxItems: 12,
     items: closed({
       title: { type: "string" },
       explanation_markdown: { type: "string" },
@@ -643,11 +650,15 @@ function isStructuredSummary(
   errors: string[],
   latexValidator: typeof validateLatex = validateLatex,
 ): value is StructuredSummary {
+  const compact = isRecord(value) &&
+    Object.hasOwn(value, "overview_markdown") &&
+    Object.hasOwn(value, "topic_titles");
   if (
     !exactRecord(
       value,
       [
         "language",
+        ...(compact ? ["overview_markdown", "topic_titles"] : []),
         "sections",
         "key_concepts",
         "equations",
@@ -659,12 +670,36 @@ function isStructuredSummary(
     )
   ) return false;
   if (!boundedString(value.language, 1, 32)) errors.push("language");
-  if (!boundedArray(value.sections, 1, 24)) errors.push("sections");
-  else {value.sections.forEach((section, index) =>
+  if (compact) {
+    if (
+      typeof value.overview_markdown !== "string" ||
+      !validOverviewMarkdown(value.overview_markdown)
+    ) errors.push("overview_markdown");
+    if (!boundedArray(value.topic_titles, 3, 8)) {
+      errors.push("topic_titles");
+    } else {
+      const topics = value.topic_titles as unknown[];
+      const normalized = topics.flatMap((topic) =>
+        typeof topic === "string" ? [topic.trim().toLocaleLowerCase()] : []
+      );
+      if (
+        topics.some((topic) =>
+          typeof topic !== "string" || topic !== topic.trim() ||
+          !boundedString(topic, 1, 80)
+        ) ||
+        normalized.length !== topics.length ||
+        new Set(normalized).size !== normalized.length
+      ) errors.push("topic_titles");
+    }
+  }
+  if (!boundedArray(value.sections, 1, compact ? 6 : 24)) {
+    errors.push("sections");
+  } else {value.sections.forEach((section, index) =>
       validateSection(section, errors, index)
     );}
-  if (!boundedArray(value.key_concepts, 0, 50)) errors.push("key_concepts");
-  else {value.key_concepts.forEach((concept, index) =>
+  if (!boundedArray(value.key_concepts, 0, compact ? 12 : 50)) {
+    errors.push("key_concepts");
+  } else {value.key_concepts.forEach((concept, index) =>
       validateConcept(concept, errors, index)
     );}
   if (!boundedArray(value.equations, 0, 100)) errors.push("equations");
@@ -1041,6 +1076,22 @@ function boundedString(
 ): value is string {
   return typeof value === "string" && value.length >= min &&
     value.length <= max;
+}
+function validOverviewMarkdown(value: string) {
+  if (
+    value !== value.trim() || value.length > 1200 ||
+    !validateSafeMarkdown(value, 1200).valid ||
+    /^\s*(?:#{1,6}|>|[-+*]|\d+\.)\s/mu.test(value) ||
+    /\b(?:page|pages|seite|seiten|страница|страницы|стр\.)\s*\d/iu
+      .test(value)
+  ) return false;
+  const paragraphs = value.split(/\n\s*\n/u).map((paragraph) =>
+    paragraph.trim()
+  );
+  return paragraphs.length >= 2 && paragraphs.length <= 4 &&
+    paragraphs.every((paragraph) =>
+      paragraph.length >= 1 && paragraph.length <= 600
+    );
 }
 function validConfidence(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 &&

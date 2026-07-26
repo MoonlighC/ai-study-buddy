@@ -10,6 +10,36 @@ void main() {
     expect(value.equationById('eq_one')?.sourcePage, 1);
     expect(value.partialExtraction.missingPages, [2]);
   });
+  test('compact contract bounds overview topics sections and concepts', () {
+    final compact = _summary()
+      ..['overview_markdown'] =
+          'A short document-wide overview.\n\nIt connects the main topics.'
+      ..['topic_titles'] = ['Foundations', 'Equations', 'Applications']
+      ..['key_concepts'] = [
+        for (var index = 0; index < 12; index++)
+          {
+            'title': 'Concept $index',
+            'explanation_markdown': 'Explanation',
+            'source_pages': [1],
+            'confidence': 1,
+          },
+      ];
+    final decoded = decoder.decode(compact, schemaVersion: 1, pageCount: 2);
+    expect(decoded.overviewMarkdown.length, lessThanOrEqualTo(1200));
+    expect(decoded.topicTitles, hasLength(3));
+    expect(decoded.keyConcepts, hasLength(12));
+
+    (compact['key_concepts'] as List).add({
+      'title': 'Too many',
+      'explanation_markdown': 'Explanation',
+      'source_pages': [1],
+      'confidence': 1,
+    });
+    expect(
+      () => decoder.decode(compact, schemaVersion: 1, pageCount: 2),
+      throwsA(isA<StructuredSummaryFormatException>()),
+    );
+  });
   test('equation LaTeX must be non-blank and equations may be omitted', () {
     for (final latex in ['', ' \t\r\n']) {
       final invalid = _summary();

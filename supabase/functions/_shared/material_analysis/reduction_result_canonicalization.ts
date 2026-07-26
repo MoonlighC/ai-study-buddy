@@ -2,11 +2,13 @@ import { ReductionResult } from "./contracts.ts";
 import { validateReductionResult } from "./schemas.ts";
 import { validateSafeMarkdown } from "./validators.ts";
 
-const maximumReductionKeyConcepts = 100;
-const maximumReductionKeyConceptLength = 500;
+const maximumReductionKeyConcepts = 24;
+const maximumReductionKeyConceptScalars = 120;
 const controlCharacterPattern = /[\p{Cc}\p{Cf}]/u;
 const structureDelimiterPattern = /[\[\]{}]/u;
 const quoteCommaQuotePattern = /["']\s*,\s*["']/u;
+const repeatedQuoteCommaSeparatorPattern =
+  /(?:["']\s*,\s*){2,}|(?:,\s*["']\s*){2,}/u;
 const jsonPropertyPattern = /["']\s*:\s*/u;
 const jsonEscapePattern = /\\(?:["\\/bfnrt]|u[0-9a-f]{4})/iu;
 const htmlPattern = /<\/?[a-z][^>]*>/iu;
@@ -15,11 +17,12 @@ const domainPattern =
   /\b(?:[a-z][a-z0-9+.-]*:\/\/|www\.|[a-z0-9](?:[a-z0-9-]{0,62}\.)+[a-z]{2,63}(?:\b|\/))/iu;
 
 export type ReductionKeyConceptComparison = {
-  providerKeyConceptCount: number;
-  acceptedKeyConceptCount: number;
-  droppedKeyConceptCount: number;
-  duplicateKeyConceptCount: number;
-  cappedKeyConceptCount: number;
+  inputConceptCount: number;
+  acceptedConceptCount: number;
+  duplicateConceptCount: number;
+  oversizedConceptCount: number;
+  serializedListConceptCount: number;
+  droppedConceptCount: number;
 };
 
 export function canonicalizeReductionResult(
@@ -32,14 +35,15 @@ export function canonicalizeReductionResult(
   comparison: ReductionKeyConceptComparison;
 } {
   const comparison = {
-    providerKeyConceptCount: isRecord(result) &&
+    inputConceptCount: isRecord(result) &&
         Array.isArray(result.key_concepts)
       ? result.key_concepts.length
       : 0,
-    acceptedKeyConceptCount: 0,
-    droppedKeyConceptCount: 0,
-    duplicateKeyConceptCount: 0,
-    cappedKeyConceptCount: 0,
+    acceptedConceptCount: 0,
+    duplicateConceptCount: 0,
+    oversizedConceptCount: 0,
+    serializedListConceptCount: 0,
+    droppedConceptCount: 0,
   };
   if (!isRecord(result) || !Array.isArray(result.key_concepts)) {
     return { valid: false, result, comparison };
@@ -58,23 +62,26 @@ export function canonicalizeReductionResult(
   const keyConcepts: string[] = [];
   const seen = new Set<string>();
   for (const item of result.key_concepts) {
-    const normalized = canonicalizeReductionKeyConcept(item);
-    if (normalized === null) {
-      comparison.droppedKeyConceptCount++;
+    const candidate = classifyReductionKeyConcept(item);
+    if (candidate.oversized) comparison.oversizedConceptCount++;
+    if (candidate.serializedList) comparison.serializedListConceptCount++;
+    if (candidate.normalized === null) {
       continue;
     }
-    if (seen.has(normalized)) {
-      comparison.duplicateKeyConceptCount++;
+    const dedupeKey = candidate.normalized.toLocaleLowerCase();
+    if (seen.has(dedupeKey)) {
+      comparison.duplicateConceptCount++;
       continue;
     }
-    seen.add(normalized);
+    seen.add(dedupeKey);
     if (keyConcepts.length >= maximumReductionKeyConcepts) {
-      comparison.cappedKeyConceptCount++;
       continue;
     }
-    keyConcepts.push(normalized);
+    keyConcepts.push(candidate.normalized);
   }
-  comparison.acceptedKeyConceptCount = keyConcepts.length;
+  comparison.acceptedConceptCount = keyConcepts.length;
+  comparison.droppedConceptCount = comparison.inputConceptCount -
+    comparison.acceptedConceptCount;
   const canonical: ReductionResult = {
     ...(result as unknown as ReductionResult),
     key_concepts: keyConcepts,
@@ -90,29 +97,37 @@ export function canonicalizeReductionResult(
   };
 }
 
-function canonicalizeReductionKeyConcept(value: unknown): string | null {
+function classifyReductionKeyConcept(value: unknown): {
+  normalized: string | null;
+  oversized: boolean;
+  serializedList: boolean;
+} {
   if (
-    typeof value !== "string" || value.length === 0 ||
-    value.length > maximumReductionKeyConceptLength ||
-    controlCharacterPattern.test(value)
+    typeof value !== "string" || value.length === 0
   ) {
-    return null;
+    return { normalized: null, oversized: false, serializedList: false };
   }
   const normalized = value.trim().replace(/(?:\p{Zs}| )+/gu, " ");
+  const oversized = [...normalized].length > maximumReductionKeyConceptScalars;
+  const serializedList = quoteCommaQuotePattern.test(normalized) ||
+    repeatedQuoteCommaSeparatorPattern.test(normalized);
   if (
-    normalized.length === 0 ||
+    normalized.length === 0 || oversized || serializedList ||
+    controlCharacterPattern.test(normalized) ||
     structureDelimiterPattern.test(normalized) ||
-    quoteCommaQuotePattern.test(normalized) ||
     jsonPropertyPattern.test(normalized) ||
     jsonEscapePattern.test(normalized) ||
     htmlPattern.test(normalized) ||
     markdownPattern.test(normalized) ||
     domainPattern.test(normalized) ||
-    !validateSafeMarkdown(normalized, maximumReductionKeyConceptLength).valid
+    !validateSafeMarkdown(
+      normalized,
+      maximumReductionKeyConceptScalars * 2,
+    ).valid
   ) {
-    return null;
+    return { normalized: null, oversized, serializedList };
   }
-  return normalized;
+  return { normalized, oversized: false, serializedList: false };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

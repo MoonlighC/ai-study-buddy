@@ -101,6 +101,8 @@ class StructuredSummary {
   const StructuredSummary({
     required this.schemaVersion,
     required this.language,
+    required this.overviewMarkdown,
+    required this.topicTitles,
     required this.sections,
     required this.keyConcepts,
     required this.equations,
@@ -109,6 +111,8 @@ class StructuredSummary {
   });
   final int schemaVersion;
   final String language;
+  final String overviewMarkdown;
+  final List<String> topicTitles;
   final List<StructuredSection> sections;
   final List<KeyConcept> keyConcepts;
   final List<Equation> equations;
@@ -134,8 +138,13 @@ class StructuredSummaryDecoder {
     required int pageCount,
   }) {
     if (schemaVersion != 1 || pageCount < 1 || pageCount > 100) _bad();
+    final raw = _asMap(value);
+    final compact =
+        raw.containsKey('overview_markdown') && raw.containsKey('topic_titles');
     final r = _map(value, {
       'language',
+      if (compact) 'overview_markdown',
+      if (compact) 'topic_titles',
       'sections',
       'key_concepts',
       'equations',
@@ -149,7 +158,7 @@ class StructuredSummaryDecoder {
     final ids = equations.map((e) => e.id).toList();
     if (ids.toSet().length != ids.length) _bad();
     final refs = <String>[];
-    final sections = _list(r['sections'], 24, min: 1)
+    final sections = _list(r['sections'], compact ? 6 : 24, min: 1)
         .map((v) {
           final m = _map(v, {
             'id',
@@ -194,7 +203,7 @@ class StructuredSummaryDecoder {
         ids.any((id) => !refs.contains(id))) {
       _bad();
     }
-    final concepts = _list(r['key_concepts'], 50)
+    final concepts = _list(r['key_concepts'], compact ? 12 : 50)
         .map((v) {
           final m = _map(v, {
             'title',
@@ -221,9 +230,17 @@ class StructuredSummaryDecoder {
         equations.any((e) => !authority.contains(e.sourcePage))) {
       _bad();
     }
+    final overview = compact
+        ? _overview(r['overview_markdown'])
+        : _legacyOverview(sections);
+    final topics = compact
+        ? _topics(r['topic_titles'])
+        : _legacyTopics(sections, concepts);
     return StructuredSummary(
       schemaVersion: schemaVersion,
       language: _string(r['language'], 32),
+      overviewMarkdown: overview,
+      topicTitles: topics,
       sections: sections,
       keyConcepts: concepts,
       equations: equations,
@@ -314,6 +331,76 @@ class StructuredSummaryDecoder {
       pageModes: modes,
     );
   }
+}
+
+String _overview(Object? value) {
+  final text = _string(value, 1200).trim();
+  final paragraphs = text
+      .split(RegExp(r'\n\s*\n'))
+      .where((part) => part.trim().isNotEmpty)
+      .toList(growable: false);
+  if (paragraphs.length < 2 ||
+      paragraphs.length > 4 ||
+      RegExp(
+        r'(^|\n)\s*(?:#{1,6}\s|[-*+]\s|>\s)',
+        caseSensitive: false,
+      ).hasMatch(text) ||
+      RegExp(
+        r'\b(?:page|pages|seite|seiten|страница|страницы|стр\.)\s*\d+',
+        caseSensitive: false,
+      ).hasMatch(text)) {
+    _bad();
+  }
+  return text;
+}
+
+List<String> _topics(Object? value) {
+  final topics = _list(
+    value,
+    8,
+    min: 3,
+  ).map((item) => _string(item, 80).trim()).toList(growable: false);
+  if (topics.any((topic) => topic.isEmpty || topic.runes.length > 80) ||
+      topics.map((topic) => topic.toLowerCase()).toSet().length !=
+          topics.length) {
+    _bad();
+  }
+  return List.unmodifiable(topics);
+}
+
+String _legacyOverview(List<StructuredSection> sections) {
+  final paragraphs = <String>[];
+  for (final section in sections) {
+    for (final block in section.blocks) {
+      if (block is! ProseBlock) continue;
+      final prose = block.markdown.trim();
+      if (prose.isNotEmpty) paragraphs.add(prose);
+      if (paragraphs.length == 2) break;
+    }
+    if (paragraphs.length == 2) break;
+  }
+  return paragraphs.join('\n\n');
+}
+
+List<String> _legacyTopics(
+  List<StructuredSection> sections,
+  List<KeyConcept> concepts,
+) {
+  final result = <String>[], seen = <String>{};
+  for (final candidate in [
+    ...sections.map((section) => section.title),
+    ...concepts.map((concept) => concept.title),
+  ]) {
+    final title = candidate.trim();
+    if (title.isEmpty ||
+        title.runes.length > 80 ||
+        !seen.add(title.toLowerCase())) {
+      continue;
+    }
+    result.add(title);
+    if (result.length == 8) break;
+  }
+  return List.unmodifiable(result);
 }
 
 Never _bad() => throw const StructuredSummaryFormatException();

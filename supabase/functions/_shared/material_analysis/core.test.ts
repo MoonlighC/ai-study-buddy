@@ -233,6 +233,22 @@ Deno.test("summary permits no equations and rejects blank equation LaTeX", () =>
   }
 });
 
+Deno.test("compact overview is short, paragraph-based, and not page-by-page", () => {
+  const valid = validSummary();
+  equal(validateSummarySemantics(valid, 2).valid, true);
+  for (
+    const overview of [
+      "Page 1 introduces voltage.\n\nPage 2 introduces current.",
+      "One unstructured paragraph only.",
+      `${"x".repeat(600)}\n\n${"y".repeat(601)}`,
+    ]
+  ) {
+    const invalid = validSummary();
+    invalid.overview_markdown = overview;
+    equal(validateSummarySemantics(invalid, 2).valid, false);
+  }
+});
+
 Deno.test("summary semantics enforce manifest and equation integrity", () => {
   const summary = validSummary();
   equal(validateSummarySemantics(summary, 2).valid, true);
@@ -552,6 +568,9 @@ function routingInput(
 function validSummary(): StructuredSummary {
   return {
     language: "en",
+    overview_markdown:
+      "A compact overview of the material.\n\nIt connects the grounded themes for study.",
+    topic_titles: ["Voltage", "Relationships", "Applications"],
     sections: [{
       id: "overview",
       title: "Overview",

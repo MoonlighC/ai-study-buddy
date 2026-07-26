@@ -242,10 +242,13 @@ Deno.test("C2 visual and reduction grouping are bounded", () => {
   equal(reductions.every((group) => group.length <= 10), true);
 });
 
-Deno.test("C2 safe projection contains no active links and preserves warnings", () => {
+Deno.test("C2 safe projection is the compact display overview only", () => {
   const markdown = projectSummaryToSafeMarkdown(validSummary());
-  equal(markdown.includes("## Overview"), true);
-  equal(markdown.includes("Equation: V = I \\cdot R"), true);
+  equal(
+    markdown,
+    "A compact overview of the material.\n\nIt connects the grounded themes for study.",
+  );
+  equal(markdown.includes("Equation:"), false);
   equal(/https?:\/\//.test(markdown), false);
 });
 
@@ -322,6 +325,9 @@ function imageMaterial(length: number) {
 function validSummary(): StructuredSummary {
   return {
     language: "en",
+    overview_markdown:
+      "A compact overview of the material.\n\nIt connects the grounded themes for study.",
+    topic_titles: ["Voltage", "Relationships", "Applications"],
     sections: [{
       id: "overview",
       title: "Overview",

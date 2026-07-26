@@ -114,6 +114,8 @@ export interface PageMode {
 
 export interface StructuredSummary {
   language: string;
+  overview_markdown: string;
+  topic_titles: string[];
   sections: Array<{
     id: string;
     title: string;

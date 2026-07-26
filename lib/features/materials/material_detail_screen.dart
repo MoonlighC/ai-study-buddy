@@ -109,6 +109,14 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
             const SizedBox(height: 16),
             if (isUpload && usesPersistentAnalysis && !deleting) ...[
               _MaterialAnalysisSection(material: freshMaterial),
+              if (analysisStatus?.summary != null &&
+                  analysisStatus!.isTerminal) ...[
+                const SizedBox(height: 16),
+                _PersistentPrimaryActions(
+                  material: freshMaterial,
+                  subject: subject,
+                ),
+              ],
               const SizedBox(height: 16),
             ],
             if (deleting)
@@ -941,6 +949,103 @@ class _PdfExtractionSection extends StatelessWidget {
         context,
       ).scanPdfWithOcrFor(AuthScope.read(context).user, material.id);
     }
+  }
+}
+
+class _PersistentPrimaryActions extends StatelessWidget {
+  const _PersistentPrimaryActions({
+    required this.material,
+    required this.subject,
+  });
+
+  final StudyMaterial material;
+  final Subject subject;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.watch(context);
+    return MaterialActionSection(
+      title: context.l10n.materialActionsTooltip,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilledButton.icon(
+            key: const ValueKey('primary-generate-flashcards'),
+            onPressed:
+                state.isGeneratingFlashcards ||
+                    !state.canGenerateFlashcardsForMaterial(material)
+                ? null
+                : () => _generateFlashcards(context, state),
+            icon: const Icon(Icons.style_outlined),
+            label: Text(context.l10n.flashcardsGenerate),
+          ),
+          FilledButton.icon(
+            key: const ValueKey('primary-generate-quiz'),
+            onPressed:
+                state.isGeneratingQuiz ||
+                    !state.canGenerateQuizForMaterial(material)
+                ? null
+                : () => _generateQuiz(context, state),
+            icon: const Icon(Icons.quiz_outlined),
+            label: Text(context.l10n.quizGenerate),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('primary-create-study-session'),
+            onPressed: state.canCreateStudySessionForMaterial(material)
+                ? () => _createSession(context, state)
+                : null,
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: Text(context.l10n.studyCreateSession),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('primary-ai-teacher'),
+            onPressed: () => Navigator.pushNamed(
+              context,
+              AppRoutes.aiTeacher,
+              arguments: subject,
+            ),
+            icon: const Icon(Icons.school_outlined),
+            label: Text(context.l10n.studyAiTeacherAction),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _generateFlashcards(BuildContext context, AppState state) async {
+    final count = await showFlashcardGenerationDialog(
+      context,
+      currentCardCount: state.flashcardsForMaterial(material.id).length,
+    );
+    if (!context.mounted || count == null) return;
+    await state.generateFlashcardsFor(
+      AuthScope.read(context).user,
+      material.id,
+      requestedNewCount: count,
+    );
+  }
+
+  Future<void> _generateQuiz(BuildContext context, AppState state) async {
+    await state.generateQuizFor(AuthScope.read(context).user, material.id);
+  }
+
+  void _createSession(BuildContext context, AppState state) {
+    final session = state.createStudySession(
+      subject: subject,
+      confidence: LectureConfidence.mostly,
+      materialId: material.id,
+    );
+    if (session == null) return;
+    Navigator.pushNamed(
+      context,
+      AppRoutes.studySessionResult,
+      arguments: StudySessionResultArgs(
+        subject: subject,
+        sessionId: session.id,
+        materialId: material.id,
+      ),
+    );
   }
 }
 

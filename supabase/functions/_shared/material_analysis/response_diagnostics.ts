@@ -429,6 +429,8 @@ function validateFinalSummarySchema(
     !isRecord(result) ||
     !hasExactKeys(result, [
       "language",
+      "overview_markdown",
+      "topic_titles",
       "sections",
       "key_concepts",
       "equations",
@@ -436,9 +438,15 @@ function validateFinalSummarySchema(
       "partial_extraction",
     ]) ||
     typeof result.language !== "string" || result.language.length < 1 ||
-    result.language.length > 32 || !Array.isArray(result.sections) ||
-    result.sections.length < 1 || result.sections.length > 24 ||
-    !Array.isArray(result.key_concepts) || result.key_concepts.length > 50 ||
+    result.language.length > 32 ||
+    typeof result.overview_markdown !== "string" ||
+    result.overview_markdown.length < 1 ||
+    result.overview_markdown.length > 1200 ||
+    !Array.isArray(result.topic_titles) ||
+    result.topic_titles.length < 3 || result.topic_titles.length > 8 ||
+    !Array.isArray(result.sections) ||
+    result.sections.length < 1 || result.sections.length > 6 ||
+    !Array.isArray(result.key_concepts) || result.key_concepts.length > 12 ||
     !Array.isArray(result.equations) || result.equations.length > 100 ||
     !Array.isArray(result.warnings) || result.warnings.length > 100 ||
     !isRecord(result.partial_extraction)
@@ -453,6 +461,21 @@ function validateFinalSummarySchema(
   metadata.concept_count = boundedCount(result.key_concepts.length);
   metadata.equation_count = boundedCount(result.equations.length);
   metadata.warning_count = boundedCount(result.warnings.length);
+  if (
+    result.topic_titles.some((title) =>
+      typeof title !== "string" || title !== title.trim() ||
+      title.length < 1 || title.length > 80
+    ) ||
+    new Set(
+        result.topic_titles.map((title) => String(title).toLocaleLowerCase()),
+      ).size !== result.topic_titles.length
+  ) {
+    return failure(
+      "final_summary_schema_failed",
+      metadata,
+      "validateFinalSummarySchema",
+    );
+  }
   const extraction = result.partial_extraction;
   if (
     !hasExactKeys(extraction, [
@@ -590,6 +613,10 @@ function validateFinalSummaryMarkdown(
   metadata: DiagnosticMetadata,
 ): DiagnosticResult | null {
   const summary = result as Record<string, unknown>;
+  if (
+    typeof summary.overview_markdown !== "string" ||
+    !validateSafeMarkdown(summary.overview_markdown, 1200).valid
+  ) return finalMarkdownFailure(metadata);
   for (const section of summary.sections as Record<string, unknown>[]) {
     for (const block of section.blocks as Record<string, unknown>[]) {
       if (

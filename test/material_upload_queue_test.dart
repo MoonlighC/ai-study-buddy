@@ -632,6 +632,8 @@ MaterialAnalysisStatus _analysisStatus(
 const _summary = StructuredSummary(
   schemaVersion: 1,
   language: 'en',
+  overviewMarkdown: 'Compact overview.\n\nSecond short paragraph.',
+  topicTitles: ['Summary', 'Foundations', 'Applications'],
   sections: [
     StructuredSection(
       id: 'summary',

@@ -2552,6 +2552,20 @@ class AppLocalizationsRu extends AppLocalizations {
   String get analysisCompleted => 'Завершено';
 
   @override
+  String get analysisDetails => 'Подробности анализа';
+
+  @override
+  String get analysisTopics => 'Темы';
+
+  @override
+  String get analysisCompletedPages => 'Полностью обработанные страницы';
+
+  @override
+  String analysisConfidence(String value) {
+    return 'Уверенность: $value';
+  }
+
+  @override
   String get analysisPreparingDocument => 'Подготовка документа';
 
   @override

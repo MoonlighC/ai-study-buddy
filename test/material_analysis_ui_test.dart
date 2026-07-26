@@ -136,6 +136,7 @@ void main() {
         dark: true,
         textScale: 2,
       );
+      await _expandAnalysisDetails(tester);
       await tester.scrollUntilVisible(
         find.text('Partial pages'),
         200,
@@ -390,6 +391,9 @@ void main() {
     );
 
     expect(find.text('Completed'), findsWidgets);
+    expect(find.text('Compact overview.'), findsOneWidget);
+    expect(find.text('Section'), findsNothing);
+    await _expandAnalysisDetails(tester);
     expect(find.text('Section'), findsOneWidget);
     expect(find.text('Creating summary'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
@@ -438,6 +442,18 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(repo.advances, 1);
   });
+}
+
+Future<void> _expandAnalysisDetails(WidgetTester tester) async {
+  final details = find.byKey(const ValueKey('analysis-details'));
+  for (var attempt = 0; attempt < 8 && details.evaluate().isEmpty; attempt++) {
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -350));
+    await tester.pumpAndSettle();
+  }
+  await tester.ensureVisible(details);
+  await tester.pumpAndSettle();
+  await tester.tap(details);
+  await tester.pumpAndSettle();
 }
 
 Future<AppState> _pump(
@@ -576,6 +592,8 @@ MaterialAnalysisStatus _status({
 StructuredSummary _summary() => const StructuredSummary(
   schemaVersion: 1,
   language: 'en',
+  overviewMarkdown: 'Compact overview.\n\nSecond short paragraph.',
+  topicTitles: ['Overview', 'Foundations', 'Applications'],
   sections: [
     StructuredSection(
       id: 'section',

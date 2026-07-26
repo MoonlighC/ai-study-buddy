@@ -670,27 +670,27 @@ function logPageBatchComparison(
 function logReductionKeyConceptComparison(
   comparison:
     | {
-      providerKeyConceptCount: number;
-      acceptedKeyConceptCount: number;
-      droppedKeyConceptCount: number;
-      duplicateKeyConceptCount: number;
-      cappedKeyConceptCount: number;
+      inputConceptCount: number;
+      acceptedConceptCount: number;
+      duplicateConceptCount: number;
+      oversizedConceptCount: number;
+      serializedListConceptCount: number;
+      droppedConceptCount: number;
     }
     | undefined,
 ) {
   if (!comparison) return;
   analysisLog("advance", "reduction_key_concept_canonicalization", {
     validator_stage: "canonicalizeReductionKeyConcepts",
-    validator_code: comparison.droppedKeyConceptCount > 0 ||
-        comparison.duplicateKeyConceptCount > 0 ||
-        comparison.cappedKeyConceptCount > 0
+    validator_code: comparison.droppedConceptCount > 0
       ? "reduction_key_concepts_canonicalized"
       : "reduction_key_concepts_unchanged",
-    provider_key_concept_count: comparison.providerKeyConceptCount,
-    accepted_key_concept_count: comparison.acceptedKeyConceptCount,
-    dropped_key_concept_count: comparison.droppedKeyConceptCount,
-    duplicate_key_concept_count: comparison.duplicateKeyConceptCount,
-    capped_key_concept_count: comparison.cappedKeyConceptCount,
+    input_concept_count: comparison.inputConceptCount,
+    accepted_concept_count: comparison.acceptedConceptCount,
+    duplicate_concept_count: comparison.duplicateConceptCount,
+    oversized_concept_count: comparison.oversizedConceptCount,
+    serialized_list_concept_count: comparison.serializedListConceptCount,
+    dropped_concept_count: comparison.droppedConceptCount,
   });
 }
 

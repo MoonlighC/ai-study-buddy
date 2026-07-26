@@ -2395,6 +2395,11 @@ class AppState extends ChangeNotifier {
             material.content.trim().length >= summaryMinimumContentCharacters);
   }
 
+  bool canCreateStudySessionForMaterial(StudyMaterial material) {
+    return _validatedDetailedAnalysisForMaterial(material).isNotEmpty ||
+        canGenerateSummaryForMaterial(material);
+  }
+
   List<PersistedStudyActivity> get activeStudyActivities =>
       List.unmodifiable(_activeStudyActivities);
 
@@ -3409,7 +3414,7 @@ class AppState extends ChangeNotifier {
     final selectedMaterial = materialById(materialId);
     if (selectedMaterial == null ||
         selectedMaterial.subjectId != subject.id ||
-        !canGenerateSummaryForMaterial(selectedMaterial)) {
+        !canCreateStudySessionForMaterial(selectedMaterial)) {
       return null;
     }
     final sessionNumber = ++_sessionCounter;
@@ -3604,7 +3609,7 @@ class AppState extends ChangeNotifier {
           subject == null ||
           material == null ||
           material.subjectId != subject.id ||
-          !canGenerateSummaryForMaterial(material)) {
+          !canCreateStudySessionForMaterial(material)) {
         throw const FormatException();
       }
       var restored = StudySession(
@@ -3822,9 +3827,10 @@ class AppState extends ChangeNotifier {
     StudyMaterial? material,
   ) {
     final base = _ai.summaryFor(subject);
+    final detailedSource = material == null ? '' : _studySourceFor(material);
     final sourceNote = material == null
         ? ''
-        : ' Source "${material.title}" says: ${material.content}';
+        : ' Source "${material.title}" says: $detailedSource';
     return switch (confidence) {
       LectureConfidence.understoodEverything =>
         'Short review: $base$sourceNote Focus on one quick check and move on.',
@@ -3874,9 +3880,9 @@ class AppState extends ChangeNotifier {
               id: 'local-session-$sessionNumber-source-card-1',
               subjectId: subject.id,
               front: 'What is the key idea in "${material.title}"?',
-              back: material.content.isEmpty
+              back: _studySourceFor(material).isEmpty
                   ? 'Review the selected material and identify its main point.'
-                  : material.content,
+                  : _studySourceFor(material),
               topic: material.title,
               isFavorite: false,
             ),
@@ -3929,9 +3935,63 @@ class AppState extends ChangeNotifier {
       ],
       correctAnswer: material.title,
       explanation:
-          'This local session was generated from "${material.title}", using its pasted content.',
+          'This local session was generated from the validated detailed analysis for "${material.title}".',
       difficulty: fallback?.difficulty ?? StudyDifficulty.medium,
     );
+  }
+
+  String _studySourceFor(StudyMaterial material) {
+    final detailed = _validatedDetailedAnalysisForMaterial(material);
+    return detailed.isNotEmpty ? detailed : material.content.trim();
+  }
+
+  String _validatedDetailedAnalysisForMaterial(StudyMaterial material) {
+    final status = _analysisStatuses[material.id];
+    final summary = status?.summary;
+    if (summary == null ||
+        status?.summarySchemaVersion !=
+            supportedStructuredSummarySchemaVersion ||
+        !const {
+          AnalysisState.completed,
+          AnalysisState.completedWithWarnings,
+        }.contains(status?.state)) {
+      return '';
+    }
+    final equations = {
+      for (final equation in summary.equations) equation.id: equation,
+    };
+    final lines = <String>[];
+    for (final section in summary.sections) {
+      lines.add(section.title);
+      lines.add('Source pages: ${section.sourcePages.join(', ')}');
+      for (final block in section.blocks) {
+        if (block is ProseBlock) {
+          lines.add(block.markdown);
+        } else if (block is EquationBlock) {
+          final equation = equations[block.equationId];
+          if (equation != null) {
+            lines.add(
+              'Equation from page ${equation.sourcePage}: '
+              '${equation.latex} ${equation.explanationMarkdown}',
+            );
+          }
+        }
+      }
+    }
+    for (final concept in summary.keyConcepts) {
+      lines.add(
+        '${concept.title} (source pages '
+        '${concept.sourcePages.join(', ')}): ${concept.explanationMarkdown}',
+      );
+    }
+    for (final warning in summary.warnings) {
+      lines.add(
+        'Warning ${warning.code} (source pages '
+        '${warning.sourcePages.join(', ')}): ${warning.detail}',
+      );
+    }
+    final text = lines.join('\n\n').trim();
+    return text.length <= 12000 ? text : text.substring(0, 12000);
   }
 
   List<WeakTopic> _initialWeakTopicsFor(

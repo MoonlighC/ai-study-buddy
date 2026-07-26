@@ -707,11 +707,12 @@ Deno.test("runtime logs reduction concept canonicalization counts only", async (
   const metadata = lines.map((line) => JSON.parse(line)).find((line) =>
     line.stage === "reduction_key_concept_canonicalization"
   );
-  equal(metadata.provider_key_concept_count, 2);
-  equal(metadata.accepted_key_concept_count, 1);
-  equal(metadata.dropped_key_concept_count, 1);
-  equal(metadata.duplicate_key_concept_count, 0);
-  equal(metadata.capped_key_concept_count, 0);
+  equal(metadata.input_concept_count, 2);
+  equal(metadata.accepted_concept_count, 1);
+  equal(metadata.duplicate_concept_count, 0);
+  equal(metadata.oversized_concept_count, 1);
+  equal(metadata.serialized_list_concept_count, 1);
+  equal(metadata.dropped_concept_count, 1);
   equal(JSON.stringify(metadata).includes("private concept"), false);
   equal(JSON.stringify(metadata).includes("Safe concept"), false);
 });
@@ -1509,6 +1510,9 @@ function malformedReductionResult() {
 function finalSummary() {
   return {
     language: "en",
+    overview_markdown:
+      "A compact overview of the material.\n\nIt connects the grounded themes for study.",
+    topic_titles: ["Foundations", "Core ideas", "Applications"],
     sections: [{
       id: "section_1",
       title: "Summary",

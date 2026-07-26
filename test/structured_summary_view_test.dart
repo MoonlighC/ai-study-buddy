@@ -24,6 +24,7 @@ void main() {
   ) async {
     final opened = <MaterialViewerArgs>[];
     await _pump(tester, material: _material(MaterialKind.pdf), opened: opened);
+    await _expandDetails(tester);
 
     await tester.tap(find.widgetWithText(ActionChip, 'Source page 2'));
     await tester.pumpAndSettle();
@@ -35,6 +36,10 @@ void main() {
 
     expect(find.text('Warning source page 2'), findsOneWidget);
     expect(find.text('Warning source page 3'), findsOneWidget);
+    await tester.ensureVisible(
+      find.widgetWithText(ActionChip, 'Warning source page 3'),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ActionChip, 'Warning source page 3'));
     await tester.pumpAndSettle();
     expect(opened.last.initialPage, 3);
@@ -47,6 +52,7 @@ void main() {
       material: _material(MaterialKind.image),
       opened: opened,
     );
+    await _expandDetails(tester);
     await tester.tap(find.widgetWithText(ActionChip, 'Source page 2'));
     await tester.pumpAndSettle();
     expect(opened.single.materialId, _materialId);
@@ -74,6 +80,7 @@ void main() {
         ),
       );
       await _pump(tester, material: _material(MaterialKind.pdf), opened: []);
+      await _expandDetails(tester);
       await tester.tap(find.byTooltip('Copy formula'));
       await tester.pump();
       expect(clipboardArguments, {'text': r'\frac{a}{b}'});
@@ -91,10 +98,35 @@ void main() {
       opened: [],
       summary: _summaryWithoutEquations(),
     );
+    await _expandDetails(tester);
     expect(find.text('Section'), findsOneWidget);
     expect(find.byTooltip('Copy formula'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'compact overview is primary and detailed provenance stays collapsed',
+    (tester) async {
+      await _pump(tester, material: _material(MaterialKind.pdf), opened: []);
+      expect(
+        find.text('This lecture covers sequential digital circuits.'),
+        findsOneWidget,
+      );
+      expect(find.text('State machines'), findsOneWidget);
+      expect(find.text('Section'), findsNothing);
+      expect(find.textContaining('90'), findsNothing);
+
+      await _expandDetails(tester);
+      expect(find.text('Section'), findsOneWidget);
+      expect(find.textContaining('Confidence:'), findsWidgets);
+      expect(find.text('90%'), findsNothing);
+    },
+  );
+}
+
+Future<void> _expandDetails(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('analysis-details')));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pump(
@@ -163,6 +195,9 @@ StudyMaterial _material(MaterialKind kind) => StudyMaterial(
 StructuredSummary _summary() => StructuredSummary(
   schemaVersion: 1,
   language: 'en',
+  overviewMarkdown:
+      'This lecture covers sequential digital circuits.\n\nIt connects state machines, registers, and counters.',
+  topicTitles: const ['State machines', 'Registers', 'Counters'],
   sections: const [
     StructuredSection(
       id: 'section',
@@ -209,6 +244,9 @@ StructuredSummary _summary() => StructuredSummary(
 StructuredSummary _summaryWithoutEquations() => StructuredSummary(
   schemaVersion: 1,
   language: 'en',
+  overviewMarkdown:
+      'This is a compact document overview.\n\nIt connects the main ideas.',
+  topicTitles: const ['Overview', 'Foundations', 'Applications'],
   sections: const [
     StructuredSection(
       id: 'section',

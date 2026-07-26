@@ -16,6 +16,9 @@ export const finalSummaryPartitionOverlapFixture = {
   }],
   providerResult: {
     language: "en",
+    overview_markdown:
+      "A compact overview of the grounded material.\n\nIt retains the main themes while leaving provenance in analysis details.",
+    topic_titles: ["Grounded content", "Main themes", "Study details"],
     sections: [{
       id: "section_1",
       title: "Grounded summary",
