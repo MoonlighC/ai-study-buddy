@@ -68,6 +68,13 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
         p_analyze_again: input.analyze_again,
       });
     },
+    async preparePageRecoveries(input) {
+      return await rpcOne(
+        trusted,
+        "prepare_material_analysis_page_recoveries_internal",
+        { p_material_id: input.material_id },
+      ) as never;
+    },
     async claimNext(input) {
       const value = await rpcOne(
         trusted,

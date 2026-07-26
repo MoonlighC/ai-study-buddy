@@ -361,7 +361,21 @@ await runSql(
   "phase_c_analyze_again_artifact_eligibility.sql",
 );
 
-console.log("PHASE_DE_DATABASE_TESTS_OK migrations=32 sql_suites=22");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "033_material_analysis_bounded_page_recovery.sql",
+  ),
+  "migration 033_",
+);
+await runSql(
+  path.join(root, "supabase", "tests", "phase_c_page_recovery_pass.sql"),
+  "phase_c_page_recovery_pass.sql",
+);
+
+console.log("PHASE_DE_DATABASE_TESTS_OK migrations=33 sql_suites=23");
 await database.close();
 
 async function runSql(file, label) {

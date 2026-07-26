@@ -122,6 +122,96 @@ Deno.test("visual STEM page request states the strict Markdown and LaTeX contrac
   equal(responseCreates, 1);
 });
 
+Deno.test("page recovery is one high-detail page and fails closed on wrong provenance", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  let calls = 0;
+  const adapter = adapterWith((input, init) => {
+    if (String(input).includes("/responses")) {
+      calls++;
+      const body = JSON.parse(String(init?.body));
+      const prompt = body.input[0].content[0].text as string;
+      equal(body.text.format.name, "phase_c_page_recovery_v3");
+      equal(prompt.includes("single-page recovery pass"), true);
+      equal(prompt.includes(JSON.stringify("Authoritative page text.")), true);
+      return Promise.resolve(
+        jsonResponse(completedResponse({
+          pages: [{ ...pageBatch().pages[0], page_number: 2 }],
+        })),
+      );
+    }
+    throw new Error("unexpected provider endpoint");
+  });
+  const error = await caught(() =>
+    adapter.execute(
+      {
+        ...baseRequest(),
+        operation: "page_recovery",
+        input: {
+          kind: "pdf",
+          bytes: pdf,
+          pageNumbers: [1],
+          authoritativeText: "Authoritative page text.",
+          renderDetail: "high",
+        },
+      },
+      undefined,
+      "file_12345678",
+    )
+  );
+  equal(error instanceof ProviderBoundaryError, true);
+  equal(calls, 1);
+});
+
+Deno.test("page recovery rejects multiple pages before provider dispatch", async () => {
+  let calls = 0;
+  const adapter = adapterWith(() => {
+    calls++;
+    return Promise.resolve(jsonResponse(completedResponse(pageBatch())));
+  });
+  const error = await caught(() =>
+    adapter.execute(
+      {
+        ...baseRequest(),
+        operation: "page_recovery",
+        expectedPages: [1, 2],
+        pageCount: 2,
+        input: {
+          kind: "pdf",
+          bytes: new Uint8Array([1]),
+          pageNumbers: [1, 2],
+          authoritativeText: "",
+          renderDetail: "high",
+        },
+      },
+      undefined,
+      "file_12345678",
+    )
+  );
+  equal(error.message, "invalid_page_recovery_request");
+  equal(calls, 0);
+});
+
+Deno.test("page recovery rejects non-PDF input before provider dispatch", async () => {
+  let calls = 0;
+  const adapter = adapterWith(() => {
+    calls++;
+    return Promise.resolve(jsonResponse(completedResponse(pageBatch())));
+  });
+  const error = await caught(() =>
+    adapter.execute({
+      ...baseRequest(),
+      operation: "page_recovery",
+      input: {
+        kind: "image",
+        bytes: new Uint8Array([1]),
+        mimeType: "image/png",
+      },
+    })
+  );
+  equal(error.message, "invalid_page_recovery_request");
+  equal(calls, 0);
+});
+
 Deno.test("C2 PDF execution refuses an unpersisted file identity before dispatch", async () => {
   let calls = 0;
   const adapter = adapterWith(() => {

@@ -1400,7 +1400,8 @@ class _MaterialAnalysisSectionState extends State<_MaterialAnalysisSection> {
               : _stage(l, status),
           message: _retryRemaining != null && _retryRemaining! > 0
               ? l.analysisRetryAvailableIn(_retryRemaining!)
-              : status.state == AnalysisState.completed
+              : status.state == AnalysisState.completed ||
+                    status.state == AnalysisState.completedWithWarnings
               ? l.analysisCompleted
               : status.publicStage == AnalysisPublicStage.analyzingPages
               ? l.analysisPageProgress(status.completedPages, status.pageCount)

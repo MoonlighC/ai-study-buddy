@@ -89,6 +89,9 @@ export type AnalysisDependencies = {
     version_fingerprint: string;
     page_plans: unknown[];
   }): Promise<unknown>;
+  preparePageRecoveries(
+    input: { principal_id: string; material_id: string },
+  ): Promise<RecoveryDiagnostics>;
   claimNext(
     input: { principal_id: string; material_id: string },
   ): Promise<InternalWorkUnit>;
@@ -163,6 +166,15 @@ export type AnalysisDependencies = {
   }): Promise<void>;
   provider: TrustedOpenAiAdapter;
   jitter(): number;
+};
+
+export type RecoveryDiagnostics = {
+  recovery_candidate_count: number;
+  recovery_submitted_count: number;
+  recovery_completed_count: number;
+  recovery_partial_count: number;
+  recovery_still_missing_count: number;
+  recovery_duplicate_submission_count: number;
 };
 
 type DiagnosticTargetBase = {
@@ -258,6 +270,11 @@ export function createAdvanceMaterialAnalysisHandler(
       principalId,
       body.material_id,
     );
+    const plannedRecovery = await deps.preparePageRecoveries({
+      principal_id: principalId,
+      material_id: body.material_id,
+    });
+    logRecoveryDiagnostics(plannedRecovery);
     const work = await deps.claimNext({
       principal_id: principalId,
       material_id: body.material_id,
@@ -469,6 +486,9 @@ async function executeOneWorkUnit(
       retrieved.reductionKeyConceptComparison,
     );
     logEquationComparison(retrieved.equationComparison);
+    if (request.operation === "page_recovery") {
+      logRecoveryOutcome(retrieved.result, 0);
+    }
     await deps.completeOperation({
       batch_id: required.batchId,
       lease_token: required.leaseToken,
@@ -549,6 +569,9 @@ async function executeOneWorkUnit(
       provider.reductionKeyConceptComparison,
     );
     logEquationComparison(provider.equationComparison);
+    if (request.operation === "page_recovery") {
+      logRecoveryOutcome(provider.result, 1);
+    }
     const summaryMarkdown = work.kind === "final_summary"
       ? projectSummaryToSafeMarkdown(provider.result as StructuredSummary)
       : undefined;
@@ -721,18 +744,34 @@ async function providerRequest(
 ): Promise<ProviderRequest> {
   const operation = resolveWorkOperation(work);
   const pages = work.page_numbers ?? [];
+  if (operation === "page_recovery" && material.kind !== "pdf") {
+    throw new Error("page_recovery_requires_pdf");
+  }
   let input: ProviderRequest["input"];
   if (
     (operation === "page_visual" || operation === "page_recovery") &&
     material.kind === "pdf"
   ) {
+    if (operation === "page_recovery" && pages.length !== 1) {
+      throw new Error("page_recovery_requires_single_page");
+    }
     const original = await deps.downloadPrivate(material);
     await inspectSourceBytes(material, original);
     const mini = await createMiniPdf(original, pages);
     if (mini.originalPageNumbers.join() !== pages.join()) {
       throw new Error("mini_pdf_mapping_failed");
     }
-    input = { kind: "pdf", bytes: mini.bytes, pageNumbers: pages };
+    input = {
+      kind: "pdf",
+      bytes: mini.bytes,
+      pageNumbers: pages,
+      ...(operation === "page_recovery"
+        ? {
+          authoritativeText: selectablePageText(material.metadata, pages[0]),
+          renderDetail: "high" as const,
+        }
+        : {}),
+    };
   } else if (
     (operation === "page_visual" || operation === "page_recovery") &&
     material.kind === "image"
@@ -849,6 +888,39 @@ function selectablePages(metadata: Record<string, unknown> | undefined) {
       ? [{ page_number: page.page_number as number, text: page.text }]
       : []
   );
+}
+
+function selectablePageText(
+  metadata: Record<string, unknown> | undefined,
+  pageNumber: number,
+) {
+  return selectablePages(metadata).find((page) =>
+    page.page_number === pageNumber
+  )?.text ?? "";
+}
+
+function logRecoveryDiagnostics(diagnostics: RecoveryDiagnostics) {
+  if (
+    diagnostics.recovery_candidate_count === 0 &&
+    diagnostics.recovery_duplicate_submission_count === 0
+  ) return;
+  analysisLog("advance", "page_recovery_planned", diagnostics);
+}
+
+function logRecoveryOutcome(result: unknown, submitted: 0 | 1) {
+  const page = isRecord(result) && Array.isArray(result.pages) &&
+      result.pages.length === 1 && isRecord(result.pages[0])
+    ? result.pages[0]
+    : undefined;
+  const status = page?.content_status;
+  analysisLog("advance", "page_recovery_completed", {
+    recovery_candidate_count: 1,
+    recovery_submitted_count: submitted,
+    recovery_completed_count: status === "completed" ? 1 : 0,
+    recovery_partial_count: status === "partial" ? 1 : 0,
+    recovery_still_missing_count: status === "missing" ? 1 : 0,
+    recovery_duplicate_submission_count: 0,
+  });
 }
 
 function equationIds(value: unknown) {

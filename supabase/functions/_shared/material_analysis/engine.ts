@@ -30,6 +30,7 @@ export const maximumTextBatchPages = 10;
 export const maximumTextBatchCharacters = 40_000;
 export const maximumVisualBatchPages = 5;
 export const maximumReductionInputs = 10;
+export const pageRecoveryConfidenceThreshold = 0.5;
 
 export type PublicRequest = {
   material_id: string;
@@ -255,8 +256,10 @@ export async function buildPagePlans(input: {
       route: decision.route,
       normalized_text: text,
       routing_signals: {
+        blank_page_conclusive: false,
         reasons: decision.reasons,
         router_version: decision.routerVersion,
+        source_render_exists: true,
       },
       routing_confidence: decision.confidence,
       input_hash: await sha256Hex(text || `visual:${pageNumber}`),
@@ -486,6 +489,12 @@ export function analysisLog(
       "dropped_key_concept_count",
       "duplicate_key_concept_count",
       "capped_key_concept_count",
+      "recovery_candidate_count",
+      "recovery_submitted_count",
+      "recovery_completed_count",
+      "recovery_partial_count",
+      "recovery_still_missing_count",
+      "recovery_duplicate_submission_count",
     ]
   ) {
     const value = details[key];

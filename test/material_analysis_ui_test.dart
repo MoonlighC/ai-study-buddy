@@ -284,6 +284,37 @@ void main() {
     },
   );
 
+  testWidgets('Analyze again disables immediately and keeps one operation', (
+    tester,
+  ) async {
+    final pending = Completer<MaterialAnalysisStatus>();
+    final failed = _status(
+      stage: AnalysisPublicStage.creatingSummary,
+      state: AnalysisState.failed,
+      safeErrorCode: 'structured_output_invalid',
+      canAnalyzeAgain: true,
+    );
+    final repo = _UiRepo(status: failed, onAnalyzeAgain: () => pending.future);
+    final state = await _pump(tester, repo);
+
+    await tester.tap(find.text('Analyze again'));
+    await tester.pump();
+    final operationId = state.materialAnalysisOperationIdFor(_material.id);
+    expect(operationId, isNotNull);
+    expect(state.isMaterialAnalysisActionInFlight(_material.id), isTrue);
+    expect(repo.analysesAgain, 1);
+
+    await tester.tap(find.text('Analyze again'), warnIfMissed: false);
+    await tester.pump();
+    expect(repo.analysesAgain, 1);
+    expect(state.materialAnalysisOperationIdFor(_material.id), operationId);
+
+    pending.complete(failed);
+    await tester.pumpAndSettle();
+    expect(state.isMaterialAnalysisActionInFlight(_material.id), isFalse);
+    expect(state.materialAnalysisOperationIdFor(_material.id), isNull);
+  });
+
   testWidgets(
     'structured-output failure without eligibility promises no new analysis',
     (tester) async {
@@ -360,6 +391,26 @@ void main() {
 
     expect(find.text('Completed'), findsWidgets);
     expect(find.text('Section'), findsOneWidget);
+    expect(find.text('Creating summary'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
+
+  testWidgets('completed with warnings never renders an active summary stage', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _UiRepo(
+        status: _status(
+          stage: AnalysisPublicStage.creatingSummary,
+          state: AnalysisState.completedWithWarnings,
+          completedPages: 4,
+          summary: _summary(),
+        ),
+      ),
+    );
+
+    expect(find.text('Completed with warnings'), findsWidgets);
     expect(find.text('Creating summary'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
   });

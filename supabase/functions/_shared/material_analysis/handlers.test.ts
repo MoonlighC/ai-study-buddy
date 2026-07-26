@@ -9,6 +9,7 @@ import {
 } from "./handlers.ts";
 import { analysisValidatorVersion, SafeAnalysisError } from "./engine.ts";
 import { TrustedOpenAiAdapter } from "./openai_adapter.ts";
+import { createMiniPdf } from "./mini_pdf.ts";
 import { buildSyntheticPdf } from "./synthetic_pdf_fixtures.ts";
 
 const owner = crypto.randomUUID();
@@ -479,6 +480,108 @@ Deno.test("C2 transient DB failure after response retries without another paid c
   equal(fake.completions, 1);
 });
 
+Deno.test("page recovery submits one isolated original page with authoritative text", async () => {
+  const pdf = await buildSyntheticPdf(["text", "text"]);
+  const fake = fakeDependencies(pdf);
+  fake.source.metadata = {
+    pdf_extraction: {
+      selectable_pages: [{
+        page_number: 2,
+        text: "Authoritative extracted text for original page two.",
+      }],
+    },
+  };
+  fake.work = pageRecoveryWorkUnit(2, 2);
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+
+  equal(response.status, 200);
+  equal(fake.providerRequests, 1);
+  equal(fake.submissions, 1);
+  equal(fake.completions, 1);
+  equal(fake.uploadRequests, 1);
+  const recovered = await createMiniPdf(pdf, [2]);
+  equal(fake.uploadedPdfBytes, recovered.bytes);
+  equal(
+    fake.providerPrompt.includes(
+      JSON.stringify("Authoritative extracted text for original page two."),
+    ),
+    true,
+  );
+});
+
+Deno.test("page recovery rejects multi-page work before provider access", async () => {
+  const pdf = await buildSyntheticPdf(["text", "text"]);
+  const fake = fakeDependencies(pdf);
+  fake.work = pageRecoveryWorkUnit(1, 2, [1, 2]);
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+
+  equal(response.status, 500);
+  equal(fake.providerRequests, 0);
+  equal(fake.submissions, 0);
+  equal(fake.completions, 0);
+});
+
+Deno.test("page recovery rejects non-PDF source before provider access", async () => {
+  const fake = fakeDependencies(pngBytes(), "image");
+  fake.work = pageRecoveryWorkUnit(1, 1);
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+
+  equal(response.status, 500);
+  equal(fake.providerRequests, 0);
+  equal(fake.submissions, 0);
+  equal(fake.completions, 0);
+});
+
+Deno.test("page recovery crash reconciliation retrieves without another POST", async () => {
+  const pdf = await buildSyntheticPdf(["text"]);
+  const fake = fakeDependencies(pdf);
+  fake.work = pageRecoveryReconciliationWorkUnit();
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+
+  equal(response.status, 200);
+  equal(fake.providerRequests, 1);
+  equal(fake.providerMethods, ["GET"]);
+  equal(fake.submissions, 0);
+  equal(fake.completions, 1);
+});
+
+Deno.test("page recovery logs outcome counts and no page or provider identity", async () => {
+  const fake = fakeDependencies(await buildSyntheticPdf(["text"]));
+  fake.work = pageRecoveryWorkUnit(1, 1);
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (line: unknown) => lines.push(String(line));
+  try {
+    const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+      request({ material_id: materialId }),
+    );
+    equal(response.status, 200);
+  } finally {
+    console.log = original;
+  }
+  const metadata = lines.map((line) => JSON.parse(line)).find((line) =>
+    line.stage === "page_recovery_completed"
+  );
+  equal(metadata.recovery_candidate_count, 1);
+  equal(metadata.recovery_submitted_count, 1);
+  equal(metadata.recovery_completed_count, 1);
+  equal(metadata.recovery_partial_count, 0);
+  equal(metadata.recovery_still_missing_count, 0);
+  equal(metadata.recovery_duplicate_submission_count, 0);
+  const encoded = JSON.stringify(metadata);
+  equal(encoded.includes(materialId), false);
+  equal(encoded.includes("resp_"), false);
+  equal(encoded.includes("page_number"), false);
+});
+
 Deno.test("valid final summary persists exactly once with one provider POST", async () => {
   const fake = fakeDependencies(pngBytes(), "image");
   fake.work = finalSummaryWorkUnit();
@@ -918,6 +1021,8 @@ function fakeDependencies(
     responsePersistenceAttempts: 0,
     diagnostics: [] as Array<Record<string, unknown>>,
     observedImageBytes: new Uint8Array(),
+    uploadedPdfBytes: new Uint8Array(),
+    providerPrompt: "",
   };
   const provider = new TrustedOpenAiAdapter({
     apiKey: runtimeApiFixture,
@@ -927,6 +1032,9 @@ function fakeDependencies(
       if (String(input).endsWith("/files")) {
         state.uploadRequests++;
         if (providerMode === "upload_failure") throw new TypeError("network");
+        const form = init?.body as FormData;
+        const file = form.get("file") as File;
+        state.uploadedPdfBytes = new Uint8Array(await file.arrayBuffer());
         return new Response(JSON.stringify({ id: "file_12345678" }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -1008,6 +1116,7 @@ function fakeDependencies(
         });
       }
       const body = JSON.parse(String(init?.body));
+      state.providerPrompt = body.input[0].content[0].text;
       const dataUrl = body.input[0].content.find((
         item: Record<string, unknown>,
       ) => item.type === "input_image")?.image_url;
@@ -1025,6 +1134,8 @@ function fakeDependencies(
         body.text?.format?.name === "phase_c_final_summary_v3";
       const reductionOperation =
         body.text?.format?.name === "phase_c_reduction_v2";
+      const recoveryOperation =
+        body.text?.format?.name === "phase_c_page_recovery_v3";
       const equationMode = providerMode === "final_equation_replaced" ||
           providerMode === "final_equation_orphan" ||
           providerMode === "final_equation_referenced_only" ||
@@ -1041,6 +1152,13 @@ function fakeDependencies(
             ? providerMode === "reduction_concept_canonicalized"
               ? malformedReductionResult()
               : reductionResult()
+            : recoveryOperation
+            ? {
+              pages: [{
+                ...pageBatch().pages[0],
+                page_number: state.work.page_numbers?.[0] ?? 1,
+              }],
+            }
             : pageBatch(),
         )),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -1057,6 +1175,15 @@ function fakeDependencies(
       state.preparations.push(structuredClone(input));
       return Promise.resolve("job");
     },
+    preparePageRecoveries: () =>
+      Promise.resolve({
+        recovery_candidate_count: 0,
+        recovery_submitted_count: 0,
+        recovery_completed_count: 0,
+        recovery_partial_count: 0,
+        recovery_still_missing_count: 0,
+        recovery_duplicate_submission_count: 0,
+      }),
     claimNext: () => {
       state.claims++;
       return Promise.resolve(state.work);
@@ -1165,6 +1292,28 @@ function workUnit(): InternalWorkUnit {
   };
 }
 
+function pageRecoveryWorkUnit(
+  pageNumber: number,
+  pageCount: number,
+  pageNumbers = [pageNumber],
+): InternalWorkUnit {
+  return {
+    kind: "page_recovery",
+    operation: "page_recovery",
+    material_id: materialId,
+    job_id: jobId,
+    batch_id: batchId,
+    lease_token: leaseId,
+    page_count: pageCount,
+    page_numbers: pageNumbers,
+    validation_version: analysisValidatorVersion,
+    input_payload: {
+      operation: "page_recovery",
+      page_numbers: pageNumbers,
+    },
+  };
+}
+
 function reconciliationWorkUnit(): InternalWorkUnit {
   return {
     ...workUnit(),
@@ -1173,6 +1322,16 @@ function reconciliationWorkUnit(): InternalWorkUnit {
     response_id: "resp_12345678",
     idempotency_key: "a".repeat(64),
     input_payload: { operation: "page_visual" },
+  };
+}
+
+function pageRecoveryReconciliationWorkUnit(): InternalWorkUnit {
+  return {
+    ...pageRecoveryWorkUnit(1, 1),
+    kind: "reconciliation",
+    operation: "page_recovery",
+    response_id: "resp_12345678",
+    idempotency_key: "a".repeat(64),
   };
 }
 

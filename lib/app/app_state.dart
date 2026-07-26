@@ -74,6 +74,7 @@ class AppState extends ChangeNotifier {
     AppPreferencesStore? preferencesStore,
     Future<void> Function(Duration)? analysisDelay,
     DateTime Function()? analysisNow,
+    String Function()? analysisOperationIdGenerator,
   }) : config = config ?? AppConfig.fromValues(),
        preferencesStore =
            preferencesStore ?? const SharedPreferencesAppPreferencesStore(),
@@ -179,6 +180,8 @@ class AppState extends ChangeNotifier {
                : const MockSubjectDeletionRepository()),
        _analysisDelay = analysisDelay ?? Future<void>.delayed,
        _analysisNow = analysisNow ?? DateTime.now,
+       _analysisOperationIdGenerator =
+           analysisOperationIdGenerator ?? newUuidV4,
        _subjects =
            (config ?? AppConfig.fromValues()).effectiveBackendMode ==
                AppBackendMode.supabase
@@ -208,6 +211,7 @@ class AppState extends ChangeNotifier {
 
   final AppConfig config;
   final AppPreferencesStore preferencesStore;
+  final String Function() _analysisOperationIdGenerator;
   final SubjectRepository subjectRepository;
   final MaterialRepository materialRepository;
   final MaterialAnalysisRepository materialAnalysisRepository;
@@ -410,6 +414,8 @@ class AppState extends ChangeNotifier {
       _analysisActions.containsKey(id);
   AnalysisExplicitAction? materialAnalysisActionFor(String id) =>
       _analysisActions[id]?.action;
+  String? materialAnalysisOperationIdFor(String id) =>
+      _analysisActions[id]?.operationId;
 
   Future<void> observeMaterialAnalysis(
     AuthUser? user,
@@ -722,7 +728,11 @@ class AppState extends ChangeNotifier {
     AnalysisExplicitAction action,
   ) {
     if (_analysisActions.containsKey(id)) return null;
-    final guard = _AnalysisActionGuard(id: id, action: action);
+    final guard = _AnalysisActionGuard(
+      id: id,
+      action: action,
+      operationId: _analysisOperationIdGenerator(),
+    );
     _analysisActions[id] = guard;
     notifyListeners();
     return guard;
@@ -3947,10 +3957,15 @@ class AppState extends ChangeNotifier {
 }
 
 class _AnalysisActionGuard {
-  const _AnalysisActionGuard({required this.id, required this.action});
+  const _AnalysisActionGuard({
+    required this.id,
+    required this.action,
+    required this.operationId,
+  });
 
   final String id;
   final AnalysisExplicitAction action;
+  final String operationId;
 }
 
 const _transientAnalysisErrors = {

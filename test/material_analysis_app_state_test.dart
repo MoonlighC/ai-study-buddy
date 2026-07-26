@@ -122,12 +122,17 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(repo.advances, 0);
       final first = state.analyzeMaterialAgain(_user, _ids.first);
+      final operationId = state.materialAnalysisOperationIdFor(_ids.first);
+      expect(operationId, isNotNull);
+      expect(state.isMaterialAnalysisActionInFlight(_ids.first), isTrue);
       final duplicate = state.analyzeMaterialAgain(_user, _ids.first);
       expect(repo.analysesAgain, 1);
       expect(await duplicate, isFalse);
+      expect(state.materialAnalysisOperationIdFor(_ids.first), operationId);
       analyze.complete(_status(_ids.first));
       expect(await first, isTrue);
       expect(state.materialAnalysisActionFor(_ids.first), isNull);
+      expect(state.materialAnalysisOperationIdFor(_ids.first), isNull);
     },
   );
 
