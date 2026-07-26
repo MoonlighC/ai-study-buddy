@@ -342,7 +342,26 @@ await runSql(
   "phase_c_real_output_reliability.sql",
 );
 
-console.log("PHASE_DE_DATABASE_TESTS_OK migrations=31 sql_suites=21");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "032_material_analysis_analyze_again_artifact_eligibility.sql",
+  ),
+  "migration 032_",
+);
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "phase_c_analyze_again_artifact_eligibility.sql",
+  ),
+  "phase_c_analyze_again_artifact_eligibility.sql",
+);
+
+console.log("PHASE_DE_DATABASE_TESTS_OK migrations=32 sql_suites=22");
 await database.close();
 
 async function runSql(file, label) {

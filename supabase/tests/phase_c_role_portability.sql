@@ -111,6 +111,7 @@ with phase_c_helper(signature) as (
     'public.material_analysis_valid_page_numbers(integer[])'::regprocedure,
     'public.material_analysis_version_fingerprint(jsonb)'::regprocedure,
     'public.material_analysis_valid_diagnostic_metadata(jsonb)'::regprocedure,
+    'public.material_analysis_analyze_again_eligible(uuid,uuid)'::regprocedure,
     'public.enforce_material_processing_job_row()'::regprocedure,
     'public.enforce_material_processing_page_row()'::regprocedure,
     'public.enforce_material_processing_batch_row()'::regprocedure,
@@ -135,7 +136,7 @@ select pg_temp.assert_role_portability(
         where privilege.grantee=0 and privilege.privilege_type='EXECUTE'
       )
   ),
-  'postgres owns all thirteen helpers and no API role can execute them directly'
+  'postgres owns all fourteen helpers and no API role can execute them directly'
 );
 
 with phase_c_definer as (
