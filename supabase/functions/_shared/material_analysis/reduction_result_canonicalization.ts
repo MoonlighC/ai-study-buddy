@@ -25,6 +25,28 @@ export type ReductionKeyConceptComparison = {
   droppedConceptCount: number;
 };
 
+export type ReductionValidatorStage =
+  | "validateReductionMinimumShape"
+  | "validateReductionSchema"
+  | "validateReductionMarkdown"
+  | "validateReductionSourcePages"
+  | "validateReductionEquationReferences"
+  | "validateReductionWarningProvenance";
+
+export type ReductionFailureDiagnostic = {
+  validatorStage: ReductionValidatorStage;
+  safeValidatorCode:
+    | "reduction_required_shape_invalid"
+    | "reduction_schema_invalid"
+    | "reduction_markdown_invalid"
+    | "reduction_source_pages_mismatch"
+    | "reduction_equation_references_invalid"
+    | "reduction_warning_provenance_invalid";
+  sourcePageCount: number;
+  equationIdCount: number;
+  warningCount: number;
+};
+
 export function canonicalizeReductionResult(
   result: unknown,
   allowedPages: number[],
@@ -33,6 +55,7 @@ export function canonicalizeReductionResult(
   valid: boolean;
   result: unknown;
   comparison: ReductionKeyConceptComparison;
+  failure?: ReductionFailureDiagnostic;
 } {
   const comparison = {
     inputConceptCount: isRecord(result) &&
@@ -45,18 +68,17 @@ export function canonicalizeReductionResult(
     serializedListConceptCount: 0,
     droppedConceptCount: 0,
   };
-  if (!isRecord(result) || !Array.isArray(result.key_concepts)) {
-    return { valid: false, result, comparison };
-  }
-  const withoutConcepts = { ...result, key_concepts: [] };
-  if (
-    !validateReductionResult(
-      withoutConcepts,
-      allowedPages,
-      authoritativeEquationIds,
-    ).valid
-  ) {
-    return { valid: false, result, comparison };
+  if (!hasMinimumReductionShape(result)) {
+    return {
+      valid: false,
+      result,
+      comparison,
+      failure: reductionFailure(
+        result,
+        "validateReductionMinimumShape",
+        "reduction_required_shape_invalid",
+      ),
+    };
   }
 
   const keyConcepts: string[] = [];
@@ -86,15 +108,109 @@ export function canonicalizeReductionResult(
     ...(result as unknown as ReductionResult),
     key_concepts: keyConcepts,
   };
+  const validation = validateReductionResult(
+    canonical,
+    allowedPages,
+    authoritativeEquationIds,
+  );
+  const failure = validation.valid ? undefined : diagnoseStrictReductionFailure(
+    canonical,
+    validation.errors,
+    allowedPages,
+  );
   return {
-    valid: validateReductionResult(
-      canonical,
-      allowedPages,
-      authoritativeEquationIds,
-    ).valid,
+    valid: validation.valid,
     result: canonical,
     comparison,
+    failure,
   };
+}
+
+function hasMinimumReductionShape(
+  value: unknown,
+): value is Record<string, unknown> & { key_concepts: unknown[] } {
+  if (!isRecord(value) || !Array.isArray(value.key_concepts)) return false;
+  const required = [
+    "source_pages",
+    "summary_markdown",
+    "key_concepts",
+    "equation_ids",
+    "warnings",
+    "confidence",
+  ];
+  return Object.keys(value).length === required.length &&
+    required.every((key) => Object.hasOwn(value, key));
+}
+
+function diagnoseStrictReductionFailure(
+  value: ReductionResult,
+  errors: string[],
+  allowedPages: number[],
+): ReductionFailureDiagnostic {
+  if (
+    errors.includes("summary_markdown") ||
+    errors.includes("reduction_markdown_dollar_math")
+  ) {
+    return reductionFailure(
+      value,
+      "validateReductionMarkdown",
+      "reduction_markdown_invalid",
+    );
+  }
+  if (
+    errors.includes("source_pages") &&
+    Array.isArray(value.source_pages) &&
+    value.source_pages.every(Number.isInteger) &&
+    value.source_pages.length >= 1 &&
+    value.source_pages.length <= 100 &&
+    value.source_pages.every((page) =>
+      (page as number) >= 1 &&
+      (page as number) <= Math.max(1, ...allowedPages)
+    )
+  ) {
+    return reductionFailure(
+      value,
+      "validateReductionSourcePages",
+      "reduction_source_pages_mismatch",
+    );
+  }
+  if (errors.includes("equation_references")) {
+    return reductionFailure(
+      value,
+      "validateReductionEquationReferences",
+      "reduction_equation_references_invalid",
+    );
+  }
+  if (errors.includes("warning_page_provenance")) {
+    return reductionFailure(
+      value,
+      "validateReductionWarningProvenance",
+      "reduction_warning_provenance_invalid",
+    );
+  }
+  return reductionFailure(
+    value,
+    "validateReductionSchema",
+    "reduction_schema_invalid",
+  );
+}
+
+function reductionFailure(
+  value: unknown,
+  validatorStage: ReductionFailureDiagnostic["validatorStage"],
+  safeValidatorCode: ReductionFailureDiagnostic["safeValidatorCode"],
+): ReductionFailureDiagnostic {
+  return {
+    validatorStage,
+    safeValidatorCode,
+    sourcePageCount: arrayLength(value, "source_pages"),
+    equationIdCount: arrayLength(value, "equation_ids"),
+    warningCount: arrayLength(value, "warnings"),
+  };
+}
+
+function arrayLength(value: unknown, key: string): number {
+  return isRecord(value) && Array.isArray(value[key]) ? value[key].length : 0;
 }
 
 function classifyReductionKeyConcept(value: unknown): {

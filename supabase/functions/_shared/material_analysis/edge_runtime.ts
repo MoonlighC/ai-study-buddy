@@ -179,6 +179,18 @@ export function createAnalysisDependencies(jwt: string): AnalysisDependencies {
         p_cleanup_complete: input.cleanup_complete ?? true,
       });
     },
+    async recordReductionDiagnostic(input) {
+      await rpcVoid(
+        trusted,
+        "record_material_analysis_reduction_diagnostic_internal",
+        {
+          p_batch_id: input.batch_id,
+          p_lease_token: input.lease_token,
+          p_diagnostic_metadata: input.diagnostic_metadata,
+          p_diagnostic_version: input.diagnostic_version,
+        },
+      );
+    },
     async loadDiagnosticTarget(batchId) {
       return await rpcOne(
         trusted,

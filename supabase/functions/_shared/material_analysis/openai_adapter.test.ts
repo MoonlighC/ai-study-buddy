@@ -322,6 +322,46 @@ Deno.test("21-page parent reduction permits three bounded inputs", async () => {
   equal(calls, 1);
 });
 
+Deno.test("reduction JSON parse failure retains a counts-only safe stage", async () => {
+  const adapter = adapterWith(() =>
+    Promise.resolve(jsonResponse({
+      id: "resp_12345678",
+      object: "response",
+      status: "completed",
+      output: [{
+        type: "message",
+        content: [{ type: "output_text", text: "{" }],
+      }],
+    }))
+  );
+  const error = await caught(() =>
+    adapter.execute({
+      operation: "reduction",
+      input: {
+        kind: "text",
+        text: JSON.stringify({
+          inputs: [reductionForPages([1])],
+          equation_ids: [[]],
+        }),
+      },
+      expectedPages: [1],
+      allowedEquationIds: [],
+      pageCount: 1,
+      idempotencyKey: "f".repeat(64),
+    })
+  );
+  if (!(error instanceof ProviderBoundaryError)) {
+    throw new Error("expected_provider_boundary_error");
+  }
+  equal(error.reductionDiagnostic, {
+    validatorStage: "parseStructuredJson",
+    safeValidatorCode: "reduction_json_parse_failed",
+    sourcePageCount: 0,
+    equationIdCount: 0,
+    warningCount: 0,
+  });
+});
+
 Deno.test("parent reduction rejects more than ten inputs before dispatch", async () => {
   const pages = Array.from({ length: 100 }, (_, index) => index + 1);
   let calls = 0;

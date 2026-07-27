@@ -717,6 +717,44 @@ Deno.test("runtime logs reduction concept canonicalization counts only", async (
   equal(JSON.stringify(metadata).includes("Safe concept"), false);
 });
 
+Deno.test("failed global reduction persists counts-only diagnostics before terminalization", async () => {
+  const fake = fakeDependencies(
+    pngBytes(),
+    "image",
+    "reduction_unknown_equation",
+  );
+  fake.work = { ...reductionWorkUnit(), reduction_level: 2 };
+  const response = await createAdvanceMaterialAnalysisHandler(fake.deps)(
+    request({ material_id: materialId }),
+  );
+
+  equal(response.status, 200);
+  equal(fake.completions, 0);
+  equal(fake.failures.length, 1);
+  equal(fake.diagnostics.length, 1);
+  const persisted = fake.diagnostics[0]
+    .diagnostic_metadata as Record<string, unknown>;
+  equal(persisted, {
+    operation_kind: "reduction",
+    reduction_level: "global",
+    validator_stage: "validateReductionEquationReferences",
+    safe_validator_code: "reduction_equation_references_invalid",
+    input_concept_count: 0,
+    accepted_concept_count: 0,
+    duplicate_concept_count: 0,
+    oversized_concept_count: 0,
+    serialized_list_concept_count: 0,
+    dropped_concept_count: 0,
+    source_page_count: 1,
+    equation_id_count: 1,
+    warning_count: 0,
+  });
+  const serialized = JSON.stringify(fake.diagnostics[0]);
+  equal(serialized.includes("Safe concept"), false);
+  equal(serialized.includes(materialId), false);
+  equal(serialized.includes("resp_"), false);
+});
+
 Deno.test("repeated final-summary reconciliation persists once with zero POSTs", async () => {
   const fake = fakeDependencies(
     pngBytes(),
@@ -992,6 +1030,7 @@ function fakeDependencies(
     | "retrieval_reduction_success"
     | "page_missing_synthesized"
     | "reduction_concept_canonicalized"
+    | "reduction_unknown_equation"
     | "final_equation_replaced"
     | "final_equation_orphan"
     | "final_equation_referenced_only"
@@ -1152,6 +1191,8 @@ function fakeDependencies(
             : reductionOperation
             ? providerMode === "reduction_concept_canonicalized"
               ? malformedReductionResult()
+              : providerMode === "reduction_unknown_equation"
+              ? { ...reductionResult(), equation_ids: ["eq_unknown"] }
               : reductionResult()
             : recoveryOperation
             ? {
@@ -1229,6 +1270,10 @@ function fakeDependencies(
       if (String(input.failure_class).startsWith("terminal_")) {
         state.work = { kind: "none", material_id: materialId };
       }
+      return Promise.resolve();
+    },
+    recordReductionDiagnostic: (input) => {
+      state.diagnostics.push(structuredClone(input));
       return Promise.resolve();
     },
     reconcileOperation: () => Promise.resolve(),

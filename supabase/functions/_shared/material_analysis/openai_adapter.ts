@@ -16,6 +16,7 @@ import {
 export { canonicalizePageBatchResult } from "./page_result_canonicalization.ts";
 import {
   canonicalizeReductionResult,
+  ReductionFailureDiagnostic,
   ReductionKeyConceptComparison,
 } from "./reduction_result_canonicalization.ts";
 export {
@@ -63,6 +64,21 @@ export type ProviderResult = {
   pageBatchComparison?: PageBatchCanonicalizationComparison;
   reductionKeyConceptComparison?: ReductionKeyConceptComparison;
   equationComparison?: FinalSummaryEquationComparison;
+};
+
+export type ReductionProviderFailureDiagnostic = {
+  validatorStage:
+    | ReductionFailureDiagnostic["validatorStage"]
+    | "validateResponseEnvelope"
+    | "parseStructuredJson";
+  safeValidatorCode:
+    | ReductionFailureDiagnostic["safeValidatorCode"]
+    | "reduction_response_invalid"
+    | "reduction_json_parse_failed";
+  sourcePageCount: number;
+  equationIdCount: number;
+  warningCount: number;
+  comparison?: ReductionKeyConceptComparison;
 };
 
 export type FinalSummaryEquationComparison = {
@@ -199,7 +215,10 @@ export class TrustedOpenAiAdapter {
         equationComparison: validated.equationComparison,
       };
     } catch (error) {
-      throw boundaryWithResponseId(error, responseId);
+      throw boundaryWithResponseId(
+        withReductionFailureDiagnostic(request, error),
+        responseId,
+      );
     }
   }
 
@@ -216,6 +235,7 @@ export class TrustedOpenAiAdapter {
         | "invalid";
       result?: unknown;
       diagnostic?: PageBatchDiagnosticMetadata;
+      reductionDiagnostic?: ReductionProviderFailureDiagnostic;
       pageBatchComparison?: PageBatchCanonicalizationComparison;
       reductionKeyConceptComparison?: ReductionKeyConceptComparison;
       equationComparison?: FinalSummaryEquationComparison;
@@ -250,10 +270,14 @@ export class TrustedOpenAiAdapter {
         equationComparison: validated.equationComparison,
       };
     } catch (error) {
+      const diagnosed = withReductionFailureDiagnostic(input.request, error);
       return {
         status: "invalid",
-        diagnostic: error instanceof ProviderBoundaryError
-          ? error.diagnostic
+        diagnostic: diagnosed instanceof ProviderBoundaryError
+          ? diagnosed.diagnostic
+          : undefined,
+        reductionDiagnostic: diagnosed instanceof ProviderBoundaryError
+          ? diagnosed.reductionDiagnostic
           : undefined,
       };
     }
@@ -427,6 +451,7 @@ export class ProviderBoundaryError extends Error {
   readonly retryAfterSeconds?: number;
   readonly dispatched: boolean;
   readonly diagnostic?: PageBatchDiagnosticMetadata;
+  readonly reductionDiagnostic?: ReductionProviderFailureDiagnostic;
   constructor(input: {
     kind: ProviderBoundaryError["kind"];
     status?: number;
@@ -434,6 +459,7 @@ export class ProviderBoundaryError extends Error {
     retryAfterSeconds?: number;
     dispatched: boolean;
     diagnostic?: PageBatchDiagnosticMetadata;
+    reductionDiagnostic?: ReductionProviderFailureDiagnostic;
   }) {
     super("provider_boundary_failure");
     Object.assign(this, input);
@@ -493,6 +519,15 @@ export function validateProviderOutputWithMetadata(
       throw new ProviderBoundaryError({
         kind: "invalid_response",
         dispatched: true,
+        reductionDiagnostic: canonical.failure
+          ? {
+            ...canonical.failure,
+            ...(canonical.failure.validatorStage ===
+                "validateReductionMinimumShape"
+              ? {}
+              : { comparison: canonical.comparison }),
+          }
+          : undefined,
       });
     }
     return {
@@ -1073,12 +1108,51 @@ function boundaryWithResponseId(error: unknown, responseId: string) {
       retryAfterSeconds: error.retryAfterSeconds,
       dispatched: true,
       diagnostic: error.diagnostic,
+      reductionDiagnostic: error.reductionDiagnostic,
     });
   }
   return new ProviderBoundaryError({
     kind: "invalid_response",
     responseId,
     dispatched: true,
+  });
+}
+
+function withReductionFailureDiagnostic(
+  request: ProviderRequest,
+  error: unknown,
+): unknown {
+  if (request.operation !== "reduction") return error;
+  if (
+    error instanceof ProviderBoundaryError &&
+    error.reductionDiagnostic
+  ) return error;
+  return new ProviderBoundaryError({
+    kind: error instanceof ProviderBoundaryError
+      ? error.kind
+      : "invalid_response",
+    status: error instanceof ProviderBoundaryError ? error.status : undefined,
+    responseId: error instanceof ProviderBoundaryError
+      ? error.responseId
+      : undefined,
+    retryAfterSeconds: error instanceof ProviderBoundaryError
+      ? error.retryAfterSeconds
+      : undefined,
+    dispatched: true,
+    diagnostic: error instanceof ProviderBoundaryError
+      ? error.diagnostic
+      : undefined,
+    reductionDiagnostic: {
+      validatorStage: error instanceof SyntaxError
+        ? "parseStructuredJson"
+        : "validateResponseEnvelope",
+      safeValidatorCode: error instanceof SyntaxError
+        ? "reduction_json_parse_failed"
+        : "reduction_response_invalid",
+      sourcePageCount: 0,
+      equationIdCount: 0,
+      warningCount: 0,
+    },
   });
 }
 

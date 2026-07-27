@@ -22,6 +22,7 @@ import { createMiniPdf } from "./mini_pdf.ts";
 import {
   ProviderBoundaryError,
   ProviderRequest,
+  ReductionProviderFailureDiagnostic,
   TrustedOpenAiAdapter,
 } from "./openai_adapter.ts";
 import { Equation, StructuredSummary } from "./contracts.ts";
@@ -70,6 +71,7 @@ export type InternalWorkUnit = {
   artifact_id?: string;
   mime_type?: string;
   validation_version?: string;
+  reduction_level?: number;
 };
 
 export type AnalysisDependencies = {
@@ -141,6 +143,12 @@ export type AnalysisDependencies = {
     temporary_file_id?: string;
     cleanup_complete?: boolean;
   }): Promise<void>;
+  recordReductionDiagnostic(input: {
+    batch_id: string;
+    lease_token: string;
+    diagnostic_metadata: ReductionDiagnosticMetadata;
+    diagnostic_version: number;
+  }): Promise<void>;
   reconcileOperation(input: {
     batch_id: string;
     lease_token: string;
@@ -166,6 +174,22 @@ export type AnalysisDependencies = {
   }): Promise<void>;
   provider: TrustedOpenAiAdapter;
   jitter(): number;
+};
+
+export type ReductionDiagnosticMetadata = {
+  operation_kind: "reduction";
+  reduction_level: "first_level" | "global";
+  validator_stage: ReductionProviderFailureDiagnostic["validatorStage"];
+  safe_validator_code: ReductionProviderFailureDiagnostic["safeValidatorCode"];
+  input_concept_count?: number;
+  accepted_concept_count?: number;
+  duplicate_concept_count?: number;
+  oversized_concept_count?: number;
+  serialized_list_concept_count?: number;
+  dropped_concept_count?: number;
+  source_page_count: number;
+  equation_id_count: number;
+  warning_count: number;
 };
 
 export type RecoveryDiagnostics = {
@@ -474,6 +498,14 @@ async function executeOneWorkUnit(
           ...retrieved.diagnostic,
         });
       }
+      if (retrieved.reductionDiagnostic) {
+        await persistReductionFailureDiagnostic(
+          deps,
+          work,
+          required,
+          retrieved.reductionDiagnostic,
+        );
+      }
       await deps.failOperation({
         batch_id: required.batchId,
         lease_token: required.leaseToken,
@@ -600,6 +632,14 @@ async function executeOneWorkUnit(
         temporary_file_id: temporaryFileId,
       });
     }
+    if (error.reductionDiagnostic) {
+      await persistReductionFailureDiagnostic(
+        deps,
+        work,
+        required,
+        error.reductionDiagnostic,
+      );
+    }
     const classified = classifyFailure({
       dispatched: error.dispatched,
       responseId: error.responseId,
@@ -637,6 +677,41 @@ async function executeOneWorkUnit(
       cleanup_complete: !temporaryFileId,
     });
   }
+}
+
+async function persistReductionFailureDiagnostic(
+  deps: AnalysisDependencies,
+  work: InternalWorkUnit,
+  required: { batchId: string; leaseToken: string },
+  diagnostic: ReductionProviderFailureDiagnostic,
+) {
+  const comparison = diagnostic.comparison;
+  const metadata: ReductionDiagnosticMetadata = {
+    operation_kind: "reduction",
+    reduction_level: (work.reduction_level ?? 1) > 1 ? "global" : "first_level",
+    validator_stage: diagnostic.validatorStage,
+    safe_validator_code: diagnostic.safeValidatorCode,
+    ...(comparison
+      ? {
+        input_concept_count: comparison.inputConceptCount,
+        accepted_concept_count: comparison.acceptedConceptCount,
+        duplicate_concept_count: comparison.duplicateConceptCount,
+        oversized_concept_count: comparison.oversizedConceptCount,
+        serialized_list_concept_count: comparison.serializedListConceptCount,
+        dropped_concept_count: comparison.droppedConceptCount,
+      }
+      : {}),
+    source_page_count: diagnostic.sourcePageCount,
+    equation_id_count: diagnostic.equationIdCount,
+    warning_count: diagnostic.warningCount,
+  };
+  analysisLog("advance", "reduction_validation_failed", metadata);
+  await deps.recordReductionDiagnostic({
+    batch_id: required.batchId,
+    lease_token: required.leaseToken,
+    diagnostic_metadata: metadata,
+    diagnostic_version: diagnosticVersion,
+  });
 }
 
 function logPageBatchComparison(

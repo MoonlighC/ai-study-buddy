@@ -183,6 +183,28 @@ export const gti9AuthoritativeEquationIds = Array.from(
   (_, index) => `eq_sanitized_${index + 1}`,
 );
 
+export const gti9ChildReductions = [
+  [1, 10],
+  [11, 20],
+  [21, 30],
+  [31, 40],
+  [41, 50],
+  [51, 55],
+].map(([start, end], index) => ({
+  source_pages: Array.from(
+    { length: end - start + 1 },
+    (_, offset) => start + offset,
+  ),
+  summary_markdown: `Sanitized child reduction ${index + 1}.`,
+  key_concepts: [`Sanitized child concept ${index + 1}`],
+  equation_ids: gti9AuthoritativeEquationIds.slice(
+    index * 9,
+    Math.min((index + 1) * 9, gti9AuthoritativeEquationIds.length),
+  ),
+  warnings: [],
+  confidence: 0.9,
+}));
+
 export const gti9GlobalReductionRaw = {
   source_pages: Array.from({ length: 55 }, (_, index) => index + 1),
   summary_markdown:

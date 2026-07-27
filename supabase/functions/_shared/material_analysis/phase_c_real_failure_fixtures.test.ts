@@ -24,6 +24,7 @@ import {
   gti7Pages21To25,
   gti7Pages26To30,
   gti9AuthoritativeEquationIds,
+  gti9ChildReductions,
   gti9GlobalReductionRaw,
   ss24Pages11To13WithStray10,
   ss24Pages1To5MissingUntrustworthy,
@@ -612,6 +613,7 @@ Deno.test("reduction canonicalization caps safely and cannot mask bad provenance
 });
 
 Deno.test("gti9 global reduction drops the exact bare serialized list and prepares final summary", () => {
+  equal(gti9ChildReductions.length, 6);
   equal(gti9GlobalReductionRaw.key_concepts.length, 100);
   equal([...gti9GlobalReductionRaw.key_concepts[1]].length, 1900);
   const canonical = canonicalizeReductionResult(

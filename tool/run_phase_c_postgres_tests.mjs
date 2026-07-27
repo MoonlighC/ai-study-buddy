@@ -3,25 +3,70 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 const modulePath = process.env.PGLITE_MODULE;
-if (!modulePath) {
+const nativeModulePath = process.env.NATIVE_POSTGRES_MODULE;
+if (!modulePath && !nativeModulePath) {
   throw new Error(
-    "Set PGLITE_MODULE to the absolute @electric-sql/pglite dist index.js path.",
+    "Set PGLITE_MODULE or NATIVE_POSTGRES_MODULE to an absolute module path.",
   );
 }
-const { PGlite } = await import(pathToFileURL(modulePath).href);
 const root = path.resolve(import.meta.dirname, "..");
-const database = new PGlite();
-await database.waitReady;
+let database;
+let runtimeLabel = "pglite";
+if (nativeModulePath) {
+  const { default: EmbeddedPostgres } = await import(
+    pathToFileURL(nativeModulePath).href
+  );
+  const port = Number(process.env.NATIVE_POSTGRES_PORT);
+  const databaseDir = process.env.NATIVE_POSTGRES_DATA_DIR;
+  if (!Number.isInteger(port) || !databaseDir) {
+    throw new Error(
+      "Set NATIVE_POSTGRES_PORT and NATIVE_POSTGRES_DATA_DIR for native tests.",
+    );
+  }
+  const server = new EmbeddedPostgres({
+    databaseDir,
+    user: "postgres",
+    password: "local-test-only",
+    port,
+    persistent: false,
+    onLog: () => {},
+    onError: (error) => console.error(String(error)),
+  });
+  await server.initialise();
+  await server.start();
+  const client = server.getPgClient();
+  await client.connect();
+  const version = await client.query(
+    "select current_setting('server_version_num')::integer as value",
+  );
+  runtimeLabel = `postgres${Math.floor(version.rows[0].value / 10000)}`;
+  database = {
+    exec: (source) => client.query(source),
+    query: (source) => client.query(source),
+    close: async () => {
+      await client.end();
+      await server.stop();
+    },
+  };
+} else {
+  const { PGlite } = await import(pathToFileURL(modulePath).href);
+  database = new PGlite();
+  await database.waitReady;
+}
 
 await database.exec(`
   create schema if not exists extensions;
   create schema if not exists auth;
   create schema if not exists storage;
-  create or replace function extensions.digest(value text,algorithm text)
-  returns bytea language sql immutable as $$
-    select case when lower(algorithm)='sha256' then pg_catalog.sha256(convert_to(value,'utf8'))
-      else decode(md5(value),'hex') end
-  $$;
+  ${
+  nativeModulePath
+    ? "create extension if not exists pgcrypto with schema extensions;"
+    : `create or replace function extensions.digest(value text,algorithm text)
+      returns bytea language sql immutable as $$
+        select case when lower(algorithm)='sha256' then pg_catalog.sha256(convert_to(value,'utf8'))
+          else decode(md5(value),'hex') end
+      $$;`
+}
   do $$ begin
     if not exists(select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
     if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
@@ -394,7 +439,28 @@ await runSql(
   "material_analysis_compact_summary_contract.sql",
 );
 
-console.log("PHASE_DE_DATABASE_TESTS_OK migrations=34 sql_suites=24");
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "migrations",
+    "035_material_analysis_reduction_failure_repair.sql",
+  ),
+  "migration 035_",
+);
+await runSql(
+  path.join(
+    root,
+    "supabase",
+    "tests",
+    "phase_c_reduction_failure_repair.sql",
+  ),
+  "phase_c_reduction_failure_repair.sql",
+);
+
+console.log(
+  `PHASE_DE_DATABASE_TESTS_OK runtime=${runtimeLabel} migrations=35 sql_suites=25`,
+);
 await database.close();
 
 async function runSql(file, label) {
