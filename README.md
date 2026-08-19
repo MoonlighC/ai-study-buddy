@@ -29,9 +29,17 @@ AI Study Buddy helps students understand, organize and practice learning materia
 - Row Level Security
 - Server-side AI processing
 
-## Screenshots
+## Backend setup
 
-(Add screenshots here)
+This repository contains the client and backend source code.
+
+To run your own instance you need:
+
+- your own Supabase project
+- your own OpenAI API key
+- your own Supabase secrets
+
+No production credentials are included.
 
 ## Architecture
 
