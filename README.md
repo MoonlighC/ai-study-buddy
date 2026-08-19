@@ -1,36 +1,130 @@
-# AI Study Buddy
+# AI Study Buddy 📚🤖
 
-AI Study Buddy is a Flutter study workspace for Android, iOS, web, and Windows.
-The Dart package name and internal executable slug remain `ai_study_buddy`.
+AI-powered study assistant built with Flutter.
 
-## Local development
+Upload your lectures, notes and PDFs. 
+AI Study Buddy helps students understand, organize and practice learning materials.
 
-Local development defaults to the in-memory backend:
+## Features
 
-```powershell
+✨ Upload learning materials
+- PDF documents
+- Images
+- Multiple files per subject
+
+🧠 AI-powered learning
+- Automatic summaries
+- Flashcards generation
+- Quiz generation
+- Study sessions
+
+📈 Learning progress
+- Track completed sessions
+- Identify weak topics
+- Review favorites
+
+🔐 Secure architecture
+- Flutter frontend
+- Supabase backend
+- Row Level Security
+- Server-side AI processing
+
+## Screenshots
+
+(Add screenshots here)
+
+## Architecture
+
+```
+Flutter App
+     |
+     |
+Supabase
+     |
+     |
+Edge Functions
+     |
+     |
+AI Providers
+```
+
+## Tech Stack
+
+Frontend:
+- Flutter
+- Dart
+
+Backend:
+- Supabase
+- PostgreSQL
+- Edge Functions
+
+AI:
+- OpenAI API integration
+
+Testing:
+- Flutter tests
+- Deno tests
+- SQL migration tests
+
+
+## Local Development
+
+Clone repository:
+
+```bash
+git clone https://github.com/MoonlighC/ai-study-buddy.git
+```
+
+Install dependencies:
+
+```bash
+flutter pub get
+```
+
+Run:
+
+```bash
 flutter run
-flutter test
 ```
 
-To use a Supabase client explicitly, provide public client configuration at
-compile time:
+## Environment Configuration
 
-```powershell
-flutter run `
-  --dart-define=APP_ENV=local `
-  --dart-define=APP_BACKEND_MODE=supabase `
-  --dart-define=SUPABASE_URL=https://PROJECT.supabase.co `
-  --dart-define=SUPABASE_ANON_KEY=PUBLIC_CLIENT_KEY
+Create your local configuration:
+
+```
+config/local.example.dart-defines.json
 ```
 
-`SUPABASE_ANON_KEY` may contain a Supabase legacy anon key or current
-publishable client key. It is public client configuration, not a server secret.
-Service-role, database, and OpenAI credentials must remain server-side.
+Required values:
 
-See [Phase 11.1 release foundation](docs/release-foundation-phase-11-1.md) for
-the environment matrix, platform identifiers, build commands, deployment
-checklists, and distribution limitations.
+```
+SUPABASE_URL
+SUPABASE_ANON_KEY
+```
 
-See [Phase 11.2 release readiness](docs/release-readiness-phase-11-2.md) for
-structural signing validation, packaging, CI, store checklists, and release
-runbooks.
+Never use service_role keys inside the mobile application.
+
+## Project Status
+
+🚧 Active development
+
+Current implemented:
+- PDF upload
+- AI material analysis
+- Summaries
+- Flashcards
+- Quizzes
+- Study sessions
+
+## Roadmap
+
+- [ ] App Store release
+- [ ] Google Play release
+- [ ] More AI learning modes
+- [ ] Offline learning support
+- [ ] Collaborative studying
+
+## License
+
+MIT License
