@@ -4,7 +4,7 @@
 
 The first beta is a private, direct signed Android APK. Google Play Internal Testing, paid Apple Developer membership, TestFlight, store records, public releases, and production deployment are deferred. iOS validation uses the owner's Mac, Xcode Personal Team, and physical iPhone only.
 
-The shared Android/iOS build sequence is recorded in `docs/beta-build-history.json`. `1.0.0+2` is reserved for the first staging beta and is **not distributed**. Change a record to `distributed` and add its UTC distribution time only after an artifact has actually left owner custody. Never reuse or lower a build number.
+The shared Android/iOS build sequence is recorded in `docs/internal/beta-build-history.json`. `1.0.0+2` is reserved for the first staging beta and is **not distributed**. Change a record to `distributed` and add its UTC distribution time only after an artifact has actually left owner custody. Never reuse or lower a build number.
 
 Preflight on 2026-07-12 found a clean synchronized `main` at `bdcd9ac4dc79dad22bd0e95c0f4900ee5339554d`. The owner reported GitHub Actions Validate green; attach the exact run URL/ID to the beta evidence before distribution because it was unavailable through the local connector.
 

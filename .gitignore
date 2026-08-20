@@ -59,6 +59,13 @@ supabase/.temp/
 # Signing and provisioning material
 *.jks
 *.keystore
+*.pem
+*.key
+*.pfx
+*.der
+*.crt
+*.csr
+*.ppk
 key.properties
 signing.properties
 *.p12

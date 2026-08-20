@@ -223,7 +223,7 @@ void main() {
 
   test('beta ledger and ignore coverage remain auditable', () {
     final ledger =
-        jsonDecode(File('docs/beta-build-history.json').readAsStringSync())
+        jsonDecode(File('docs/internal/beta-build-history.json').readAsStringSync())
             as Map<String, dynamic>;
     final record = (ledger['records'] as List).single as Map<String, dynamic>;
     expect(record['buildNumber'], 2);
@@ -245,7 +245,7 @@ void main() {
 
   test('beta guide preserves direct APK and Personal Team boundaries', () {
     final guide = File(
-      'docs/staging-beta-distribution-phase-12-2.md',
+      'docs/internal/staging-beta-distribution-phase-12-2.md',
     ).readAsStringSync();
     for (final required in [
       'private, direct signed Android APK',
