@@ -45,7 +45,7 @@ try {
     } finally {
       foreach ($field in $previous.Keys) { [Environment]::SetEnvironmentVariable($field, $previous[$field], 'Process') }
     }
-    & $dart run tool/release_validation_cli.dart reserved-build '--ledger=docs/beta-build-history.json' "--number=$BuildNumber"
+    & $dart run tool/release_validation_cli.dart reserved-build '--ledger=docs/internal/beta-build-history.json' "--number=$BuildNumber"
     if ($LASTEXITCODE -ne 0) { throw 'Reserved build-number validation failed.' }
     & $dart run tool/release_validation_cli.dart signer-fingerprint "--actual=$ExpectedSignerSha256" "--expected=$ExpectedSignerSha256"
     if ($LASTEXITCODE -ne 0) { throw 'Signer fingerprint structure validation failed.' }
