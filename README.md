@@ -1,9 +1,13 @@
 # AI Study Buddy 📚🤖
 
-AI-powered study assistant built with Flutter.
+[![Flutter](https://img.shields.io/badge/Flutter-3.44.4-02569B?logo=flutter&logoColor=white)](https://flutter.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Supported platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Web%20%7C%20Windows-blue)
 
-Upload your lectures, notes and PDFs. 
-AI Study Buddy helps students understand, organize and practice learning materials.
+AI Study Buddy is an AI-powered learning assistant built with Flutter.
+
+Upload lectures, notes and PDFs. Generate summaries, flashcards and quizzes.
+Organize subjects and track learning progress.
 
 ## Features
 
@@ -113,9 +117,9 @@ SUPABASE_ANON_KEY
 
 Never use service_role keys inside the mobile application.
 
-## Project Status
+## Status
 
-🚧 Active development
+**Beta / Active Development**
 
 Current implemented:
 - PDF upload
@@ -124,6 +128,15 @@ Current implemented:
 - Flashcards
 - Quizzes
 - Study sessions
+
+## Security
+
+Production credentials are never stored in this repository. The Flutter client
+uses public Supabase configuration, while privileged credentials and OpenAI
+access remain server-side in Supabase Edge Functions.
+
+Please review [SECURITY.md](SECURITY.md) before reporting a vulnerability or
+working with credentials.
 
 ## Roadmap
 
@@ -135,4 +148,4 @@ Current implemented:
 
 ## License
 
-MIT License
+This project is available under the [MIT License](LICENSE).
